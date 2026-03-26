@@ -1,0 +1,110 @@
+name: deepseek
+description: Controle Financeiro - App Turbinado 🚀
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+
+    
+  # 🔥 LOCALIZAÇÕES
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
+  
+  # ========== BANCO DE DADOS ==========
+  sqflite: ^2.3.0
+  sqflite_common_ffi: ^2.3.0
+  path: ^1.8.0
+  path_provider: ^2.1.0
+
+
+
+  # ========== UI E ANIMAÇÕES ==========
+  animate_do: ^3.3.4
+  flutter_staggered_animations: ^1.1.0
+  glassmorphism: ^3.0.0
+  shimmer: ^3.0.0
+  
+  # ========== GRÁFICOS ==========
+  fl_chart: ^0.66.0
+  syncfusion_flutter_charts: ^32.2.8
+  
+  # ========== NOTIFICAÇÕES ==========
+  flutter_local_notifications: ^17.2.0
+  timezone: ^0.9.0
+  
+  # ========== SERVIÇOS ==========
+  shared_preferences: ^2.2.0
+  csv: ^5.0.0
+  share_plus: ^7.0.0
+  http: ^1.1.0
+
+  app_links: ^6.0.0  # Adicione esta
+  url_launcher: ^6.3.0  # Adicione esta
+  
+  # ========== SEGURANÇA ==========
+  crypto: ^3.0.0
+  cryptography_plus: ^2.3.0
+  cryptography_flutter_plus: ^2.3.0
+  
+  # ========== UTILITÁRIOS ==========
+  uuid: ^4.0.0
+  # ========== CONECTIVIDADE ==========
+  connectivity_plus: ^6.0.0  # 🔥 ADICIONADO
+
+  # ========== PERFORMANCE ==========
+  flutter_native_splash: ^2.3.8
+  flutter_launcher_icons: ^0.13.1
+  provider: ^6.1.5+1
+  supabase_flutter: ^2.12.2
+  google_sign_in: ^6.3.0
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # ========== ASSETS ==========
+  assets:
+    - assets/icon/
+    - assets/images/
+  
+  # ========== FONTES (COMENTADAS) ==========
+  # fonts:
+  #   - family: Poppins
+  #     fonts:
+  #       - asset: assets/fonts/Poppins-Regular.ttf
+  #         weight: 400
+
+# ========== CONFIGURAÇÃO DO ÍCONE ==========
+flutter_launcher_icons:
+  android: true
+  ios: true
+  windows:
+    generate: true
+    icon_size: 48
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#7B2CBF"
+  adaptive_icon_foreground: "assets/icon/icon-foreground.png"
+
+# ========== CONFIGURAÇÃO DA SPLASH SCREEN ==========
+flutter_native_splash:
+  color: "#7B2CBF"
+  image: assets/images/splash_logo.png
+  android: true
+  ios: true
+  web: false
+  
+  android_12:
+    color: "#7B2CBF"
+    image: assets/images/splash_logo_android12.png

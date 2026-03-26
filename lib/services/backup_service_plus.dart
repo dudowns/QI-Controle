@@ -1,0 +1,428 @@
+// lib/services/backup_service_plus.dart
+
+import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/material.dart';
+import '../database/db_helper.dart';
+import '../services/logger_service.dart';
+import '../utils/date_helper.dart';
+
+class BackupServicePlus {
+  static final BackupServicePlus _instance = BackupServicePlus._internal();
+  factory BackupServicePlus() => _instance;
+  BackupServicePlus._internal();
+
+  final DBHelper db = DBHelper();
+
+  // ========== BACKUP DOS DADOS ==========
+  Future<Map<String, dynamic>> exportarTodosDados() async {
+    try {
+      LoggerService.info('📦 Iniciando exportação de dados...');
+
+      final lancamentos = await db.getAllLancamentos();
+      final investimentos = await db.getAllInvestimentos();
+      final proventos = await db.getAllProventos();
+      final metas = await db.getAllMetas();
+      final rendaFixa = await db.getAllRendaFixa();
+
+      // Exportar contas do mês
+      final contas = await _exportarContasDoMes();
+
+      final lancamentosLimpos = lancamentos.map((item) {
+        return {
+          'valor': item['valor'],
+          'descricao': item['descricao'],
+          'tipo': item['tipo'],
+          'categoria': item['categoria'],
+          'data': item['data'],
+          'observacao': item['observacao'],
+        };
+      }).toList();
+
+      final investimentosLimpos = investimentos.map((item) {
+        return {
+          'ticker': item['ticker'],
+          'tipo': item['tipo'],
+          'quantidade': item['quantidade'],
+          'preco_medio': item['preco_medio'],
+          'preco_atual': item['preco_atual'] ?? item['preco_medio'],
+          'data_compra': item['data_compra'],
+          'corretora': item['corretora'],
+          'setor': item['setor'],
+          'dividend_yield': item['dividend_yield'],
+        };
+      }).toList();
+
+      final proventosLimpos = proventos.map((item) {
+        return {
+          'ticker': item['ticker'],
+          'tipo_provento': item['tipo_provento'],
+          'valor_por_cota': item['valor_por_cota'],
+          'quantidade': item['quantidade'],
+          'data_pagamento': item['data_pagamento'],
+          'data_com': item['data_com'],
+          'total_recebido': item['total_recebido'],
+        };
+      }).toList();
+
+      final metasLimpos = metas.map((item) {
+        return {
+          'titulo': item['titulo'],
+          'descricao': item['descricao'],
+          'valor_objetivo': item['valor_objetivo'],
+          'valor_atual': item['valor_atual'],
+          'data_inicio': item['data_inicio'],
+          'data_fim': item['data_fim'],
+          'cor': item['cor'],
+          'icone': item['icone'],
+          'concluida': item['concluida'],
+        };
+      }).toList();
+
+      final rendaFixaLimpos = rendaFixa.map((item) {
+        return {
+          'nome': item['nome'],
+          'tipo_renda': item['tipo_renda'],
+          'valor': item['valor'],
+          'taxa': item['taxa'],
+          'data_aplicacao': item['data_aplicacao'],
+          'data_vencimento': item['data_vencimento'],
+          'dias': item['dias'],
+          'rendimento_bruto': item['rendimento_bruto'],
+          'iof': item['iof'],
+          'ir': item['ir'],
+          'rendimento_liquido': item['rendimento_liquido'],
+          'valor_final': item['valor_final'],
+          'indexador': item['indexador'],
+          'liquidez': item['liquidez'],
+          'is_lci': item['is_lci'],
+          'status': item['status'],
+        };
+      }).toList();
+
+      final dados = {
+        'metadata': {
+          'versao': '3.0',
+          'data_exportacao': DateHelper.agoraBrasilia().toIso8601String(),
+          'total_lancamentos': lancamentos.length,
+          'total_investimentos': investimentos.length,
+          'total_proventos': proventos.length,
+          'total_metas': metas.length,
+          'total_renda_fixa': rendaFixa.length,
+          'total_contas': contas.length,
+        },
+        'lancamentos': lancamentosLimpos,
+        'investimentos': investimentosLimpos,
+        'proventos': proventosLimpos,
+        'metas': metasLimpos,
+        'renda_fixa': rendaFixaLimpos,
+        'contas': contas,
+      };
+
+      LoggerService.success(
+          '✅ Exportação concluída: ${lancamentos.length} lançamentos, ${contas.length} contas');
+      return dados;
+    } catch (e) {
+      LoggerService.error('❌ Erro ao exportar dados', e);
+      rethrow;
+    }
+  }
+
+  // Exportar contas do mês
+  Future<List<Map<String, dynamic>>> _exportarContasDoMes() async {
+    final database = await db.database;
+
+    // Buscar todas as contas ativas
+    final contas = await database.query(DBHelper.tabelaContas);
+
+    // Buscar todos os pagamentos
+    final pagamentos = await database.query(DBHelper.tabelaPagamentos);
+
+    // Mapear pagamentos por conta
+    final Map<int, List<Map<String, dynamic>>> pagamentosPorConta = {};
+    for (var p in pagamentos) {
+      final contaId = p['conta_id'] as int;
+      if (!pagamentosPorConta.containsKey(contaId)) {
+        pagamentosPorConta[contaId] = [];
+      }
+      pagamentosPorConta[contaId]!.add(p);
+    }
+
+    // Adicionar pagamentos às contas
+    return contas.map((conta) {
+      final contaId = conta['id'] as int;
+      return {
+        ...conta,
+        'pagamentos': pagamentosPorConta[contaId] ?? [],
+      };
+    }).toList();
+  }
+
+  // ========== SALVAR BACKUP EM ARQUIVO (NO ONEDRIVE - BACKUPSAPPFINANCEIRO) ==========
+  Future<String?> salvarBackupEmArquivo() async {
+    try {
+      final dados = await exportarTodosDados();
+
+      // 🔥 NOME FIXO - SEMPRE O MESMO!
+      const fileName = 'backup_financeiro.json';
+
+      // 🔥 CAMINHO CORRETO - OneDrive na pasta BackupsAppFinanceiro
+      final String oneDrivePath =
+          'C:\\Users\\anaep\\OneDrive\\BackupsAppFinanceiro';
+      final backupDir = Directory(oneDrivePath);
+
+      if (!await backupDir.exists()) {
+        await backupDir.create(recursive: true);
+        LoggerService.info('📁 Pasta criada: $oneDrivePath');
+      }
+
+      final file = File('${backupDir.path}\\$fileName');
+
+      final jsonString = jsonEncode(dados);
+
+      // 🔥 SOBRESCREVE o arquivo se já existir
+      await file.writeAsString(jsonString, encoding: utf8);
+
+      LoggerService.success('✅ Backup salvo em: ${file.path}');
+
+      return file.path;
+    } catch (e) {
+      LoggerService.error('❌ Erro ao salvar backup', e);
+      return null;
+    }
+  }
+
+  // ========== VERIFICAR SE BACKUP EXISTE ==========
+  Future<bool> backupExiste() async {
+    try {
+      final String oneDrivePath =
+          'C:\\Users\\anaep\\OneDrive\\BackupsAppFinanceiro';
+      final file = File('$oneDrivePath\\backup_financeiro.json');
+
+      return await file.exists();
+    } catch (e) {
+      LoggerService.error('❌ Erro ao verificar backup', e);
+      return false;
+    }
+  }
+
+  // ========== OBTER INFORMAÇÕES DO BACKUP ==========
+  Future<Map<String, dynamic>?> getInfoBackup() async {
+    try {
+      final String oneDrivePath =
+          'C:\\Users\\anaep\\OneDrive\\BackupsAppFinanceiro';
+      final file = File('$oneDrivePath\\backup_financeiro.json');
+
+      if (!await file.exists()) {
+        return null;
+      }
+
+      final jsonString = await file.readAsString();
+      final Map<String, dynamic> dados = jsonDecode(jsonString);
+
+      return {
+        'existe': true,
+        'data_modificacao': await file.lastModified(),
+        'tamanho': await file.length(),
+        'metadata': dados['metadata'],
+      };
+    } catch (e) {
+      LoggerService.error('❌ Erro ao obter info do backup', e);
+      return null;
+    }
+  }
+
+  // ========== RESTAURAR BACKUP ==========
+  Future<bool> restaurarBackup(String caminhoArquivo,
+      {bool limparAntes = false}) async {
+    try {
+      final file = File(caminhoArquivo);
+      if (!await file.exists()) {
+        LoggerService.error('❌ Arquivo não encontrado');
+        return false;
+      }
+
+      final jsonString = await file.readAsString();
+      final Map<String, dynamic> dados = jsonDecode(jsonString);
+
+      if (dados['metadata'] == null) {
+        LoggerService.error('❌ Arquivo de backup inválido');
+        return false;
+      }
+
+      if (limparAntes) {
+        await _limparBanco();
+      }
+
+      int totalInserido = 0;
+
+      // Restaurar lançamentos
+      if (dados['lancamentos'] != null) {
+        for (var item in dados['lancamentos']) {
+          try {
+            await db.insertLancamento(item);
+            totalInserido++;
+          } catch (e) {
+            LoggerService.error('Erro ao inserir lançamento', e);
+          }
+        }
+      }
+
+      // Restaurar investimentos
+      if (dados['investimentos'] != null) {
+        for (var item in dados['investimentos']) {
+          try {
+            await db.insertInvestimento(item);
+            totalInserido++;
+          } catch (e) {
+            LoggerService.error('Erro ao inserir investimento', e);
+          }
+        }
+      }
+
+      // Restaurar proventos
+      if (dados['proventos'] != null) {
+        for (var item in dados['proventos']) {
+          try {
+            await db.insertProvento(item);
+            totalInserido++;
+          } catch (e) {
+            LoggerService.error('Erro ao inserir provento', e);
+          }
+        }
+      }
+
+      // Restaurar metas
+      if (dados['metas'] != null) {
+        for (var item in dados['metas']) {
+          try {
+            await db.insertMeta(item);
+            totalInserido++;
+          } catch (e) {
+            LoggerService.error('Erro ao inserir meta', e);
+          }
+        }
+      }
+
+      // Restaurar renda fixa
+      if (dados['renda_fixa'] != null) {
+        for (var item in dados['renda_fixa']) {
+          try {
+            await db.insertRendaFixa(item);
+            totalInserido++;
+          } catch (e) {
+            LoggerService.error('Erro ao inserir renda fixa', e);
+          }
+        }
+      }
+
+      // Restaurar contas do mês
+      if (dados['contas'] != null) {
+        for (var item in dados['contas']) {
+          try {
+            // Separar pagamentos da conta
+            final pagamentos = item['pagamentos'] as List? ?? [];
+
+            // Criar mapa da conta sem os pagamentos
+            final conta = Map<String, dynamic>.from(item);
+            conta.remove('pagamentos');
+            conta.remove('id'); // Deixa o banco gerar novo ID
+
+            // Inserir conta
+            final contaId = await db.adicionarConta(conta);
+
+            // Reinserir pagamentos se houver
+            if (contaId > 0 && pagamentos.isNotEmpty) {
+              final database = await db.database;
+              for (var p in pagamentos) {
+                final pagamento = Map<String, dynamic>.from(p);
+                pagamento.remove('id');
+                pagamento['conta_id'] = contaId;
+                await database.insert(DBHelper.tabelaPagamentos, pagamento);
+              }
+            }
+
+            totalInserido++;
+          } catch (e) {
+            LoggerService.error('Erro ao inserir conta', e);
+          }
+        }
+      }
+
+      LoggerService.success(
+          '✅ Backup restaurado! $totalInserido registros inseridos');
+      return true;
+    } catch (e) {
+      LoggerService.error('❌ Erro ao restaurar backup', e);
+      return false;
+    }
+  }
+
+  // ========== LISTAR BACKUPS DISPONÍVEIS ==========
+  Future<List<File>> listarBackups() async {
+    try {
+      final String oneDrivePath =
+          'C:\\Users\\anaep\\OneDrive\\BackupsAppFinanceiro';
+      final backupDir = Directory(oneDrivePath);
+
+      if (!await backupDir.exists()) {
+        return [];
+      }
+
+      // Retorna o arquivo fixo se existir
+      final file = File('$oneDrivePath\\backup_financeiro.json');
+      if (await file.exists()) {
+        return [file];
+      }
+
+      return [];
+    } catch (e) {
+      LoggerService.error('❌ Erro ao listar backups', e);
+      return [];
+    }
+  }
+
+  // ========== LIMPAR BANCO ==========
+  Future<void> _limparBanco() async {
+    try {
+      LoggerService.warning('🧹 Limpando banco de dados para restauração...');
+
+      final database = await db.database;
+
+      await database.execute('PRAGMA foreign_keys = OFF');
+
+      // Respeitar foreign keys
+      final tabelas = [
+        DBHelper.tabelaPagamentos,
+        DBHelper.tabelaParcelas,
+        DBHelper.tabelaDepositosMeta,
+        DBHelper.tabelaContas,
+        DBHelper.tabelaContasFixas,
+        DBHelper.tabelaProventos,
+        DBHelper.tabelaRendaFixa,
+        DBHelper.tabelaInvestimentos,
+        DBHelper.tabelaMetas,
+        DBHelper.tabelaLancamentos,
+      ];
+
+      await database.transaction((txn) async {
+        for (var tabela in tabelas) {
+          try {
+            await txn.delete(tabela);
+            LoggerService.info('🗑️ Tabela $tabela limpa');
+          } catch (e) {
+            LoggerService.error('Erro ao limpar tabela $tabela', e);
+          }
+        }
+      });
+
+      await database.execute('PRAGMA foreign_keys = ON');
+
+      LoggerService.success('✅ Banco de dados limpo com sucesso!');
+    } catch (e) {
+      LoggerService.error('❌ Erro ao limpar banco de dados', e);
+      rethrow;
+    }
+  }
+}
