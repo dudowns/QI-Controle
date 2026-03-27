@@ -9,7 +9,8 @@ class ThemeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeService = Provider.of<ThemeService>(context);
+    // 🔥 TENTAR OBTER O THEME SERVICE
+    final themeService = Provider.of<ThemeService>(context, listen: false);
 
     return PopupMenuButton<AppTheme>(
       icon: Icon(themeService.themeIcon, color: Colors.white),
@@ -71,7 +72,6 @@ class ThemeSelector extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
           children: [
-            // Ícone com fundo
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
@@ -85,7 +85,6 @@ class ThemeSelector extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            // Label
             Expanded(
               child: Text(
                 label,
@@ -96,7 +95,6 @@ class ThemeSelector extends StatelessWidget {
                 ),
               ),
             ),
-            // Check se selecionado
             if (isSelected)
               Container(
                 padding: const EdgeInsets.all(2),

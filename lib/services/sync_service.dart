@@ -29,6 +29,9 @@ class SyncService {
     });
 
     debugPrint('✅ SyncService inicializado');
+
+    // Sincroniza imediatamente ao iniciar
+    syncNow();
   }
 
   Future<void> syncNow() async {

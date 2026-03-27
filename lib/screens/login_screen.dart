@@ -1,5 +1,7 @@
+// lib/screens/login_screen.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'register_screen.dart';
 import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -57,14 +59,13 @@ class _LoginScreenState extends State<LoginScreen> {
       SnackBar(
         content: Text(msg),
         backgroundColor: isError ? Colors.red : Colors.green,
-        duration: const Duration(seconds: 2),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 VERIFICA SE É WINDOWS
     final bool isWindows = Platform.isWindows;
 
     return Scaffold(
@@ -85,7 +86,6 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -99,8 +99,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-
-                // Título
                 const Text(
                   'Controle Financeiro',
                   style: TextStyle(
@@ -118,8 +116,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 48),
-
-                // Card branco
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -135,7 +131,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: Column(
                     children: [
-                      // Email
                       TextField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
@@ -157,8 +152,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-
-                      // Senha
                       TextField(
                         controller: _senhaController,
                         obscureText: !_mostrarSenha,
@@ -189,7 +182,29 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 8),
+
+                      // 🔥 BOTÃO ESQUECI MINHA SENHA - ABRE A TELA
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _carregando
+                              ? null
+                              : () {
+                                  Navigator.pushNamed(
+                                      context, '/forgot-password');
+                                },
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF7B2CBF),
+                          ),
+                          child: const Text(
+                            'Esqueci minha senha?',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
 
                       // Botão Entrar
                       _carregando
@@ -217,10 +232,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
 
-                      // 🔥 SÓ MOSTRA O GOOGLE SE NÃO FOR WINDOWS
                       if (!isWindows) ...[
                         const SizedBox(height: 16),
-                        // Divisor
                         Row(
                           children: [
                             Expanded(
@@ -237,7 +250,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        // Botão Google
                         Center(
                           child: SizedBox(
                             width: 50,
@@ -286,8 +298,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-
-                // Link cadastro
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -296,8 +306,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: TextStyle(color: Colors.white70),
                     ),
                     TextButton(
-                      onPressed: () =>
-                          Navigator.pushNamed(context, '/register'),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const RegisterScreen()),
+                        );
+                      },
                       child: const Text(
                         'CADASTRE-SE',
                         style: TextStyle(

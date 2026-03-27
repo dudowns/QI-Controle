@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
-import '../services/auth_service.dart'; // 🔥 ADICIONADO
-import 'login_screen.dart'; // 🔥 ADICIONADO
+import '../services/auth_service.dart';
+import 'login_screen.dart';
 import 'main_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -12,32 +12,34 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  final AuthService _auth = AuthService(); // 🔥 ADICIONADO
+  final AuthService _auth = AuthService();
 
   @override
   void initState() {
     super.initState();
-    _verificarLogin(); // 🔥 MUDOU: agora verifica login
+    _verificarLogin();
   }
 
   Future<void> _verificarLogin() async {
     await Future.delayed(const Duration(seconds: 2));
 
-    if (mounted) {
-      // 🔥 VERIFICA SE TEM USUÁRIO LOGADO
-      if (_auth.estaLogado) {
-        // Se estiver logado, vai pro app principal
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainScreen()),
-        );
-      } else {
-        // Se não estiver logado, vai pro login
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
+    if (!mounted) return;
+
+    final logado = _auth.estaLogado;
+    debugPrint('🔍 Splash: Usuário logado? $logado');
+
+    if (logado) {
+      debugPrint('🚀 Splash: Indo para MainScreen');
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const MainScreen()),
+      );
+    } else {
+      debugPrint('🚀 Splash: Indo para LoginScreen');
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
     }
   }
 

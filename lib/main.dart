@@ -1,26 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
+import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/register_screen.dart';
+import 'screens/forgot_password_screen.dart';
 import 'screens/main_screen.dart';
-import 'services/sync_service.dart';
 import 'services/auth_service.dart';
+import 'services/theme_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicializar Supabase com suas credenciais
   await Supabase.initialize(
     url: 'https://fmzzuoqqvzomtlpatwye.supabase.co',
     anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtenp1b3FxdnpvbXRscGF0d3llIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI5MTE2NjQsImV4cCI6MjA1ODQ4NzY2NH0.pG9YKXcBqsEWfCxY-mALrW8OwI87mHwgUw7pUJRHzVY',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtenp1b3FxdnpvbXRscGF0d3llIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1MzExNjAsImV4cCI6MjA5MDEwNzE2MH0.6SO5dLvLOSr_-QV3AMYB8aOCe_DLmJ30L_VNFsDz4XM',
   );
 
-  // 🔥 Inicializar SyncService para sincronização automática
-  SyncService().initialize();
-
-  // Configurar localização para português
   Intl.defaultLocale = 'pt_BR';
 
   runApp(const MyApp());
@@ -31,83 +30,129 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Controle Financeiro',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primaryColor: const Color(0xFF7B2CBF),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF7B2CBF),
-          primary: const Color(0xFF7B2CBF),
-          secondary: const Color(0xFF9D4EDD),
-        ),
-        useMaterial3: true,
-        // 🔥 REMOVIDO: fontFamily: 'Poppins' (se não tiver a fonte, mantenha comentado)
-        appBarTheme: const AppBarTheme(
-          elevation: 0,
-          centerTitle: false,
-          backgroundColor: Color(0xFF7B2CBF),
-          foregroundColor: Colors.white,
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF7B2CBF),
-            foregroundColor: Colors.white,
-            minimumSize: const Size(double.infinity, 48),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF7B2CBF), width: 2),
-          ),
+    return ChangeNotifierProvider(
+      create: (_) => ThemeService()..loadTheme(),
+      child: Consumer<ThemeService>(
+        builder: (context, themeService, child) {
+          return MaterialApp(
+            title: 'Controle Financeiro',
+            debugShowCheckedModeBanner: false,
+            theme: _buildLightTheme(),
+            darkTheme: _buildDarkTheme(),
+            themeMode: themeService.themeMode,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [
+              Locale('pt', 'BR'),
+              Locale('en', 'US'),
+            ],
+            locale: const Locale('pt', 'BR'),
+            home: const SplashScreen(),
+            routes: {
+              '/register': (context) => const RegisterScreen(),
+              '/forgot-password': (context) => const ForgotPasswordScreen(),
+              '/main': (context) => const MainScreen(),
+            },
+            onGenerateRoute: (settings) {
+              if (settings.name == '/main') {
+                final auth = Supabase.instance.client.auth;
+                if (auth.currentSession != null) {
+                  return MaterialPageRoute(
+                    builder: (context) => const MainScreen(),
+                  );
+                } else {
+                  return MaterialPageRoute(
+                    builder: (context) => const LoginScreen(),
+                  );
+                }
+              }
+              return null;
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  ThemeData _buildLightTheme() {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      primaryColor: const Color(0xFF7B2CBF),
+      colorScheme: const ColorScheme.light(
+        primary: Color(0xFF7B2CBF),
+        secondary: Color(0xFF9D4EDD),
+        surface: Colors.white,
+        background: Color(0xFFF8F9FA),
+        error: Color(0xFFC62828),
+      ),
+      scaffoldBackgroundColor: const Color(0xFFF8F9FA),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF7B2CBF),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+      ),
+      cardTheme: CardThemeData(
+        color: Colors.white,
+        elevation: 2,
+        shadowColor: Colors.black.withOpacity(0.1),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
         ),
       ),
-      // Configuração de localização
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('pt', 'BR'),
-        Locale('en', 'US'),
-      ],
-      locale: const Locale('pt', 'BR'),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF7B2CBF),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+      ),
+    );
+  }
 
-      // 🔥 Tela inicial baseada no estado de autenticação
-      home: StreamBuilder<AuthState>(
-        stream: Supabase.instance.client.auth.onAuthStateChange,
-        builder: (context, snapshot) {
-          // Enquanto carrega, mostra splash ou loading
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFF7B2CBF),
-                ),
-              ),
-            );
-          }
-
-          // Verifica se tem usuário logado
-          if (snapshot.hasData) {
-            final session = snapshot.data?.session;
-            if (session != null) {
-              // Usuário logado - vai para MainScreen
-              return const MainScreen();
-            }
-          }
-
-          // Usuário não logado - vai para LoginScreen
-          return const LoginScreen();
-        },
+  ThemeData _buildDarkTheme() {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      primaryColor: const Color(0xFF9D4EDD),
+      colorScheme: const ColorScheme.dark(
+        primary: Color(0xFF9D4EDD),
+        secondary: Color(0xFF7B2CBF),
+        surface: Color(0xFF1E1E1E),
+        background: Color(0xFF121212),
+        error: Color(0xFFEF5350),
+      ),
+      scaffoldBackgroundColor: const Color(0xFF121212),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF1E1E1E),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+      ),
+      cardTheme: CardThemeData(
+        color: const Color(0xFF1E1E1E),
+        elevation: 2,
+        shadowColor: Colors.black.withOpacity(0.3),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF9D4EDD),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
       ),
     );
   }

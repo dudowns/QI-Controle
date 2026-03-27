@@ -1,5 +1,7 @@
+// lib/services/auth_service.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/foundation.dart';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -14,17 +16,17 @@ class AuthService {
   // Login com email/senha
   Future<User?> login(String email, String senha) async {
     try {
-      print('🔐 Tentando login: $email');
+      debugPrint('🔐 Tentando login: $email');
 
       final response = await _supabase.auth.signInWithPassword(
         email: email.trim(),
         password: senha,
       );
 
-      print('✅ Login bem-sucedido: ${response.user?.email}');
+      debugPrint('✅ Login bem-sucedido: ${response.user?.email}');
       return response.user;
     } catch (e) {
-      print('❌ Erro no login: $e');
+      debugPrint('❌ Erro no login: $e');
       return null;
     }
   }
@@ -32,8 +34,7 @@ class AuthService {
   // Cadastro com email/senha
   Future<User?> cadastrar(String email, String senha, String nome) async {
     try {
-      print('📝 Tentando cadastrar: $email');
-      print('📝 Nome: $nome');
+      debugPrint('📝 Tentando cadastrar: $email');
 
       final response = await _supabase.auth.signUp(
         email: email.trim(),
@@ -42,26 +43,68 @@ class AuthService {
       );
 
       if (response.user == null) {
-        print('⚠️ Nenhum usuário retornado');
+        debugPrint('⚠️ Nenhum usuário retornado');
         return null;
       }
 
-      print('✅ Cadastro bem-sucedido: ${response.user?.email}');
+      debugPrint('✅ Cadastro bem-sucedido: ${response.user?.email}');
       return response.user;
     } catch (e) {
-      print('❌ Erro no cadastro: $e');
+      debugPrint('❌ Erro no cadastro: $e');
       return null;
+    }
+  }
+
+  // 🔥 RECUPERAR SENHA - Envia email com link
+  Future<void> resetPassword(String email) async {
+    try {
+      debugPrint('📧 Enviando recuperação de senha para: $email');
+      await _supabase.auth.resetPasswordForEmail(email);
+      debugPrint('✅ Email de recuperação enviado!');
+    } catch (e) {
+      debugPrint('❌ Erro ao enviar recuperação: $e');
+      rethrow;
+    }
+  }
+
+  // 🔥 NOVO: Atualizar senha (usado após recuperação)
+  Future<void> updatePassword(String novaSenha) async {
+    try {
+      debugPrint('🔑 Atualizando senha...');
+      await _supabase.auth.updateUser(
+        UserAttributes(password: novaSenha),
+      );
+      debugPrint('✅ Senha atualizada com sucesso!');
+    } catch (e) {
+      debugPrint('❌ Erro ao atualizar senha: $e');
+      rethrow;
+    }
+  }
+
+  // 🔥 NOVO: Verificar OTP (código de 6 dígitos)
+  Future<void> verifyOtp(String code, String email) async {
+    try {
+      debugPrint('🔐 Verificando OTP para: $email');
+      await _supabase.auth.verifyOTP(
+        type: OtpType.recovery,
+        token: code,
+        email: email,
+      );
+      debugPrint('✅ OTP verificado com sucesso!');
+    } catch (e) {
+      debugPrint('❌ Erro ao verificar OTP: $e');
+      rethrow;
     }
   }
 
   // Login com Google
   Future<User?> loginComGoogle() async {
     try {
-      print('🔐 Tentando login com Google');
+      debugPrint('🔐 Tentando login com Google');
 
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
-        print('⚠️ Login com Google cancelado');
+        debugPrint('⚠️ Login com Google cancelado');
         return null;
       }
 
@@ -73,10 +116,10 @@ class AuthService {
         idToken: googleAuth.idToken!,
       );
 
-      print('✅ Login Google bem-sucedido: ${response.user?.email}');
+      debugPrint('✅ Login Google bem-sucedido: ${response.user?.email}');
       return response.user;
     } catch (e) {
-      print('❌ Erro no login com Google: $e');
+      debugPrint('❌ Erro no login com Google: $e');
       return null;
     }
   }
@@ -86,9 +129,9 @@ class AuthService {
     try {
       await _googleSignIn.signOut();
       await _supabase.auth.signOut();
-      print('✅ Logout realizado');
+      debugPrint('✅ Logout realizado');
     } catch (e) {
-      print('❌ Erro no logout: $e');
+      debugPrint('❌ Erro no logout: $e');
     }
   }
 }

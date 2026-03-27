@@ -1,13 +1,14 @@
 // lib/repositories/meta_repository.dart
-import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // 🔥 ADICIONADO
+
+import 'package:flutter/foundation.dart'; // 🔥 IMPORT PARA debugPrint
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../database/db_helper.dart';
 import '../services/sync_service.dart';
 
 class MetaRepository {
   final DBHelper _dbHelper = DBHelper();
   final SyncService _syncService = SyncService();
-  final supabase = Supabase.instance.client; // 🔥 ADICIONADO
+  final supabase = Supabase.instance.client;
 
   // ========== CONSTANTES ==========
   static const String tabelaMetas = DBHelper.tabelaMetas;
@@ -29,7 +30,6 @@ class MetaRepository {
       return response;
     } catch (e) {
       debugPrint('❌ Erro ao buscar progresso metas: $e');
-      // Fallback: usar dados locais
       return _getProgressoMetasLocal();
     }
   }
@@ -74,7 +74,6 @@ class MetaRepository {
       return response;
     } catch (e) {
       debugPrint('❌ Erro ao buscar metas por status: $e');
-      // Fallback: filtrar localmente
       final todas = await _getProgressoMetasLocal();
       return todas.where((meta) => meta['status'] == status).toList();
     }

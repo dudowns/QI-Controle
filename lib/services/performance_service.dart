@@ -5,7 +5,7 @@ class PerformanceMetrics {
   String operacao;
   int totalChamadas = 0;
   int tempoTotalMs = 0;
-  int tempoMinimoMs = 0x7FFFFFFF; // Valor máximo
+  int tempoMinimoMs = 0x3FFFFFFF; // 🔥 CORRIGIDO: valor compatível com JS
   int tempoMaximoMs = 0;
   List<int> ultimosTempos = []; // Últimos 10 tempos
 
@@ -34,7 +34,8 @@ class PerformanceMetrics {
       'totalChamadas': totalChamadas,
       'tempoTotalMs': tempoTotalMs,
       'tempoMedioMs': tempoMedioMs,
-      'tempoMinimoMs': tempoMinimoMs == 0x7FFFFFFFFFFFFFFF ? 0 : tempoMinimoMs,
+      'tempoMinimoMs':
+          tempoMinimoMs == 0x3FFFFFFF ? 0 : tempoMinimoMs, // 🔥 CORRIGIDO
       'tempoMaximoMs': tempoMaximoMs,
       'ultimosTempos': ultimosTempos,
     };
@@ -146,7 +147,7 @@ class PerformanceService {
         'operacaoMaisLenta': '',
         'tempoMaisLentoMs': 0,
         'operacaoMaisRapida': '',
-        'tempoMaisRapidoMs': 0x7FFFFFFFFFFFFFFF,
+        'tempoMaisRapidoMs': 0x3FFFFFFF, // 🔥 CORRIGIDO
       },
     };
 
