@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:animate_do/animate_do.dart';
 import '../services/auth_service.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
@@ -22,13 +23,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       _mostrarMensagem('Digite sua nova senha', isError: true);
       return;
     }
-
     if (_senhaController.text.length < 6) {
       _mostrarMensagem('A senha deve ter no mínimo 6 caracteres',
           isError: true);
       return;
     }
-
     if (_senhaController.text != _confirmarController.text) {
       _mostrarMensagem('As senhas não coincidem', isError: true);
       return;
@@ -38,7 +37,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
     try {
       await _auth.updatePassword(_senhaController.text);
-
       setState(() {
         _senhaAlterada = true;
         _carregando = false;
@@ -54,39 +52,48 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       SnackBar(
         content: Text(msg),
         backgroundColor: isError ? Colors.red : Colors.green,
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nova Senha'),
-        backgroundColor: const Color(0xFF7B2CBF),
-        foregroundColor: Colors.white,
-      ),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF7B2CBF),
-              Color(0xFF9D4EDD),
-            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF7B2CBF), Color(0xFF9D4EDD), Color(0xFFE0AAFF)],
           ),
         ),
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Card(
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 20 : 0, vertical: 20),
+            child: FadeInUp(
+              duration: Duration(milliseconds: 800),
+              child: Container(
+                width: isMobile ? double.infinity : 420,
+                constraints: BoxConstraints(maxWidth: 450),
+                padding: EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.95),
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 30,
+                      offset: Offset(0, 15),
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
                 child:
                     _senhaAlterada ? _buildSuccessWidget() : _buildFormWidget(),
               ),
@@ -101,108 +108,118 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(
-          Icons.lock_outline,
-          size: 80,
-          color: Color(0xFF7B2CBF),
+        ElasticIn(
+          duration: Duration(milliseconds: 800),
+          child: Container(
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF7B2CBF), Color(0xFF9D4EDD)],
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0xFF7B2CBF).withOpacity(0.4),
+                  blurRadius: 20,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: Icon(Icons.lock_outline, size: 50, color: Colors.white),
+          ),
         ),
-        const SizedBox(height: 16),
-        const Text(
+        SizedBox(height: 24),
+        Text(
           'Criar Nova Senha',
           style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF7B2CBF),
-          ),
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF343A40)),
         ),
-        const SizedBox(height: 8),
-        const Text(
+        SizedBox(height: 8),
+        Text(
           'Digite sua nova senha',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey,
-          ),
+          style: TextStyle(fontSize: 13, color: Colors.grey[600]),
         ),
-        const SizedBox(height: 32),
+        SizedBox(height: 32),
         TextField(
           controller: _senhaController,
           obscureText: !_mostrarSenha,
           decoration: InputDecoration(
             labelText: 'Nova Senha',
-            prefixIcon:
-                const Icon(Icons.lock_outline, color: Color(0xFF7B2CBF)),
+            hintText: '••••••••',
+            labelStyle: TextStyle(color: Color(0xFF7B2CBF)),
+            prefixIcon: Icon(Icons.lock_outline, color: Color(0xFF7B2CBF)),
             suffixIcon: IconButton(
               icon: Icon(
-                _mostrarSenha ? Icons.visibility : Icons.visibility_off,
-                color: const Color(0xFF7B2CBF),
-              ),
+                  _mostrarSenha ? Icons.visibility : Icons.visibility_off,
+                  color: Color(0xFF7B2CBF)),
               onPressed: () => setState(() => _mostrarSenha = !_mostrarSenha),
             ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF7B2CBF), width: 2),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: Color(0xFF7B2CBF), width: 2),
             ),
+            filled: true,
+            fillColor: Colors.grey[50],
           ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         TextField(
           controller: _confirmarController,
           obscureText: !_mostrarConfirmar,
           decoration: InputDecoration(
             labelText: 'Confirmar Senha',
-            prefixIcon:
-                const Icon(Icons.lock_outline, color: Color(0xFF7B2CBF)),
+            hintText: '••••••••',
+            labelStyle: TextStyle(color: Color(0xFF7B2CBF)),
+            prefixIcon: Icon(Icons.lock_outline, color: Color(0xFF7B2CBF)),
             suffixIcon: IconButton(
               icon: Icon(
-                _mostrarConfirmar ? Icons.visibility : Icons.visibility_off,
-                color: const Color(0xFF7B2CBF),
-              ),
+                  _mostrarConfirmar ? Icons.visibility : Icons.visibility_off,
+                  color: Color(0xFF7B2CBF)),
               onPressed: () =>
                   setState(() => _mostrarConfirmar = !_mostrarConfirmar),
             ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF7B2CBF), width: 2),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: Color(0xFF7B2CBF), width: 2),
             ),
+            filled: true,
+            fillColor: Colors.grey[50],
           ),
         ),
-        const SizedBox(height: 24),
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton(
-            onPressed: _carregando ? null : _atualizarSenha,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7B2CBF),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: _carregando
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text(
-                    'ALTERAR SENHA',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+        SizedBox(height: 24),
+        _carregando
+            ? Center(child: CircularProgressIndicator(color: Color(0xFF7B2CBF)))
+            : SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _atualizarSenha,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF7B2CBF),
+                    elevation: 3,
+                    shadowColor: Color(0xFF7B2CBF).withOpacity(0.5),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
                   ),
-          ),
-        ),
+                  child: Text('ALTERAR SENHA',
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                ),
+              ),
       ],
     );
   }
@@ -211,47 +228,36 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(
-          Icons.check_circle,
-          size: 80,
-          color: Colors.green,
-        ),
-        const SizedBox(height: 16),
-        const Text(
+        Icon(Icons.check_circle, size: 80, color: Colors.green),
+        SizedBox(height: 24),
+        Text(
           'Senha Alterada!',
           style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.green,
-          ),
+              fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green),
         ),
-        const SizedBox(height: 8),
-        const Text(
+        SizedBox(height: 8),
+        Text(
           'Sua senha foi alterada com sucesso.',
           style: TextStyle(fontSize: 14, color: Colors.grey),
         ),
-        const SizedBox(height: 24),
+        SizedBox(height: 32),
         SizedBox(
           width: double.infinity,
-          height: 50,
+          height: 52,
           child: ElevatedButton(
-            onPressed: () {
-              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-            },
+            onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                context, '/', (route) => false),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7B2CBF),
+              backgroundColor: Color(0xFF7B2CBF),
+              elevation: 3,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+                  borderRadius: BorderRadius.circular(16)),
             ),
-            child: const Text(
-              'VOLTAR PARA LOGIN',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
+            child: Text('VOLTAR PARA LOGIN',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
           ),
         ),
       ],

@@ -1,15 +1,13 @@
-// lib/screens/dashboard.dart
+// lib/screens/dashboard_screen.dart
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
-import '../services/supabase_service.dart';
+import '../database/db_helper.dart';
 import '../constants/app_colors.dart';
-import '../models/lancamento_model.dart';
 import '../constants/app_categories.dart';
 import '../utils/formatters.dart';
 import '../widgets/animated_counter.dart';
-import 'main_screen.dart';
+import 'main_screen.dart'; // 🔥 ADICIONADO
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -18,22 +16,34 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen>
-    with AutomaticKeepAliveClientMixin {
-  late final SupabaseService _supabaseService;
+class _DashboardScreenState extends State<DashboardScreen> {
+  final DBHelper _dbHelper = DBHelper();
 
-  @override
-  bool get wantKeepAlive => true;
+  // Dados
+  List<Map<String, dynamic>> _lancamentos = [];
+  List<Map<String, dynamic>> _investimentos = [];
+  List<Map<String, dynamic>> _metas = [];
+  List<Map<String, dynamic>> _contas = [];
 
-  DateTime mesAtual = DateTime.now();
-  Map<String, dynamic>? dados;
-  bool loading = true;
-  String? erro;
+  bool _isLoading = true;
+  DateTime _mesSelecionado = DateTime.now();
 
+  // Totais
+  double _totalReceitas = 0;
+  double _totalDespesas = 0;
+  double _totalContasPendentes = 0;
+  int _quantidadeContas = 0;
+  double _patrimonio = 0;
+  int _metasAtivas = 0;
+
+  // Estatísticas
   double _mediaGastosDiaria = 0;
   MapEntry<String, double>? _maiorGasto;
   double _taxaEconomia = 0;
-  List<Map<String, dynamic>> _ultimos3Meses = [];
+
+  // Gráficos
+  List<Map<String, dynamic>> _gastosPorCategoria = [];
+  List<Map<String, dynamic>> _evolucaoMensal = [];
   List<Map<String, dynamic>> _ultimasTransacoes = [];
 
   final NumberFormat _realFormat = NumberFormat.currency(
@@ -58,12 +68,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   ];
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _supabaseService = Provider.of<SupabaseService>(context, listen: false);
-  }
-
-  @override
   void initState() {
     super.initState();
     _carregarDados();
@@ -71,112 +75,96 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   Future<void> _carregarDados() async {
     if (!mounted) return;
-    setState(() {
-      loading = true;
-      erro = null;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      final primeiroDia = DateTime(mesAtual.year, mesAtual.month, 1);
-      final ultimoDia = DateTime(mesAtual.year, mesAtual.month + 1, 0);
+      _lancamentos = await _dbHelper.getAllLancamentos();
+      _investimentos = await _dbHelper.getAllInvestimentos();
+      _metas = await _dbHelper.getAllMetas();
+      _contas = await _dbHelper.getPagamentosDoMes(
+          _mesSelecionado.year, _mesSelecionado.month);
 
-      // Buscar lançamentos do mês
-      final lancamentos = await _supabaseService.getLancamentos();
-
-      // Filtrar pelo mês atual
-      final lancamentosMes = lancamentos
-          .where((l) =>
-              l.data.isAfter(primeiroDia.subtract(const Duration(days: 1))) &&
-              l.data.isBefore(ultimoDia.add(const Duration(days: 1))))
-          .toList();
-
-      // Calcular receitas e despesas
-      double receitas = 0;
-      double despesas = 0;
-      final Map<String, double> gastosPorCategoria = {};
-
-      for (var l in lancamentosMes) {
-        if (l.tipo == TipoLancamento.receita) {
-          receitas += l.valor;
-        } else {
-          despesas += l.valor;
-          gastosPorCategoria[l.categoria] =
-              (gastosPorCategoria[l.categoria] ?? 0) + l.valor;
-        }
-      }
-
-      // Gastos por categoria
-      final gastos = gastosPorCategoria.entries.map((entry) {
-        return {
-          'categoria': entry.key,
-          'total': entry.value,
-        };
-      }).toList();
-      gastos.sort(
-          (a, b) => (b['total'] as double).compareTo(a['total'] as double));
-
-      // Buscar últimas transações
-      _ultimasTransacoes =
-          await _supabaseService.getUltimasTransacoes(limit: 5);
-
-      // Buscar evolução mensal
-      await _carregarEvolucaoMensal();
-
-      // Buscar contas pendentes
-      final contasResponse = await _carregarContasPendentes();
-
-      // Buscar patrimônio
-      final patrimonio = await _carregarPatrimonio();
-
-      // Buscar metas ativas
-      final metas = await _supabaseService.getMetas();
-      final metasAtivas = metas.where((m) => !m.concluida).length;
-
-      _calcularEstatisticas(gastos, despesas, receitas);
-
-      dados = {
-        'receitas': receitas,
-        'despesas': despesas,
-        'saldo': receitas - despesas,
-        'gastos': gastos,
-        'contasPendentes': contasResponse['total'],
-        'qtdContas': contasResponse['quantidade'],
-        'patrimonio': patrimonio,
-        'metasAtivas': metasAtivas,
-        'ultimas_transacoes': _ultimasTransacoes,
-      };
+      _calcularTotais();
+      _calcularEvolucaoMensal();
+      _calcularGastosPorCategoria();
+      _calcularEstatisticas();
+      _carregarUltimasTransacoes();
     } catch (e) {
-      debugPrint('❌ Erro: $e');
-      erro = "Erro ao carregar dados";
+      debugPrint('❌ Erro ao carregar dashboard: $e');
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _carregarEvolucaoMensal() async {
-    _ultimos3Meses.clear();
-    final todosLancamentos = await _supabaseService.getLancamentos();
+  void _calcularTotais() {
+    double receitas = 0;
+    double despesas = 0;
+
+    for (var l in _lancamentos) {
+      final data = DateTime.parse(l['data']);
+      if (data.year == _mesSelecionado.year &&
+          data.month == _mesSelecionado.month) {
+        if (l['tipo'] == 'receita') {
+          receitas += (l['valor'] as num).toDouble();
+        } else {
+          despesas += (l['valor'] as num).toDouble();
+        }
+      }
+    }
+
+    _totalReceitas = receitas;
+    _totalDespesas = despesas;
+
+    double totalPendente = 0;
+    int quantidadePendente = 0;
+    for (var c in _contas) {
+      final status = c['status'] as int;
+      if (status == 0) {
+        totalPendente += (c['valor'] as num).toDouble();
+        quantidadePendente++;
+      }
+    }
+    _totalContasPendentes = totalPendente;
+    _quantidadeContas = quantidadePendente;
+
+    double patrimonio = 0;
+    for (var inv in _investimentos) {
+      final quantidade = (inv['quantidade'] as num).toDouble();
+      final precoAtual = (inv['preco_atual'] as num?)?.toDouble() ??
+          (inv['preco_medio'] as num).toDouble();
+      patrimonio += quantidade * precoAtual;
+    }
+    _patrimonio = patrimonio;
+
+    int ativas = 0;
+    for (var m in _metas) {
+      if ((m['concluida'] as int) == 0) {
+        ativas++;
+      }
+    }
+    _metasAtivas = ativas;
+  }
+
+  void _calcularEvolucaoMensal() {
+    _evolucaoMensal.clear();
 
     for (int i = 2; i >= 0; i--) {
-      final data = DateTime(mesAtual.year, mesAtual.month - i, 1);
-      final inicio = DateTime(data.year, data.month, 1);
-      final fim = DateTime(data.year, data.month + 1, 0);
-
+      final data = DateTime(_mesSelecionado.year, _mesSelecionado.month - i, 1);
       double receitas = 0;
       double despesas = 0;
 
-      for (var l in todosLancamentos) {
-        if (l.data.isAfter(inicio.subtract(const Duration(days: 1))) &&
-            l.data.isBefore(fim.add(const Duration(days: 1)))) {
-          if (l.tipo == TipoLancamento.receita) {
-            receitas += l.valor;
+      for (var l in _lancamentos) {
+        final dataLanc = DateTime.parse(l['data']);
+        if (dataLanc.year == data.year && dataLanc.month == data.month) {
+          if (l['tipo'] == 'receita') {
+            receitas += (l['valor'] as num).toDouble();
           } else {
-            despesas += l.valor;
+            despesas += (l['valor'] as num).toDouble();
           }
         }
       }
 
-      _ultimos3Meses.add({
+      _evolucaoMensal.add({
         'mes': data.month,
         'receitas': receitas,
         'despesas': despesas,
@@ -184,36 +172,63 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  Future<Map<String, dynamic>> _carregarContasPendentes() async {
-    final contas = await _supabaseService.getContas();
-    double total = 0;
-    for (var conta in contas) {
-      total += conta.valor;
+  void _calcularGastosPorCategoria() {
+    final Map<String, double> gastos = {};
+    double totalDespesas = 0;
+
+    for (var l in _lancamentos) {
+      final data = DateTime.parse(l['data']);
+      if (data.year == _mesSelecionado.year &&
+          data.month == _mesSelecionado.month) {
+        if (l['tipo'] != 'receita') {
+          final valor = (l['valor'] as num).toDouble();
+          final categoria = l['categoria']?.toString() ?? 'Outros';
+          gastos[categoria] = (gastos[categoria] ?? 0) + valor;
+          totalDespesas += valor;
+        }
+      }
     }
-    return {'total': total, 'quantidade': contas.length};
+
+    _gastosPorCategoria = gastos.entries.map((entry) {
+      return {
+        'categoria': entry.key,
+        'total': entry.value,
+        'percentual':
+            totalDespesas > 0 ? (entry.value / totalDespesas) * 100 : 0,
+      };
+    }).toList()
+      ..sort((a, b) => (b['total'] as double).compareTo(a['total'] as double));
   }
 
-  Future<double> _carregarPatrimonio() async {
-    final investimentos = await _supabaseService.getInvestimentos();
-    double patrimonio = 0;
-    for (var inv in investimentos) {
-      patrimonio += inv.valorAtual;
-    }
-    return patrimonio;
-  }
+  void _calcularEstatisticas() {
+    final lancamentosMes = _lancamentos.where((l) {
+      final data = DateTime.parse(l['data']);
+      return data.year == _mesSelecionado.year &&
+          data.month == _mesSelecionado.month;
+    }).toList();
 
-  void _calcularEstatisticas(
-      List gastos, double despesasTotal, double receitasTotal) {
-    final diasNoMes = DateTime(mesAtual.year, mesAtual.month + 1, 0).day;
+    double despesasTotal = 0;
+    final Map<String, double> gastosPorCategoria = {};
+
+    for (var l in lancamentosMes) {
+      if (l['tipo'] != 'receita') {
+        final valor = (l['valor'] as num).toDouble();
+        despesasTotal += valor;
+        final categoria = l['categoria']?.toString() ?? 'Outros';
+        gastosPorCategoria[categoria] =
+            (gastosPorCategoria[categoria] ?? 0) + valor;
+      }
+    }
+
+    final diasNoMes =
+        DateTime(_mesSelecionado.year, _mesSelecionado.month + 1, 0).day;
     _mediaGastosDiaria = despesasTotal / diasNoMes;
 
-    if (gastos.isNotEmpty) {
+    if (gastosPorCategoria.isNotEmpty) {
       MapEntry<String, double>? maior;
-      for (var item in gastos) {
-        final valor = (item['total'] as double);
-        final categoria = item['categoria']?.toString() ?? 'Outros';
-        if (maior == null || valor > maior.value) {
-          maior = MapEntry(categoria, valor);
+      for (var entry in gastosPorCategoria.entries) {
+        if (maior == null || entry.value > maior.value) {
+          maior = entry;
         }
       }
       _maiorGasto = maior;
@@ -221,14 +236,32 @@ class _DashboardScreenState extends State<DashboardScreen>
       _maiorGasto = null;
     }
 
+    double receitasTotal = 0;
+    for (var l in lancamentosMes) {
+      if (l['tipo'] == 'receita') {
+        receitasTotal += (l['valor'] as num).toDouble();
+      }
+    }
     _taxaEconomia = receitasTotal > 0
         ? ((receitasTotal - despesasTotal) / receitasTotal) * 100
         : 0;
   }
 
+  void _carregarUltimasTransacoes() {
+    _ultimasTransacoes = _lancamentos.where((l) {
+      final data = DateTime.parse(l['data']);
+      return data.year == _mesSelecionado.year &&
+          data.month == _mesSelecionado.month;
+    }).toList()
+      ..sort((a, b) => b['data'].compareTo(a['data']));
+
+    _ultimasTransacoes = _ultimasTransacoes.take(5).toList();
+  }
+
   void _navegarMes(int delta) {
     setState(() {
-      mesAtual = DateTime(mesAtual.year, mesAtual.month + delta);
+      _mesSelecionado =
+          DateTime(_mesSelecionado.year, _mesSelecionado.month + delta, 1);
     });
     _carregarDados();
   }
@@ -244,34 +277,23 @@ class _DashboardScreenState extends State<DashboardScreen>
     return valor.toStringAsFixed(0);
   }
 
+  double _toDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
+  // 🔥 MÉTODO CORRIGIDO - Agora usa MainScreen.navigateTo
+  void _irParaLancamentos() {
+    MainScreen.navigateTo(1); // índice 1 = tela de Lançamentos
+  }
+
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-
-    if (loading) {
+    if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
-    }
-
-    if (erro != null && dados == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(erro!,
-                style: TextStyle(color: AppColors.textPrimary(context))),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: _carregarDados,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text('Tentar novamente'),
-            ),
-          ],
-        ),
-      );
     }
 
     return RefreshIndicator(
@@ -289,26 +311,26 @@ class _DashboardScreenState extends State<DashboardScreen>
             const SizedBox(height: 16),
             Row(
               children: [
-                _buildStatCard('Receitas', _toDouble(dados!['receitas']),
-                    AppColors.success, Icons.trending_up),
+                _buildStatCard('Receitas', _totalReceitas, AppColors.success,
+                    Icons.trending_up),
                 const SizedBox(width: 12),
-                _buildStatCard('Despesas', _toDouble(dados!['despesas']),
-                    AppColors.error, Icons.trending_down),
+                _buildStatCard('Despesas', _totalDespesas, AppColors.error,
+                    Icons.trending_down),
                 const SizedBox(width: 12),
                 _buildStatCard(
                   'Contas Pendentes',
-                  _toDouble(dados!['contasPendentes']),
+                  _totalContasPendentes,
                   AppColors.warning,
                   Icons.receipt,
-                  subtitle: '${dados!['qtdContas']} conta(s)',
+                  subtitle: '$_quantidadeContas conta(s)',
                 ),
                 const SizedBox(width: 12),
                 _buildStatCard(
                   'Patrimônio',
-                  _toDouble(dados!['patrimonio']),
+                  _patrimonio,
                   AppColors.primary,
                   Icons.account_balance,
-                  subtitle: '${dados!['metasAtivas']} meta(s) ativa(s)',
+                  subtitle: '$_metasAtivas meta(s) ativa(s)',
                 ),
               ],
             ),
@@ -341,14 +363,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  double _toDouble(dynamic value) {
-    if (value == null) return 0.0;
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
-    return 0.0;
-  }
-
   Widget _buildMonthSelector() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -368,7 +382,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
           const SizedBox(width: 8),
           Text(
-            '${_meses[mesAtual.month - 1]}. ${mesAtual.year}',
+            '${_meses[_mesSelecionado.month - 1]}. ${_mesSelecionado.year}',
             style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -422,8 +436,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildExpensesSection() {
-    final gastos = dados!['gastos'] as List;
-    final despesasTotal = _toDouble(dados!['despesas']);
+    final gastos = _gastosPorCategoria;
+    final despesasTotal = _totalDespesas;
 
     if (gastos.isEmpty) {
       return Container(
@@ -553,7 +567,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildIncomeExpenseChart() {
-    if (_ultimos3Meses.isEmpty) {
+    if (_evolucaoMensal.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -569,7 +583,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
 
     double maxValor = 0;
-    for (var item in _ultimos3Meses) {
+    for (var item in _evolucaoMensal) {
       final receitas = item['receitas'] as double;
       final despesas = item['despesas'] as double;
       if (receitas > maxValor) maxValor = receitas;
@@ -597,12 +611,12 @@ class _DashboardScreenState extends State<DashboardScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Receitas: ${_formatarMoeda(_toDouble(dados!['receitas']))}',
+              Text('Receitas: ${_formatarMoeda(_totalReceitas)}',
                   style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       color: AppColors.success)),
-              Text('Despesas: ${_formatarMoeda(_toDouble(dados!['despesas']))}',
+              Text('Despesas: ${_formatarMoeda(_totalDespesas)}',
                   style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -621,7 +635,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   enabled: true,
                   touchTooltipData: BarTouchTooltipData(
                     getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                      final item = _ultimos3Meses[group.x.toInt()];
+                      final item = _evolucaoMensal[group.x.toInt()];
                       final isReceita = rodIndex == 0;
                       final valor = isReceita
                           ? item['receitas'] as double
@@ -640,8 +654,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                     tooltipPadding: const EdgeInsets.all(8),
                   ),
                 ),
-                barGroups: List.generate(_ultimos3Meses.length, (index) {
-                  final item = _ultimos3Meses[index];
+                barGroups: List.generate(_evolucaoMensal.length, (index) {
+                  final item = _evolucaoMensal[index];
                   return BarChartGroupData(
                     x: index,
                     barRods: [
@@ -665,11 +679,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                       showTitles: true,
                       getTitlesWidget: (value, meta) {
                         final index = value.toInt();
-                        if (index >= 0 && index < _ultimos3Meses.length) {
+                        if (index >= 0 && index < _evolucaoMensal.length) {
                           return Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
-                                '${_meses[(_ultimos3Meses[index]['mes'] as int) - 1]}.',
+                                '${_meses[(_evolucaoMensal[index]['mes'] as int) - 1]}.',
                                 style: const TextStyle(
                                     fontSize: 12, fontWeight: FontWeight.w500)),
                           );
@@ -827,9 +841,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ],
               ),
               TextButton(
-                onPressed: () {
-                  MainScreen.navigateTo(1);
-                },
+                onPressed: _irParaLancamentos,
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   padding: EdgeInsets.zero,
@@ -866,13 +878,13 @@ class _DashboardScreenState extends State<DashboardScreen>
     final prefixo = isReceita ? '+' : '-';
     final valor = _toDouble(transacao['valor']);
     final data = DateTime.parse(transacao['data']);
+    final categoria = transacao['categoria']?.toString() ?? 'Outros';
+    final categoriaCor = AppCategories.getColor(categoria);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: InkWell(
-        onTap: () {
-          MainScreen.navigateTo(1);
-        },
+        onTap: _irParaLancamentos,
         borderRadius: BorderRadius.circular(8),
         child: Row(
           children: [
@@ -895,10 +907,23 @@ class _DashboardScreenState extends State<DashboardScreen>
                           fontWeight: FontWeight.w500,
                           color: AppColors.textPrimary(context))),
                   const SizedBox(height: 2),
-                  Text(transacao['categoria']?.toString() ?? 'Outros',
-                      style: TextStyle(
-                          fontSize: 10,
-                          color: AppColors.textSecondary(context))),
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: categoriaCor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(categoria,
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textSecondary(context))),
+                    ],
+                  ),
                 ],
               ),
             ),

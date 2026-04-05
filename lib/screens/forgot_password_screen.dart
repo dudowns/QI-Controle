@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:animate_do/animate_do.dart';
 import '../services/auth_service.dart';
-import 'verify_otp_screen.dart'; // 🔥 IMPORTAR
+import 'verify_otp_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -13,7 +14,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final AuthService _auth = AuthService();
   final TextEditingController _emailController = TextEditingController();
   bool _carregando = false;
-  bool _enviado = false;
 
   Future<void> _enviarRecuperacao() async {
     if (_emailController.text.isEmpty) {
@@ -25,26 +25,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     try {
       await _auth.resetPassword(_emailController.text.trim());
-
-      setState(() {
-        _enviado = true;
-        _carregando = false;
-      });
-
-      // 🔥 NAVEGAR PARA TELA DE VERIFICAÇÃO OTP
       if (mounted) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => VerifyOtpScreen(
-              email: _emailController.text.trim(),
-            ),
+            builder: (context) =>
+                VerifyOtpScreen(email: _emailController.text.trim()),
           ),
         );
       }
     } catch (e) {
-      setState(() => _carregando = false);
       _mostrarMensagem('Erro: $e', isError: true);
+    } finally {
+      setState(() => _carregando = false);
     }
   }
 
@@ -53,175 +46,139 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       SnackBar(
         content: Text(msg),
         backgroundColor: isError ? Colors.red : Colors.green,
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Recuperar Senha'),
-        backgroundColor: const Color(0xFF7B2CBF),
-        foregroundColor: Colors.white,
-      ),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF7B2CBF),
-              Color(0xFF9D4EDD),
-            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF7B2CBF), Color(0xFF9D4EDD), Color(0xFFE0AAFF)],
           ),
         ),
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Card(
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 20 : 0, vertical: 20),
+            child: FadeInUp(
+              duration: Duration(milliseconds: 800),
+              child: Container(
+                width: isMobile ? double.infinity : 420,
+                constraints: BoxConstraints(maxWidth: 450),
+                padding: EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.95),
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 30,
+                      offset: Offset(0, 15),
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.lock_reset,
-                      size: 80,
-                      color: Color(0xFF7B2CBF),
+                    ElasticIn(
+                      duration: Duration(milliseconds: 800),
+                      child: Container(
+                        padding: EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF7B2CBF), Color(0xFF9D4EDD)],
+                          ),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0xFF7B2CBF).withOpacity(0.4),
+                              blurRadius: 20,
+                              spreadRadius: 5,
+                            ),
+                          ],
+                        ),
+                        child: Icon(Icons.lock_reset,
+                            size: 50, color: Colors.white),
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    const Text(
+                    SizedBox(height: 24),
+                    Text(
                       'Recuperar Senha',
                       style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF7B2CBF),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Digite seu e-mail para receber um código de verificação',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    if (!_enviado) ...[
-                      TextField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          labelText: 'E-mail',
-                          prefixIcon: const Icon(Icons.email_outlined),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                                color: Color(0xFF7B2CBF), width: 2),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _carregando ? null : _enviarRecuperacao,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF7B2CBF),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: _carregando
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Text(
-                                  'ENVIAR CÓDIGO',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ] else ...[
-                      const Icon(
-                        Icons.check_circle,
-                        size: 80,
-                        color: Colors.green,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Código Enviado!',
-                        style: TextStyle(
-                          fontSize: 20,
+                          fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: Colors.green,
+                          color: Color(0xFF343A40)),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Digite seu e-mail para receber um código',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                    SizedBox(height: 32),
+                    TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        labelText: 'E-mail',
+                        hintText: 'seu@email.com',
+                        labelStyle: TextStyle(color: Color(0xFF7B2CBF)),
+                        prefixIcon: Icon(Icons.email_outlined,
+                            color: Color(0xFF7B2CBF)),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
                         ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide:
+                              BorderSide(color: Color(0xFF7B2CBF), width: 2),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Enviamos um código de verificação para:\n${_emailController.text}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Verifique sua caixa de entrada e digite o código no app.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF7B2CBF),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                    ),
+                    SizedBox(height: 24),
+                    _carregando
+                        ? Center(
+                            child: CircularProgressIndicator(
+                                color: Color(0xFF7B2CBF)))
+                        : SizedBox(
+                            width: double.infinity,
+                            height: 52,
+                            child: ElevatedButton(
+                              onPressed: _enviarRecuperacao,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Color(0xFF7B2CBF),
+                                elevation: 3,
+                                shadowColor: Color(0xFF7B2CBF).withOpacity(0.5),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                              ),
+                              child: Text('ENVIAR CÓDIGO',
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white)),
                             ),
                           ),
-                          child: const Text(
-                            'VOLTAR PARA LOGIN',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                     TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      child: const Text(
-                        'Lembrei minha senha',
-                        style: TextStyle(color: Color(0xFF7B2CBF)),
-                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('VOLTAR PARA LOGIN',
+                          style: TextStyle(color: Color(0xFF7B2CBF))),
                     ),
                   ],
                 ),

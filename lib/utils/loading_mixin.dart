@@ -1,10 +1,15 @@
 // lib/utils/loading_mixin.dart
 import 'package:flutter/material.dart';
 import '../services/loading_service.dart';
-import 'result.dart'; // 🔥 IMPORT OBRIGATÓRIO
+import 'result.dart';
 
 mixin LoadingMixin {
-  final LoadingService _loading = LoadingService();
+  LoadingService? _loadingService;
+
+  LoadingService get _loading {
+    _loadingService ??= LoadingService();
+    return _loadingService!;
+  }
 
   /// Executa uma operação com loading automático
   Future<T> withLoading<T>(Future<T> Function() operation) async {
@@ -28,7 +33,7 @@ mixin LoadingMixin {
     }
   }
 
-  /// Executa uma operação com loading e retorna Result (versão simplificada)
+  /// Executa uma operação com loading e retorna Result
   Future<Result<T>> toResult<T>(
     Future<T> Function() operation, {
     String errorMessage = 'Erro ao executar operação',
@@ -42,5 +47,41 @@ mixin LoadingMixin {
     } finally {
       _loading.hide();
     }
+  }
+
+  /// Mostra snackbar de erro
+  void showErrorSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// Mostra snackbar de sucesso
+  void showSuccessSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// Mostra snackbar de aviso
+  void showWarningSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orange,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 }

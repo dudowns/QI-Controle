@@ -134,7 +134,6 @@ class SupabaseService {
       'user_id': currentUserId,
     });
 
-    // Atualizar valor da meta
     final meta = await client.from('metas').select().eq('id', metaId).single();
     final valorAtual = (meta['valor_atual'] as num).toDouble();
     final novoValor = valorAtual + valor;
@@ -146,7 +145,6 @@ class SupabaseService {
     }).eq('id', metaId);
   }
 
-  // 🔥 ADICIONADO: Buscar depósitos de uma meta
   Future<List<DepositoMeta>> getDepositos(String metaId) async {
     try {
       final response = await client
@@ -163,7 +161,6 @@ class SupabaseService {
     }
   }
 
-  // 🔥 ADICIONADO: Deletar depósito
   Future<void> deleteDeposito(String id) async {
     try {
       await client.from('depositos_meta').delete().eq('id', id);
@@ -236,22 +233,94 @@ class SupabaseService {
 
   // ==================== TRANSAÇÕES ====================
 
-  Future<List<Transacao>> getTransacoes({String? ticker}) async {
+  Future<List<Transacao>> getTransacoes() async {
     try {
-      var query =
-          client.from('transacoes').select().eq('user_id', currentUserId);
+      final response = await client
+          .from('transacoes')
+          .select()
+          .eq('user_id', currentUserId)
+          .order('data', ascending: false);
 
-      if (ticker != null && ticker.trim().isNotEmpty) {
-        query = query.eq('ticker', ticker.trim().toUpperCase());
-      }
-
-      final response = await query.order('data', ascending: false);
-      return (response as List)
-          .map((json) => Transacao.fromJson(json))
-          .toList();
+      return response.map((json) => Transacao.fromJson(json)).toList();
     } catch (e) {
-      debugPrint('Erro ao buscar transações no Supabase: $e');
+      debugPrint('Erro ao buscar transações: $e');
       return [];
+    }
+  }
+
+  Future<List<Transacao>> getTransacoesByTicker(String ticker) async {
+    try {
+      final response = await client
+          .from('transacoes')
+          .select()
+          .eq('user_id', currentUserId)
+          .eq('ticker', ticker.toUpperCase())
+          .order('data', ascending: false);
+
+      return response.map((json) => Transacao.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Erro ao buscar transações por ticker: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getUltimasTransacoes(
+      {int limit = 5}) async {
+    try {
+      return await client
+          .from('transacoes')
+          .select()
+          .eq('user_id', currentUserId)
+          .order('data', ascending: false)
+          .limit(limit);
+    } catch (e) {
+      debugPrint('Erro ao buscar últimas transações: $e');
+      return [];
+    }
+  }
+
+  Future<List<Transacao>> getUltimasTransacoesModel({int limit = 5}) async {
+    try {
+      final response = await client
+          .from('transacoes')
+          .select()
+          .eq('user_id', currentUserId)
+          .order('data', ascending: false)
+          .limit(limit);
+
+      return response.map((json) => Transacao.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Erro ao buscar últimas transações (model): $e');
+      return [];
+    }
+  }
+
+  Future<void> inserirTransacao({
+    required String ticker,
+    required String tipoInvestimento,
+    required String tipoTransacao,
+    required double quantidade,
+    required double precoUnitario,
+    DateTime? data,
+    double taxa = 0,
+  }) async {
+    try {
+      final total = quantidade * precoUnitario;
+
+      await client.from('transacoes').insert({
+        'user_id': currentUserId,
+        'ticker': ticker.toUpperCase(),
+        'tipo_investimento': tipoInvestimento,
+        'tipo_transacao': tipoTransacao,
+        'quantidade': quantidade,
+        'preco_unitario': precoUnitario,
+        'total': total,
+        'data': (data ?? DateTime.now()).toIso8601String(),
+        'taxa': taxa,
+      });
+    } catch (e) {
+      debugPrint('Erro ao inserir transação: $e');
+      rethrow;
     }
   }
 
@@ -262,7 +331,12 @@ class SupabaseService {
   }
 
   Future<void> deleteTransacao(String id) async {
-    await client.from('transacoes').delete().eq('id', id);
+    try {
+      await client.from('transacoes').delete().eq('id', id);
+    } catch (e) {
+      debugPrint('Erro ao deletar transação: $e');
+      rethrow;
+    }
   }
 
   // ==================== CONTAS DO MÊS ====================
@@ -354,21 +428,6 @@ class SupabaseService {
         'saldo': 0,
         'total_lancamentos': 0,
       };
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> getUltimasTransacoes(
-      {int limit = 5}) async {
-    try {
-      return await client
-          .from('transacoes')
-          .select()
-          .eq('user_id', currentUserId)
-          .order('data', ascending: false)
-          .limit(limit);
-    } catch (e) {
-      debugPrint('Erro ao buscar últimas transações: $e');
-      return [];
     }
   }
 }

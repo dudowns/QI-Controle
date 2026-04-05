@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 
 /// Classe para representar o resultado de uma operação
-/// Pode ser sucesso (com dados) ou falha (com erro)
 class Result<T> {
   final T? _data;
   final String? _error;
@@ -34,6 +33,12 @@ class Result<T> {
     return _error!;
   }
 
+  /// Retorna dados ou null
+  T? get dataOrNull => _data;
+
+  /// Retorna erro ou null
+  String? get errorOrNull => _error;
+
   /// Método para tratar o resultado de forma segura
   void when({
     required Function(T) onSuccess,
@@ -55,7 +60,7 @@ class Result<T> {
     }
   }
 
-  /// Método para encadear operações
+  /// Método para encadear operações assíncronas
   Future<Result<U>> flatMap<U>(Future<Result<U>> Function(T) mapper) async {
     if (isSuccess) {
       return await mapper(_data as T);
@@ -90,9 +95,17 @@ extension ResultExtension<T> on Result<T> {
     }
   }
 
-  /// Retorna dados ou null em caso de erro
-  T? get dataOrNull => isSuccess ? _data : null;
-
-  /// Retorna erro ou null em caso de sucesso
-  String? get errorOrNull => isFailure ? _error : null;
+  /// Mostra snackbar em caso de sucesso
+  void showSuccessSnackBar(BuildContext context, {String? customMessage}) {
+    if (isSuccess) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(customMessage ?? 'Operação realizada com sucesso!'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
 }

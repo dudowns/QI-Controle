@@ -12,9 +12,15 @@ import 'screens/main_screen.dart';
 import 'screens/lancamentos.dart';
 import 'services/auth_service.dart';
 import 'services/theme_service.dart';
-import 'services/loading_service.dart'; // 🔥 NOVO
-import 'database/db_helper.dart';
+import 'services/loading_service.dart';
+import 'services/supabase_service.dart';
 import 'screens/investimentos.dart';
+import 'screens/metas_screen.dart';
+import 'screens/dashboard.dart';
+import 'screens/proventos.dart';
+import 'screens/renda_fixa_screen.dart';
+import 'screens/transacoes_screen.dart';
+import 'screens/contas_do_mes_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,8 +44,8 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeService()..loadTheme()),
-        ChangeNotifierProvider(
-            create: (_) => LoadingService()), // 🔥 ADICIONADO
+        ChangeNotifierProvider(create: (_) => LoadingService()),
+        Provider<SupabaseService>(create: (_) => SupabaseService()),
       ],
       child: Consumer<ThemeService>(
         builder: (context, themeService, child) {
@@ -67,6 +73,12 @@ class MyApp extends StatelessWidget {
               '/main': (context) => MainScreen(key: MainScreen.navigatorKey),
               '/lancamentos': (context) => const LancamentosScreen(),
               '/investimentos': (context) => const InvestimentosScreen(),
+              '/metas': (context) => const MetasScreen(),
+              '/dashboard': (context) => const DashboardScreen(),
+              '/proventos': (context) => const ProventosScreen(),
+              '/renda-fixa': (context) => const RendaFixaScreen(),
+              '/transacoes': (context) => const TransacoesScreen(),
+              '/contas': (context) => const ContasDoMesScreen(),
             },
           );
         },
