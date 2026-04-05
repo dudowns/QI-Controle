@@ -8,9 +8,9 @@ enum Indexador {
 }
 
 class RendaFixaModel {
-  final int? id;
+  final String? id; // 🔥 Alterado de int? para String? (UUID)
   final String nome;
-  final String tipoRenda; // ✅ TEM QUE SER 'tipoRenda'
+  final String tipoRenda;
   final double valorAplicado;
   final double taxa;
   final DateTime dataAplicacao;
@@ -29,7 +29,7 @@ class RendaFixaModel {
   RendaFixaModel({
     this.id,
     required this.nome,
-    required this.tipoRenda, // ✅ TEM QUE SER 'tipoRenda'
+    required this.tipoRenda,
     required this.valorAplicado,
     required this.taxa,
     required this.dataAplicacao,
@@ -48,14 +48,20 @@ class RendaFixaModel {
 
   factory RendaFixaModel.fromJson(Map<String, dynamic> json) {
     return RendaFixaModel(
-      id: json['id'] as int?,
-      nome: json['nome'] as String,
-      tipoRenda: json['tipo_renda'] as String, // ✅ Mapeia do banco
-      valorAplicado: (json['valor'] as num).toDouble(),
-      taxa: (json['taxa'] as num).toDouble(),
-      dataAplicacao: DateTime.parse(json['data_aplicacao']),
-      dataVencimento: DateTime.parse(json['data_vencimento']),
-      diasUteis: json['dias'] as int? ?? 0,
+      // 🔥 Forçamos String para o ID
+      id: json['id']?.toString(),
+      nome: json['nome']?.toString() ?? '',
+      tipoRenda: json['tipo_renda']?.toString() ?? '',
+      // 🔥 Conversão robusta de num para double
+      valorAplicado: (json['valor'] as num?)?.toDouble() ?? 0.0,
+      taxa: (json['taxa'] as num?)?.toDouble() ?? 0.0,
+      dataAplicacao: json['data_aplicacao'] != null
+          ? DateTime.parse(json['data_aplicacao'] as String)
+          : DateTime.now(),
+      dataVencimento: json['data_vencimento'] != null
+          ? DateTime.parse(json['data_vencimento'] as String)
+          : DateTime.now(),
+      diasUteis: (json['dias'] as num?)?.toInt() ?? 0,
       rendimentoBruto: (json['rendimento_bruto'] as num?)?.toDouble(),
       iof: (json['iof'] as num?)?.toDouble(),
       ir: (json['ir'] as num?)?.toDouble(),
@@ -63,16 +69,16 @@ class RendaFixaModel {
       valorFinal: (json['valor_final'] as num?)?.toDouble(),
       indexador: _getIndexadorFromString(json['indexador'] as String?),
       liquidezDiaria: json['liquidez'] == 'Diária',
-      isIsento: (json['is_lci'] as int?) == 1,
-      status: json['status'] as String? ?? 'ativo',
+      // 🔥 No Supabase booleano é bool nativo
+      isIsento: json['is_lci'] is bool ? json['is_lci'] : (json['is_lci'] == 1),
+      status: json['status']?.toString() ?? 'ativo',
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
+    final map = {
       'nome': nome,
-      'tipo_renda': tipoRenda, // ✅ Salva como 'tipo_renda'
+      'tipo_renda': tipoRenda,
       'valor': valorAplicado,
       'taxa': taxa,
       'data_aplicacao': dataAplicacao.toIso8601String(),
@@ -85,9 +91,12 @@ class RendaFixaModel {
       'valor_final': valorFinal,
       'indexador': _getIndexadorString(indexador),
       'liquidez': liquidezDiaria ? 'Diária' : 'No vencimento',
-      'is_lci': isIsento ? 1 : 0,
+      'is_lci': isIsento, // 🔥 Enviamos como bool nativo
       'status': status,
     };
+
+    if (id != null) map['id'] = id;
+    return map;
   }
 
   static Indexador _getIndexadorFromString(String? value) {
@@ -112,5 +121,45 @@ class RendaFixaModel {
       case Indexador.ipca:
         return 'ipca';
     }
+  }
+
+  RendaFixaModel copyWith({
+    String? id, // 🔥 Alterado para String?
+    String? nome,
+    String? tipoRenda,
+    double? valorAplicado,
+    double? taxa,
+    DateTime? dataAplicacao,
+    DateTime? dataVencimento,
+    int? diasUteis,
+    double? rendimentoBruto,
+    double? iof,
+    double? ir,
+    double? rendimentoLiquido,
+    double? valorFinal,
+    Indexador? indexador,
+    bool? liquidezDiaria,
+    bool? isIsento,
+    String? status,
+  }) {
+    return RendaFixaModel(
+      id: id ?? this.id,
+      nome: nome ?? this.nome,
+      tipoRenda: tipoRenda ?? this.tipoRenda,
+      valorAplicado: valorAplicado ?? this.valorAplicado,
+      taxa: taxa ?? this.taxa,
+      dataAplicacao: dataAplicacao ?? this.dataAplicacao,
+      dataVencimento: dataVencimento ?? this.dataVencimento,
+      diasUteis: diasUteis ?? this.diasUteis,
+      rendimentoBruto: rendimentoBruto ?? this.rendimentoBruto,
+      iof: iof ?? this.iof,
+      ir: ir ?? this.ir,
+      rendimentoLiquido: rendimentoLiquido ?? this.rendimentoLiquido,
+      valorFinal: valorFinal ?? this.valorFinal,
+      indexador: indexador ?? this.indexador,
+      liquidezDiaria: liquidezDiaria ?? this.liquidezDiaria,
+      isIsento: isIsento ?? this.isIsento,
+      status: status ?? this.status,
+    );
   }
 }

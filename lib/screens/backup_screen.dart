@@ -58,10 +58,10 @@ class _BackupScreenState extends State<BackupScreen> {
       await _carregarBackups();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
+          content: const Row(
             children: [
-              const Icon(Icons.check_circle, color: Colors.white),
-              const SizedBox(width: 12),
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 12),
               Expanded(child: Text('✅ Backup realizado com sucesso!')),
             ],
           ),
@@ -78,12 +78,12 @@ class _BackupScreenState extends State<BackupScreen> {
   Future<void> _restaurarBackupSelecionado() async {
     if (backups.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.warning, color: Colors.white),
-              const SizedBox(width: 12),
-              const Expanded(child: Text('⚠️ Nenhum backup encontrado!')),
+              Icon(Icons.warning, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(child: Text('⚠️ Nenhum backup encontrado!')),
             ],
           ),
           backgroundColor: Colors.orange,
@@ -268,10 +268,10 @@ class _BackupScreenState extends State<BackupScreen> {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.red.withOpacity(0.2)),
               ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(Icons.warning_amber, color: Colors.red, size: 20),
-                  const SizedBox(width: 12),
+                  Icon(Icons.warning_amber, color: Colors.red, size: 20),
+                  SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       'Todos os dados atuais serão SUBSTITUÍDOS!',
@@ -325,11 +325,11 @@ class _BackupScreenState extends State<BackupScreen> {
         await _carregarBackups();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Row(
+            content: const Row(
               children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('✅ Backup restaurado com sucesso!')),
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(child: Text('✅ Backup restaurado com sucesso!')),
               ],
             ),
             backgroundColor: Colors.green,
@@ -444,12 +444,12 @@ class _BackupScreenState extends State<BackupScreen> {
       if (mounted) {
         await _carregarBackups();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.delete, color: Colors.white),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('🗑️ Backup excluído')),
+                Icon(Icons.delete, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(child: Text('🗑️ Backup excluído')),
               ],
             ),
             backgroundColor: Colors.orange,
@@ -464,11 +464,11 @@ class _BackupScreenState extends State<BackupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
+        title: const Row(
           children: [
             Icon(Icons.backup, color: Colors.white),
-            const SizedBox(width: 12),
-            const Text('Backup e Restauração'),
+            SizedBox(width: 12),
+            Text('Backup e Restauração'),
           ],
         ),
         backgroundColor: AppColors.primary,
@@ -498,7 +498,7 @@ class _BackupScreenState extends State<BackupScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(color: AppColors.primary),
+                    const CircularProgressIndicator(color: AppColors.primary),
                     const SizedBox(height: 16),
                     Text(
                       'Carregando backups...',
@@ -525,7 +525,7 @@ class _BackupScreenState extends State<BackupScreen> {
                                     color: AppColors.primary.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: Icon(
+                                  child: const Icon(
                                     Icons.cloud_upload,
                                     color: AppColors.primary,
                                     size: 32,
@@ -666,7 +666,7 @@ class _BackupScreenState extends State<BackupScreen> {
                                           height: 50,
                                           decoration: BoxDecoration(
                                             gradient: isMaisRecente
-                                                ? LinearGradient(
+                                                ? const LinearGradient(
                                                     colors: [
                                                       AppColors.primary,
                                                       AppColors.secondary,
@@ -732,7 +732,7 @@ class _BackupScreenState extends State<BackupScreen> {
                                                             BorderRadius
                                                                 .circular(12),
                                                       ),
-                                                      child: Text(
+                                                      child: const Text(
                                                         'MAIS RECENTE',
                                                         style: TextStyle(
                                                           fontSize: 8,

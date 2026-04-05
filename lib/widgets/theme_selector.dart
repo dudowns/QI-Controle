@@ -98,7 +98,7 @@ class ThemeSelector extends StatelessWidget {
             if (isSelected)
               Container(
                 padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.primary,
                   shape: BoxShape.circle,
                 ),

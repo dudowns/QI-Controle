@@ -136,8 +136,8 @@ class _EditarMetaModalState extends State<EditarMetaModal> {
 
     if (_dataFim == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Selecione uma data limite'),
+        const SnackBar(
+          content: Text('Selecione uma data limite'),
           backgroundColor: AppColors.warning,
         ),
       );
@@ -147,8 +147,8 @@ class _EditarMetaModalState extends State<EditarMetaModal> {
     final valorObjetivo = _parseValor(_valorObjetivoController.text);
     if (valorObjetivo <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Digite um valor válido para a meta'),
+        const SnackBar(
+          content: Text('Digite um valor válido para a meta'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -176,8 +176,8 @@ class _EditarMetaModalState extends State<EditarMetaModal> {
         }
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('✏️ Meta atualizada com sucesso!'),
+          const SnackBar(
+            content: Text('✏️ Meta atualizada com sucesso!'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
@@ -204,9 +204,9 @@ class _EditarMetaModalState extends State<EditarMetaModal> {
         // CABEÇALHO
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: AppColors.primary,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Row(
             children: [
@@ -325,7 +325,8 @@ class _EditarMetaModalState extends State<EditarMetaModal> {
                     decoration: InputDecoration(
                       hintText: 'Ex: Viagem para a praia',
                       hintStyle: TextStyle(color: AppColors.textHint(context)),
-                      prefixIcon: Icon(Icons.title, color: AppColors.primary),
+                      prefixIcon:
+                          const Icon(Icons.title, color: AppColors.primary),
                       filled: true,
                       fillColor: AppColors.surface(context),
                       border: OutlineInputBorder(
@@ -361,8 +362,8 @@ class _EditarMetaModalState extends State<EditarMetaModal> {
                     decoration: InputDecoration(
                       hintText: 'Ex: Guardar dinheiro para viajar em dezembro',
                       hintStyle: TextStyle(color: AppColors.textHint(context)),
-                      prefixIcon:
-                          Icon(Icons.description, color: AppColors.primary),
+                      prefixIcon: const Icon(Icons.description,
+                          color: AppColors.primary),
                       filled: true,
                       fillColor: AppColors.surface(context),
                       border: OutlineInputBorder(
@@ -392,8 +393,8 @@ class _EditarMetaModalState extends State<EditarMetaModal> {
                     decoration: InputDecoration(
                       hintText: '0,00',
                       hintStyle: TextStyle(color: AppColors.textHint(context)),
-                      prefixIcon:
-                          Icon(Icons.attach_money, color: AppColors.primary),
+                      prefixIcon: const Icon(Icons.attach_money,
+                          color: AppColors.primary),
                       prefixText: 'R\$ ',
                       filled: true,
                       fillColor: AppColors.surface(context),
@@ -433,7 +434,7 @@ class _EditarMetaModalState extends State<EditarMetaModal> {
                           hintText: 'Selecione uma data',
                           hintStyle:
                               TextStyle(color: AppColors.textHint(context)),
-                          prefixIcon: Icon(Icons.calendar_today,
+                          prefixIcon: const Icon(Icons.calendar_today,
                               color: AppColors.primary),
                           suffixIcon: Icon(Icons.arrow_drop_down,
                               color: AppColors.textHint(context)),

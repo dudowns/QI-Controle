@@ -11,12 +11,10 @@ class AppThemes {
       primary: AppColors.primary,
       secondary: AppColors.secondary,
       surface: Colors.white,
-      background: Color(0xFFF8F9FA),
       error: AppColors.error,
       onPrimary: Colors.white,
       onSecondary: Colors.white,
       onSurface: Color(0xFF343A40),
-      onBackground: Color(0xFF343A40),
       onError: Colors.white,
     ),
 
@@ -38,7 +36,7 @@ class AppThemes {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Color(0xFFDEE2E6).withOpacity(0.5)),
+        side: BorderSide(color: const Color(0xFFDEE2E6).withOpacity(0.5)),
       ),
       color: Colors.white,
     ),
@@ -86,14 +84,14 @@ class AppThemes {
     // Inputs
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Color(0xFFF8F9FA),
+      fillColor: const Color(0xFFF8F9FA),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Color(0xFFDEE2E6)),
+        borderSide: const BorderSide(color: Color(0xFFDEE2E6)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Color(0xFFDEE2E6)),
+        borderSide: const BorderSide(color: Color(0xFFDEE2E6)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
@@ -177,7 +175,7 @@ class AppThemes {
 
     // Divisores
     dividerTheme: DividerThemeData(
-      color: Color(0xFFDEE2E6).withOpacity(0.5),
+      color: const Color(0xFFDEE2E6).withOpacity(0.5),
       thickness: 1,
       space: 24,
     ),
@@ -197,12 +195,12 @@ class AppThemes {
     ),
 
     // Tab bar
-    tabBarTheme: TabBarThemeData(
+    tabBarTheme: const TabBarThemeData(
       labelColor: AppColors.primary,
       unselectedLabelColor: Color(0xFF6C757D),
       indicatorColor: AppColors.primary,
-      labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-      unselectedLabelStyle: const TextStyle(fontSize: 14),
+      labelStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: TextStyle(fontSize: 14),
       indicatorSize: TabBarIndicatorSize.tab,
     ),
 
@@ -286,12 +284,10 @@ class AppThemes {
       primary: AppColors.primary,
       secondary: AppColors.secondary,
       surface: Color(0xFF1E1E1E),
-      background: Color(0xFF121212),
       error: AppColors.error,
       onPrimary: Colors.white,
       onSecondary: Colors.white,
       onSurface: Colors.white,
-      onBackground: Colors.white,
       onError: Colors.white,
     ),
 
@@ -380,12 +376,12 @@ class AppThemes {
     ),
 
     // Tab bar
-    tabBarTheme: TabBarThemeData(
+    tabBarTheme: const TabBarThemeData(
       labelColor: AppColors.primary,
       unselectedLabelColor: Colors.white70,
       indicatorColor: AppColors.primary,
-      labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-      unselectedLabelStyle: const TextStyle(fontSize: 14),
+      labelStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: TextStyle(fontSize: 14),
       indicatorSize: TabBarIndicatorSize.tab,
     ),
 

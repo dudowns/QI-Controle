@@ -1,5 +1,4 @@
 // lib/services/backup_service_plus.dart
-
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
@@ -26,7 +25,6 @@ class BackupServicePlus {
       final metas = await db.getAllMetas();
       final rendaFixa = await db.getAllRendaFixa();
 
-      // Exportar contas do mês
       final contas = await _exportarContasDoMes();
 
       final lancamentosLimpos = lancamentos.map((item) {
@@ -129,17 +127,12 @@ class BackupServicePlus {
     }
   }
 
-  // Exportar contas do mês
   Future<List<Map<String, dynamic>>> _exportarContasDoMes() async {
     final database = await db.database;
 
-    // Buscar todas as contas ativas
     final contas = await database.query(DBHelper.tabelaContas);
-
-    // Buscar todos os pagamentos
     final pagamentos = await database.query(DBHelper.tabelaPagamentos);
 
-    // Mapear pagamentos por conta
     final Map<int, List<Map<String, dynamic>>> pagamentosPorConta = {};
     for (var p in pagamentos) {
       final contaId = p['conta_id'] as int;
@@ -149,7 +142,6 @@ class BackupServicePlus {
       pagamentosPorConta[contaId]!.add(p);
     }
 
-    // Adicionar pagamentos às contas
     return contas.map((conta) {
       final contaId = conta['id'] as int;
       return {
@@ -159,16 +151,13 @@ class BackupServicePlus {
     }).toList();
   }
 
-  // ========== SALVAR BACKUP EM ARQUIVO (NO ONEDRIVE - BACKUPSAPPFINANCEIRO) ==========
   Future<String?> salvarBackupEmArquivo() async {
     try {
       final dados = await exportarTodosDados();
 
-      // 🔥 NOME FIXO - SEMPRE O MESMO!
       const fileName = 'backup_financeiro.json';
 
-      // 🔥 CAMINHO CORRETO - OneDrive na pasta BackupsAppFinanceiro
-      final String oneDrivePath =
+      const String oneDrivePath =
           'C:\\Users\\anaep\\OneDrive\\BackupsAppFinanceiro';
       final backupDir = Directory(oneDrivePath);
 
@@ -178,14 +167,10 @@ class BackupServicePlus {
       }
 
       final file = File('${backupDir.path}\\$fileName');
-
       final jsonString = jsonEncode(dados);
-
-      // 🔥 SOBRESCREVE o arquivo se já existir
       await file.writeAsString(jsonString, encoding: utf8);
 
       LoggerService.success('✅ Backup salvo em: ${file.path}');
-
       return file.path;
     } catch (e) {
       LoggerService.error('❌ Erro ao salvar backup', e);
@@ -193,13 +178,11 @@ class BackupServicePlus {
     }
   }
 
-  // ========== VERIFICAR SE BACKUP EXISTE ==========
   Future<bool> backupExiste() async {
     try {
-      final String oneDrivePath =
+      const String oneDrivePath =
           'C:\\Users\\anaep\\OneDrive\\BackupsAppFinanceiro';
       final file = File('$oneDrivePath\\backup_financeiro.json');
-
       return await file.exists();
     } catch (e) {
       LoggerService.error('❌ Erro ao verificar backup', e);
@@ -207,10 +190,9 @@ class BackupServicePlus {
     }
   }
 
-  // ========== OBTER INFORMAÇÕES DO BACKUP ==========
   Future<Map<String, dynamic>?> getInfoBackup() async {
     try {
-      final String oneDrivePath =
+      const String oneDrivePath =
           'C:\\Users\\anaep\\OneDrive\\BackupsAppFinanceiro';
       final file = File('$oneDrivePath\\backup_financeiro.json');
 
@@ -233,7 +215,6 @@ class BackupServicePlus {
     }
   }
 
-  // ========== RESTAURAR BACKUP ==========
   Future<bool> restaurarBackup(String caminhoArquivo,
       {bool limparAntes = false}) async {
     try {
@@ -257,7 +238,6 @@ class BackupServicePlus {
 
       int totalInserido = 0;
 
-      // Restaurar lançamentos
       if (dados['lancamentos'] != null) {
         for (var item in dados['lancamentos']) {
           try {
@@ -269,7 +249,6 @@ class BackupServicePlus {
         }
       }
 
-      // Restaurar investimentos
       if (dados['investimentos'] != null) {
         for (var item in dados['investimentos']) {
           try {
@@ -281,7 +260,6 @@ class BackupServicePlus {
         }
       }
 
-      // Restaurar proventos
       if (dados['proventos'] != null) {
         for (var item in dados['proventos']) {
           try {
@@ -293,7 +271,6 @@ class BackupServicePlus {
         }
       }
 
-      // Restaurar metas
       if (dados['metas'] != null) {
         for (var item in dados['metas']) {
           try {
@@ -305,7 +282,6 @@ class BackupServicePlus {
         }
       }
 
-      // Restaurar renda fixa
       if (dados['renda_fixa'] != null) {
         for (var item in dados['renda_fixa']) {
           try {
@@ -317,22 +293,16 @@ class BackupServicePlus {
         }
       }
 
-      // Restaurar contas do mês
       if (dados['contas'] != null) {
         for (var item in dados['contas']) {
           try {
-            // Separar pagamentos da conta
             final pagamentos = item['pagamentos'] as List? ?? [];
-
-            // Criar mapa da conta sem os pagamentos
             final conta = Map<String, dynamic>.from(item);
             conta.remove('pagamentos');
-            conta.remove('id'); // Deixa o banco gerar novo ID
+            conta.remove('id');
 
-            // Inserir conta
             final contaId = await db.adicionarConta(conta);
 
-            // Reinserir pagamentos se houver
             if (contaId > 0 && pagamentos.isNotEmpty) {
               final database = await db.database;
               for (var p in pagamentos) {
@@ -359,10 +329,9 @@ class BackupServicePlus {
     }
   }
 
-  // ========== LISTAR BACKUPS DISPONÍVEIS ==========
   Future<List<File>> listarBackups() async {
     try {
-      final String oneDrivePath =
+      const String oneDrivePath =
           'C:\\Users\\anaep\\OneDrive\\BackupsAppFinanceiro';
       final backupDir = Directory(oneDrivePath);
 
@@ -370,7 +339,6 @@ class BackupServicePlus {
         return [];
       }
 
-      // Retorna o arquivo fixo se existir
       final file = File('$oneDrivePath\\backup_financeiro.json');
       if (await file.exists()) {
         return [file];
@@ -383,7 +351,6 @@ class BackupServicePlus {
     }
   }
 
-  // ========== LIMPAR BANCO ==========
   Future<void> _limparBanco() async {
     try {
       LoggerService.warning('🧹 Limpando banco de dados para restauração...');
@@ -392,7 +359,6 @@ class BackupServicePlus {
 
       await database.execute('PRAGMA foreign_keys = OFF');
 
-      // Respeitar foreign keys
       final tabelas = [
         DBHelper.tabelaPagamentos,
         DBHelper.tabelaParcelas,

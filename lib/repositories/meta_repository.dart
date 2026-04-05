@@ -1,22 +1,21 @@
 // lib/repositories/meta_repository.dart
-
-import 'package:flutter/foundation.dart'; // 🔥 IMPORT PARA debugPrint
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../database/db_helper.dart';
 import '../services/sync_service.dart';
+import '../utils/result.dart';
+import '../utils/loading_mixin.dart';
 
-class MetaRepository {
+class MetaRepository with LoadingMixin {
   final DBHelper _dbHelper = DBHelper();
   final SyncService _syncService = SyncService();
   final supabase = Supabase.instance.client;
 
-  // ========== CONSTANTES ==========
   static const String tabelaMetas = DBHelper.tabelaMetas;
   static const String tabelaDepositosMeta = DBHelper.tabelaDepositosMeta;
 
-  // ========== 🔥 NOVOS MÉTODOS COM VIEWS ==========
+  // ========== MÉTODOS COM VIEWS ==========
 
-  /// Buscar progresso das metas usando a VIEW do Supabase
   Future<List<Map<String, dynamic>>> getProgressoMetas() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return [];
@@ -26,7 +25,6 @@ class MetaRepository {
           .from('view_progresso_metas')
           .select()
           .eq('user_id', userId);
-
       return response;
     } catch (e) {
       debugPrint('❌ Erro ao buscar progresso metas: $e');
@@ -34,7 +32,6 @@ class MetaRepository {
     }
   }
 
-  /// Fallback local para progresso das metas
   Future<List<Map<String, dynamic>>> _getProgressoMetasLocal() async {
     final metas = await getAllMetas();
     final agora = DateTime.now();
@@ -59,7 +56,6 @@ class MetaRepository {
     }).toList();
   }
 
-  /// Buscar metas por status (usando VIEW)
   Future<List<Map<String, dynamic>>> getMetasPorStatus(String status) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return [];
@@ -70,7 +66,6 @@ class MetaRepository {
           .select()
           .eq('user_id', userId)
           .eq('status', status);
-
       return response;
     } catch (e) {
       debugPrint('❌ Erro ao buscar metas por status: $e');
@@ -79,14 +74,12 @@ class MetaRepository {
     }
   }
 
-  /// Buscar resumo das metas (estatísticas)
   Future<Map<String, dynamic>> getResumoMetas() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return {};
 
     try {
       final metas = await getProgressoMetas();
-
       int total = metas.length;
       int concluidas = metas.where((m) => m['status'] == 'concluida').length;
       int emAndamento =
@@ -115,7 +108,6 @@ class MetaRepository {
 
   // ========== MÉTODOS DE METAS COM SINCRONIZAÇÃO ==========
 
-  /// Insere uma nova meta
   Future<int> insertMeta(Map<String, dynamic> meta) async {
     meta['sync_status'] = 'pending';
     meta['updated_at'] = DateTime.now().toIso8601String();
@@ -125,7 +117,6 @@ class MetaRepository {
     return id;
   }
 
-  /// Atualiza uma meta existente
   Future<int> updateMeta(Map<String, dynamic> meta) async {
     meta['sync_status'] = 'pending';
     meta['updated_at'] = DateTime.now().toIso8601String();
@@ -135,7 +126,6 @@ class MetaRepository {
     return result;
   }
 
-  /// Deleta uma meta
   Future<int> deleteMeta(int id) async {
     final meta = await getMetaById(id);
     final remoteId = meta?['remote_id'] as String?;
@@ -149,23 +139,20 @@ class MetaRepository {
     return result;
   }
 
-  /// Atualiza o progresso de uma meta
   Future<int> atualizarProgressoMeta(int id, double valorAtual) async {
     final result = await _dbHelper.atualizarProgressoMeta(id, valorAtual);
     await _syncService.markAsPending('metas', id);
     return result;
   }
 
-  /// Conclui uma meta
   Future<int> concluirMeta(int id) async {
     final result = await _dbHelper.concluirMeta(id);
     await _syncService.markAsPending('metas', id);
     return result;
   }
 
-  // ========== MÉTODOS DE DEPÓSITOS COM SINCRONIZAÇÃO ==========
+  // ========== MÉTODOS DE DEPÓSITOS ==========
 
-  /// Insere um novo depósito
   Future<int> insertDepositoMeta(Map<String, dynamic> deposito) async {
     deposito['sync_status'] = 'pending';
     deposito['updated_at'] = DateTime.now().toIso8601String();
@@ -175,109 +162,215 @@ class MetaRepository {
     return id;
   }
 
-  /// Deleta um depósito
   Future<int> deleteDeposito(int id) async {
     final result = await _dbHelper.deleteDeposito(id);
     _syncService.syncNow();
     return result;
   }
 
-  // ========== MÉTODOS DE BUSCA (SQLite) ==========
+  // ========== MÉTODOS DE BUSCA ==========
 
-  /// Busca todas as metas
   Future<List<Map<String, dynamic>>> getAllMetas() async {
     return await _dbHelper.getAllMetas();
   }
 
-  /// Busca uma meta pelo ID
   Future<Map<String, dynamic>?> getMetaById(int id) async {
     return await _dbHelper.getMetaById(id);
   }
 
-  /// Busca todos os depósitos de uma meta
   Future<List<Map<String, dynamic>>> getDepositosByMetaId(int metaId) async {
     return await _dbHelper.getDepositosByMetaId(metaId);
   }
 
-  /// Calcula o total de depósitos de uma meta
   Future<double> getTotalDepositosByMetaId(int metaId) async {
     return await _dbHelper.getTotalDepositosByMetaId(metaId);
   }
 
-  // ========== MÉTODOS COMBINADOS ==========
+  // ========== MÉTODOS COM RESULT ==========
 
-  /// Busca uma meta completa com seus depósitos
-  Future<Map<String, dynamic>?> getMetaComDepositos(int id) async {
-    final meta = await _dbHelper.getMetaById(id);
-    if (meta == null) return null;
-
-    final depositos = await _dbHelper.getDepositosByMetaId(id);
-    meta['depositos'] = depositos;
-
-    return meta;
+  Future<Result<List<Map<String, dynamic>>>> getAllMetasResult() async {
+    return await withLoadingResult(() async {
+      try {
+        final metas = await _dbHelper.getAllMetas();
+        return Result.success(metas);
+      } catch (e) {
+        return Result.failure('❌ Erro ao carregar metas: $e');
+      }
+    });
   }
 
-  /// Busca todas as metas completas com seus depósitos
-  Future<List<Map<String, dynamic>>> getAllMetasComDepositos() async {
-    final metas = await _dbHelper.getAllMetas();
-
-    for (var meta in metas) {
-      final depositos = await _dbHelper.getDepositosByMetaId(meta['id']);
-      meta['depositos'] = depositos;
-    }
-
-    return metas;
+  Future<Result<Map<String, dynamic>?>> getMetaByIdResult(int id) async {
+    return await withLoadingResult(() async {
+      try {
+        final meta = await _dbHelper.getMetaById(id);
+        return Result.success(meta);
+      } catch (e) {
+        return Result.failure('❌ Erro ao buscar meta ID: $id\n$e');
+      }
+    });
   }
 
-  /// Adiciona um depósito e atualiza o progresso da meta
-  Future<bool> adicionarDepositoEAtualizarMeta({
+  Future<Result<int>> insertMetaResult(Map<String, dynamic> meta) async {
+    return await withLoadingResult(() async {
+      try {
+        meta['sync_status'] = 'pending';
+        meta['updated_at'] = DateTime.now().toIso8601String();
+
+        final id = await _dbHelper.insertMeta(meta);
+        _syncService.syncNow();
+        return Result.success(id);
+      } catch (e) {
+        return Result.failure(
+            '❌ Erro ao adicionar meta: ${meta['titulo']}\n$e');
+      }
+    });
+  }
+
+  Future<Result<int>> updateMetaResult(Map<String, dynamic> meta) async {
+    return await withLoadingResult(() async {
+      try {
+        final id = meta['id'];
+        meta.remove('id');
+        meta['sync_status'] = 'pending';
+        meta['updated_at'] = DateTime.now().toIso8601String();
+
+        final result = await _dbHelper.updateMeta(meta);
+        _syncService.syncNow();
+        return Result.success(result);
+      } catch (e) {
+        return Result.failure(
+            '❌ Erro ao atualizar meta: ${meta['titulo']}\n$e');
+      }
+    });
+  }
+
+  Future<Result<int>> deleteMetaResult(int id) async {
+    return await withLoadingResult(() async {
+      try {
+        final meta = await getMetaById(id);
+        final remoteId = meta?['remote_id'] as String?;
+
+        final result = await _dbHelper.deleteMeta(id);
+
+        if (remoteId != null && remoteId.isNotEmpty) {
+          await _syncService.deleteAndSync('metas', id, remoteId);
+        }
+
+        return Result.success(result);
+      } catch (e) {
+        return Result.failure('❌ Erro ao excluir meta ID: $id\n$e');
+      }
+    });
+  }
+
+  Future<Result<int>> atualizarProgressoMetaResult(
+      int id, double valorAtual) async {
+    return await withLoadingResult(() async {
+      try {
+        final result = await _dbHelper.atualizarProgressoMeta(id, valorAtual);
+        await _syncService.markAsPending('metas', id);
+        return Result.success(result);
+      } catch (e) {
+        return Result.failure(
+            '❌ Erro ao atualizar progresso da meta ID: $id\n$e');
+      }
+    });
+  }
+
+  Future<Result<int>> concluirMetaResult(int id) async {
+    return await withLoadingResult(() async {
+      try {
+        final result = await _dbHelper.concluirMeta(id);
+        await _syncService.markAsPending('metas', id);
+        return Result.success(result);
+      } catch (e) {
+        return Result.failure('❌ Erro ao concluir meta ID: $id\n$e');
+      }
+    });
+  }
+
+  Future<Result<List<Map<String, dynamic>>>> getDepositosByMetaIdResult(
+      int metaId) async {
+    return await withLoadingResult(() async {
+      try {
+        final depositos = await _dbHelper.getDepositosByMetaId(metaId);
+        return Result.success(depositos);
+      } catch (e) {
+        return Result.failure(
+            '❌ Erro ao buscar depósitos da meta ID: $metaId\n$e');
+      }
+    });
+  }
+
+  Future<Result<int>> insertDepositoMetaResult(
+      Map<String, dynamic> deposito) async {
+    return await withLoadingResult(() async {
+      try {
+        deposito['sync_status'] = 'pending';
+        deposito['updated_at'] = DateTime.now().toIso8601String();
+
+        final id = await _dbHelper.insertDepositoMeta(deposito);
+        _syncService.syncNow();
+        return Result.success(id);
+      } catch (e) {
+        return Result.failure(
+            '❌ Erro ao adicionar depósito: R\$ ${deposito['valor']}\n$e');
+      }
+    });
+  }
+
+  Future<Result<int>> deleteDepositoResult(int id) async {
+    return await withLoadingResult(() async {
+      try {
+        final result = await _dbHelper.deleteDeposito(id);
+        _syncService.syncNow();
+        return Result.success(result);
+      } catch (e) {
+        return Result.failure('❌ Erro ao excluir depósito ID: $id\n$e');
+      }
+    });
+  }
+
+  Future<Result<bool>> adicionarDepositoEAtualizarMetaResult({
     required int metaId,
     required double valor,
     required DateTime dataDeposito,
     String? observacao,
   }) async {
-    try {
-      await insertDepositoMeta({
-        'meta_id': metaId,
-        'valor': valor,
-        'data_deposito': dataDeposito.toIso8601String(),
-        'observacao': observacao,
-      });
+    return await withLoadingResult(() async {
+      try {
+        await insertDepositoMetaResult({
+          'meta_id': metaId,
+          'valor': valor,
+          'data_deposito': dataDeposito.toIso8601String(),
+          'observacao': observacao,
+        });
 
-      final meta = await _dbHelper.getMetaById(metaId);
-      if (meta == null) return false;
+        final metaResult = await getMetaByIdResult(metaId);
+        if (metaResult.isFailure) return Result.failure(metaResult.error);
 
-      final valorAtual = (meta['valor_atual'] as num).toDouble();
-      final novoValor = valorAtual + valor;
+        final meta = metaResult.data;
+        if (meta == null) return Result.failure('Meta não encontrada');
 
-      await atualizarProgressoMeta(metaId, novoValor);
+        final valorAtual = (meta['valor_atual'] ?? 0).toDouble();
+        final novoValor = valorAtual + valor;
 
-      final valorObjetivo = (meta['valor_objetivo'] as num).toDouble();
-      if (novoValor >= valorObjetivo) {
-        await concluirMeta(metaId);
+        await atualizarProgressoMetaResult(metaId, novoValor);
+
+        final valorObjetivo = (meta['valor_objetivo'] ?? 0).toDouble();
+        if (novoValor >= valorObjetivo) {
+          await concluirMetaResult(metaId);
+        }
+
+        return Result.success(true);
+      } catch (e) {
+        return Result.failure('❌ Erro ao adicionar depósito: $e');
       }
-
-      return true;
-    } catch (e) {
-      debugPrint('❌ Erro ao adicionar depósito: $e');
-      return false;
-    }
-  }
-
-  /// Remove um depósito e atualiza o progresso da meta
-  Future<bool> removerDepositoEAtualizarMeta(int depositoId) async {
-    try {
-      await deleteDeposito(depositoId);
-      return true;
-    } catch (e) {
-      debugPrint('❌ Erro ao remover depósito: $e');
-      return false;
-    }
+    });
   }
 
   // ========== MÉTODOS DE ESTATÍSTICAS ==========
 
-  /// Retorna estatísticas das metas (local)
   Future<Map<String, dynamic>> getEstatisticasMetas() async {
     final metas = await _dbHelper.getAllMetas();
 
@@ -322,19 +415,16 @@ class MetaRepository {
     };
   }
 
-  /// Retorna metas em andamento
   Future<List<Map<String, dynamic>>> getMetasEmAndamento() async {
     final metas = await _dbHelper.getAllMetas();
     return metas.where((meta) => (meta['concluida'] as int) == 0).toList();
   }
 
-  /// Retorna metas concluídas
   Future<List<Map<String, dynamic>>> getMetasConcluidas() async {
     final metas = await _dbHelper.getAllMetas();
     return metas.where((meta) => (meta['concluida'] as int) == 1).toList();
   }
 
-  /// Retorna metas atrasadas
   Future<List<Map<String, dynamic>>> getMetasAtrasadas() async {
     final metas = await _dbHelper.getAllMetas();
     final agora = DateTime.now();
@@ -346,5 +436,72 @@ class MetaRepository {
       final dataFim = DateTime.parse(meta['data_fim']);
       return dataFim.isBefore(agora);
     }).toList();
+  }
+
+  // ========== MÉTODOS COMBINADOS ==========
+
+  Future<Map<String, dynamic>?> getMetaComDepositos(int id) async {
+    final meta = await _dbHelper.getMetaById(id);
+    if (meta == null) return null;
+
+    final depositos = await _dbHelper.getDepositosByMetaId(id);
+    meta['depositos'] = depositos;
+
+    return meta;
+  }
+
+  Future<List<Map<String, dynamic>>> getAllMetasComDepositos() async {
+    final metas = await _dbHelper.getAllMetas();
+
+    for (var meta in metas) {
+      final depositos = await _dbHelper.getDepositosByMetaId(meta['id']);
+      meta['depositos'] = depositos;
+    }
+
+    return metas;
+  }
+
+  Future<bool> adicionarDepositoEAtualizarMeta({
+    required int metaId,
+    required double valor,
+    required DateTime dataDeposito,
+    String? observacao,
+  }) async {
+    try {
+      await insertDepositoMeta({
+        'meta_id': metaId,
+        'valor': valor,
+        'data_deposito': dataDeposito.toIso8601String(),
+        'observacao': observacao,
+      });
+
+      final meta = await _dbHelper.getMetaById(metaId);
+      if (meta == null) return false;
+
+      final valorAtual = (meta['valor_atual'] as num).toDouble();
+      final novoValor = valorAtual + valor;
+
+      await atualizarProgressoMeta(metaId, novoValor);
+
+      final valorObjetivo = (meta['valor_objetivo'] as num).toDouble();
+      if (novoValor >= valorObjetivo) {
+        await concluirMeta(metaId);
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('❌ Erro ao adicionar depósito: $e');
+      return false;
+    }
+  }
+
+  Future<bool> removerDepositoEAtualizarMeta(int depositoId) async {
+    try {
+      await deleteDeposito(depositoId);
+      return true;
+    } catch (e) {
+      debugPrint('❌ Erro ao remover depósito: $e');
+      return false;
+    }
   }
 }

@@ -78,11 +78,11 @@ class _BackupModalState extends State<BackupModal> {
       widget.onBackupRealizado?.call();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
+          content: const Row(
             children: [
-              const Icon(Icons.check_circle, color: Colors.white),
-              const SizedBox(width: 12),
-              const Expanded(child: Text('✅ Backup realizado com sucesso!')),
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(child: Text('✅ Backup realizado com sucesso!')),
             ],
           ),
           backgroundColor: AppColors.success,
@@ -191,10 +191,10 @@ class _BackupModalState extends State<BackupModal> {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.red.withOpacity(0.2)),
               ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(Icons.warning_amber, color: Colors.red, size: 20),
-                  const SizedBox(width: 12),
+                  Icon(Icons.warning_amber, color: Colors.red, size: 20),
+                  SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       'Todos os dados atuais serão SUBSTITUÍDOS!',
@@ -249,11 +249,11 @@ class _BackupModalState extends State<BackupModal> {
         widget.onBackupRealizado?.call();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Row(
+            content: const Row(
               children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('✅ Backup restaurado com sucesso!')),
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(child: Text('✅ Backup restaurado com sucesso!')),
               ],
             ),
             backgroundColor: Colors.green,
@@ -366,12 +366,12 @@ class _BackupModalState extends State<BackupModal> {
         await _carregarBackups();
         widget.onBackupRealizado?.call();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.delete, color: Colors.white),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('🗑️ Backup excluído')),
+                Icon(Icons.delete, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(child: Text('🗑️ Backup excluído')),
               ],
             ),
             backgroundColor: Colors.orange,
@@ -389,9 +389,9 @@ class _BackupModalState extends State<BackupModal> {
         // 🔝 CABEÇALHO
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: AppColors.primary,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Row(
             children: [

@@ -1,10 +1,9 @@
 // lib/screens/contas_do_mes_screen.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../database/db_helper.dart';
-import '../models/pagamento_model.dart';
+import '../repositories/conta_repository.dart';
+import '../widgets/adicionar_conta_modal.dart';
 import '../constants/app_colors.dart';
-import '../widgets/adicionar_conta_modal.dart'; // 🔥 NOVO IMPORT!
+import '../utils/formatters.dart';
 
 class ContasDoMesScreen extends StatefulWidget {
   const ContasDoMesScreen({super.key});
@@ -14,204 +13,505 @@ class ContasDoMesScreen extends StatefulWidget {
 }
 
 class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
-  final DBHelper _dbHelper = DBHelper();
-  DateTime _mesSelecionado = DateTime.now();
-  List<PagamentoMes> _pagamentos = [];
-  Map<String, dynamic> _resumo = {};
-  bool _carregando = true;
+  final ContaRepository _repository = ContaRepository();
 
-  // FILTROS
-  bool _filtroParcelas = false;
-  bool _filtroApenasPendentes = false;
-  String _filtroCategoria = 'Todas';
-  List<String> _categorias = ['Todas'];
+  List<Map<String, dynamic>> _pagamentos = [];
+  Map<String, dynamic> _resumo = {};
+  bool _isLoading = true;
+  DateTime _mesSelecionado = DateTime.now();
+
+  final Map<int, Map<String, dynamic>> _parcelasCache = {};
 
   @override
   void initState() {
     super.initState();
-    _carregarCategorias();
     _carregarDados();
-  }
-
-  Future<void> _carregarCategorias() async {
-    try {
-      final db = await _dbHelper.database;
-      final result =
-          await db.query('contas', distinct: true, columns: ['categoria']);
-
-      final categorias = result
-          .map((c) => c['categoria'] as String)
-          .where((c) => c.isNotEmpty)
-          .toSet()
-          .toList();
-
-      setState(() {
-        _categorias = ['Todas', ...categorias];
-      });
-    } catch (e) {
-      debugPrint('Erro ao carregar categorias: $e');
-    }
   }
 
   Future<void> _carregarDados() async {
-    setState(() => _carregando = true);
-
+    setState(() => _isLoading = true);
     try {
-      final pagamentosJson = await _dbHelper.getPagamentosDoMes(
-        _mesSelecionado.year,
-        _mesSelecionado.month,
-      );
-
-      _pagamentos = pagamentosJson
-          .map((p) {
-            try {
-              return PagamentoMes.fromJson(p);
-            } catch (e) {
-              return null;
-            }
-          })
-          .whereType<PagamentoMes>()
-          .toList();
-
-      _resumo = await _dbHelper.getResumoContasDoMes(
-        _mesSelecionado.year,
-        _mesSelecionado.month,
-      );
+      _pagamentos = await _repository.getPagamentosDoMes(
+          _mesSelecionado.year, _mesSelecionado.month);
+      _resumo = await _repository.getResumoContasDoMes(
+          _mesSelecionado.year, _mesSelecionado.month);
+      await _carregarParcelasInfo();
     } catch (e) {
-      _pagamentos = [];
-      _resumo = {
-        'totalPendente': 0,
-        'qtdPendente': 0,
-        'totalPago': 0,
-        'qtdPago': 0,
-      };
+      debugPrint('Erro ao carregar: $e');
     } finally {
-      if (mounted) {
-        setState(() => _carregando = false);
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _carregarParcelasInfo() async {
+    _parcelasCache.clear();
+    for (var pagamento in _pagamentos) {
+      final contaId = pagamento['conta_id'] as int;
+      final conta = await _repository.getContaById(contaId);
+
+      if (conta != null &&
+          conta.parcelasTotal != null &&
+          conta.parcelasTotal! > 1) {
+        final parcelaAtual = _calcularParcelaAtual(pagamento, conta);
+        final restantes = conta.parcelasTotal! - parcelaAtual;
+        _parcelasCache[contaId] = {
+          'atual': parcelaAtual,
+          'total': conta.parcelasTotal,
+          'restantes': restantes,
+        };
       }
     }
   }
 
-  // 🟢 FUNÇÃO CORRIGIDA - CALCULA PARCELAS DIREITO!
-  Future<Map<String, dynamic>> _getInfoParcelas(int contaId) async {
+  int _calcularParcelaAtual(Map<String, dynamic> pagamento, dynamic conta) {
     try {
-      final db = await _dbHelper.database;
-      final result = await db.query(
-        'contas',
-        where: 'id = ?',
-        whereArgs: [contaId],
-      );
+      final anoMes = pagamento['ano_mes'] as int;
+      final ano = anoMes ~/ 100;
+      final mes = anoMes % 100;
+      final dataAtual = DateTime(ano, mes, 1);
 
-      if (result.isEmpty) return {};
-
-      final conta = result.first;
-
-      // Pega os dados da conta
-      final totalParcelas = conta['parcelas_total'] as int?;
-      final dataInicioStr = conta['data_inicio'] as String?;
-      final categoria = conta['categoria'] as String? ?? 'Outros';
-
-      debugPrint(
-          '🔍 Dados da conta $contaId: totalParcelas=$totalParcelas, dataInicio=$dataInicioStr');
-
-      // Se não tem parcela, retorna só categoria
-      if (totalParcelas == null || totalParcelas <= 1) {
-        return {'categoria': categoria};
+      DateTime dataInicio;
+      if (conta.dataInicio is DateTime) {
+        dataInicio = conta.dataInicio as DateTime;
+      } else if (conta.dataInicio is String) {
+        dataInicio = DateTime.parse(conta.dataInicio as String);
+      } else {
+        return 1;
       }
 
-      // Se não tem data de início, retorna só categoria
-      if (dataInicioStr == null) {
-        return {'categoria': categoria};
-      }
-
-      final dataInicio = DateTime.parse(dataInicioStr);
-
-      // Calcula a diferença de meses
-      int mesesDiferenca = (_mesSelecionado.year - dataInicio.year) * 12 +
-          (_mesSelecionado.month - dataInicio.month);
-
-      // Parcela atual = mesesDiferenca + 1
+      final mesesDiferenca = (dataAtual.year - dataInicio.year) * 12 +
+          (dataAtual.month - dataInicio.month);
       int parcelaAtual = mesesDiferenca + 1;
 
-      debugPrint(
-          '📅 Mês selecionado: ${_mesSelecionado.month}/${_mesSelecionado.year}');
-      debugPrint('📅 Data início: ${dataInicio.month}/${dataInicio.year}');
-      debugPrint('🧮 Meses diferença: $mesesDiferenca');
-      debugPrint('🔢 Parcela atual calculada: $parcelaAtual');
-
-      // Se ainda não começou
-      if (parcelaAtual < 1) {
-        return {
-          'atual': 1,
-          'total': totalParcelas,
-          'restantes': totalParcelas,
-          'categoria': categoria,
-          'concluido': false,
-          'status': 'A começar'
-        };
+      if (parcelaAtual < 1) parcelaAtual = 1;
+      if (conta.parcelasTotal != null && parcelaAtual > conta.parcelasTotal!) {
+        parcelaAtual = conta.parcelasTotal!;
       }
 
-      // Se já passou do total
-      if (parcelaAtual > totalParcelas) {
-        return {
-          'atual': totalParcelas,
-          'total': totalParcelas,
-          'restantes': 0,
-          'categoria': categoria,
-          'concluido': true, // SÓ AQUI É TRUE!
-          'status': 'Concluído'
-        };
-      }
-
-      // Tá no meio do parcelamento
-      return {
-        'atual': parcelaAtual,
-        'total': totalParcelas,
-        'restantes': totalParcelas - parcelaAtual,
-        'categoria': categoria,
-        'concluido': false,
-        'status': 'Em andamento'
-      };
+      return parcelaAtual;
     } catch (e) {
-      debugPrint('❌ Erro ao calcular parcelas: $e');
-      return {};
+      return 1;
     }
   }
 
-  String _formatarValor(double valor) =>
-      NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$ ').format(valor);
-
   void _navegarMes(int delta) {
-    setState(() => _mesSelecionado = DateTime(
-          _mesSelecionado.year,
-          _mesSelecionado.month + delta,
-          1,
-        ));
+    setState(() {
+      _mesSelecionado =
+          DateTime(_mesSelecionado.year, _mesSelecionado.month + delta, 1);
+      _parcelasCache.clear();
+    });
     _carregarDados();
   }
 
-  Future<void> _pagarConta(PagamentoMes pagamento) async {
-    final sucesso = await _dbHelper.pagarConta(pagamento.id!);
-    if (sucesso && mounted) {
-      _carregarDados();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('✅ ${pagamento.contaNome} paga!'),
-        backgroundColor: AppColors.success,
-      ));
-    }
-  }
+  Future<void> _pagarConta(Map<String, dynamic> pagamento) async {
+    final pagamentoId = pagamento['id'];
+    final contaNome = pagamento['conta_nome'];
+    final valor = pagamento['valor'];
 
-  Future<void> _excluirConta(int contaId, String nomeConta) async {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface(context),
-        title: Text(
-          'Excluir Conta',
-          style: TextStyle(color: AppColors.textPrimary(context)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.success.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.payment, color: AppColors.success),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Confirmar Pagamento',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary(context),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Deseja pagar a conta:',
+              style: TextStyle(color: AppColors.textSecondary(context)),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.success.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.success.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.receipt, color: AppColors.success),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          contaNome,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: AppColors.textPrimary(context),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          Formatador.moeda(valor),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.success,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.info.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.info.withOpacity(0.2)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: AppColors.info, size: 20),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Este pagamento será registrado automaticamente nos Lançamentos como uma despesa.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.info,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'Cancelar',
+              style: TextStyle(color: AppColors.textSecondary(context)),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('PAGAR'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    final result = await _repository.pagarContaComLancamento(pagamentoId);
+
+    result.when(
+      onSuccess: (sucesso) {
+        if (sucesso) {
+          _carregarDados();
+
+          final snackBar = SnackBar(
+            content: Text('✅ $contaNome paga e registrada nos Lançamentos!'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'DESFAZER',
+              textColor: Colors.white,
+              onPressed: () async {
+                final desfazerResult =
+                    await _repository.desfazerPagamento(pagamentoId);
+
+                desfazerResult.when(
+                  onSuccess: (_) {
+                    _carregarDados();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('↩️ Pagamento desfeito!'),
+                        backgroundColor: AppColors.warning,
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  onError: (erro) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(erro),
+                        backgroundColor: AppColors.error,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          );
+
+          ScaffoldMessenger.of(context).showSnackBar(snackBar);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Erro ao pagar conta'),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      },
+      onError: (erro) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(erro),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _desfazerPagamento(Map<String, dynamic> pagamento) async {
+    final pagamentoId = pagamento['id'];
+    final contaNome = pagamento['conta_nome'];
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface(context),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.undo, color: AppColors.warning),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Desfazer Pagamento',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary(context),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Deseja desfazer o pagamento da conta:',
+              style: TextStyle(color: AppColors.textSecondary(context)),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.receipt, color: AppColors.warning),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          contaNome,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: AppColors.textPrimary(context),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          Formatador.moeda(pagamento['valor'] ?? 0),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.warning,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.info.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.info.withOpacity(0.2)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: AppColors.info, size: 20),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'O lançamento gerado automaticamente será removido.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.info,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'Cancelar',
+              style: TextStyle(color: AppColors.textSecondary(context)),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.warning,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('DESFAZER'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    final result = await _repository.desfazerPagamento(pagamentoId);
+
+    result.when(
+      onSuccess: (sucesso) {
+        if (sucesso) {
+          _carregarDados();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('↩️ Pagamento de $contaNome desfeito!'),
+              backgroundColor: AppColors.warning,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Erro ao desfazer pagamento'),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      },
+      onError: (erro) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(erro),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+    );
+  }
+
+  void _editarConta(Map<String, dynamic> pagamento) async {
+    final conta = await _repository.getContaById(pagamento['conta_id']);
+    if (conta != null && mounted) {
+      AdicionarContaModal.show(
+        context: context,
+        conta: conta.toJson(),
+        onSalvo: () => _carregarDados(),
+      );
+    }
+  }
+
+  void _excluirConta(Map<String, dynamic> pagamento) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface(context),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.error.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.delete, color: AppColors.error),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Excluir Conta',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary(context),
+              ),
+            ),
+          ],
         ),
         content: Text(
-          'Deseja realmente excluir a conta "$nomeConta"?\n\nTodos os pagamentos futuros serão removidos.',
+          'Deseja realmente excluir "${pagamento['conta_nome']}"?\n\nOs pagamentos futuros também serão removidos.',
           style: TextStyle(color: AppColors.textSecondary(context)),
         ),
         actions: [
@@ -226,581 +526,524 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
             ),
-            child: const Text('Excluir'),
+            child: const Text('EXCLUIR'),
           ),
         ],
       ),
     );
-
     if (confirmar == true) {
-      try {
-        await _dbHelper.deletarConta(contaId);
-        if (mounted) {
-          _carregarDados();
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('🗑️ Conta "$nomeConta" excluída!'),
-            backgroundColor: Colors.orange,
-          ));
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Erro ao excluir: $e'),
-            backgroundColor: AppColors.error,
-          ));
-        }
-      }
+      await _repository.deletarConta(pagamento['conta_id']);
+      _carregarDados();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🗑️ ${pagamento['conta_nome']} excluída!'),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
-  List<PagamentoMes> _getPagamentosFiltrados() {
-    var filtrados = List<PagamentoMes>.from(_pagamentos);
-    if (_filtroApenasPendentes) {
-      filtrados = filtrados.where((p) => !p.estaPago).toList();
-    }
-    return filtrados;
+  String _formatarDataVencimento(Map<String, dynamic> pagamento) {
+    final anoMes = pagamento['ano_mes'] as int;
+    final ano = anoMes ~/ 100;
+    final mes = anoMes % 100;
+    final dia = pagamento['dia_vencimento'] as int;
+    return '${dia.toString().padLeft(2, '0')}/${mes.toString().padLeft(2, '0')}/$ano';
+  }
+
+  bool _isAtrasado(Map<String, dynamic> pagamento) {
+    final anoMes = pagamento['ano_mes'] as int;
+    final ano = anoMes ~/ 100;
+    final mes = anoMes % 100;
+    final dia = pagamento['dia_vencimento'] as int;
+    final dataVencimento = DateTime(ano, mes, dia);
+    return dataVencimento.isBefore(DateTime.now());
   }
 
   @override
   Widget build(BuildContext context) {
+    final meses = [
+      'Jan',
+      'Fev',
+      'Mar',
+      'Abr',
+      'Mai',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Set',
+      'Out',
+      'Nov',
+      'Dez'
+    ];
+    final totalPendente = (_resumo['totalPendente'] ?? 0).toDouble();
+    final totalPago = (_resumo['totalPago'] ?? 0).toDouble();
+    final total = totalPendente + totalPago;
+
     return Scaffold(
       backgroundColor: AppColors.background(context),
-      appBar: AppBar(
-        toolbarHeight: 50,
-        title: const Text('Contas do Mês', style: TextStyle(fontSize: 18)),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: Icon(
-              _filtroApenasPendentes ? Icons.pending : Icons.pending_outlined,
-              color: _filtroApenasPendentes ? Colors.orange : Colors.white70,
-            ),
-            onPressed: () {
-              setState(() => _filtroApenasPendentes = !_filtroApenasPendentes);
-            },
-          ),
-          IconButton(
-            icon: Icon(
-              _filtroParcelas ? Icons.repeat : Icons.repeat_outlined,
-              color: _filtroParcelas ? Colors.amber : Colors.white70,
-            ),
-            onPressed: () {
-              setState(() => _filtroParcelas = !_filtroParcelas);
-            },
-          ),
-          PopupMenuButton<String>(
-            icon: Icon(Icons.filter_list, color: Colors.white70),
-            onSelected: (String value) {
-              setState(() => _filtroCategoria = value);
-            },
-            itemBuilder: (context) {
-              return _categorias.map((categoria) {
-                return PopupMenuItem(
-                  value: categoria,
-                  child: Row(
-                    children: [
-                      if (categoria == _filtroCategoria)
-                        Icon(Icons.check, color: AppColors.primary, size: 16),
-                      if (categoria == _filtroCategoria) SizedBox(width: 8),
-                      Text(
-                        categoria,
-                        style: TextStyle(color: AppColors.textPrimary(context)),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList();
-            },
-          ),
-        ],
-      ),
-      body: _carregando
+      body: _isLoading
           ? Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
+              child: CircularProgressIndicator(
+                color: AppColors.primary,
+              ),
             )
-          : Column(
-              children: [
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Container(
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface(context),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.border(context)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.chevron_left, size: 18),
-                          onPressed: () => _navegarMes(-1),
-                          color: AppColors.primary,
-                        ),
-                        Text(
-                          DateFormat('MMMM yyyy', 'pt_BR')
-                              .format(_mesSelecionado)
-                              .toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary(context),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.chevron_right, size: 18),
-                          onPressed: () => _navegarMes(1),
-                          color: AppColors.primary,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  child: Row(
-                    children: [
-                      _buildResumoCardAPagar(),
-                      const SizedBox(width: 12),
-                      _buildResumoCardPago(),
-                    ],
-                  ),
-                ),
-                if (_filtroParcelas ||
-                    _filtroApenasPendentes ||
-                    _filtroCategoria != 'Todas')
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Wrap(
-                      spacing: 8,
-                      children: [
-                        if (_filtroParcelas)
-                          Chip(
-                            label: const Text('Parcelas'),
-                            backgroundColor: AppColors.primary.withOpacity(0.1),
-                            deleteIcon: const Icon(Icons.close, size: 14),
-                            onDeleted: () {
-                              setState(() => _filtroParcelas = false);
-                            },
-                          ),
-                        if (_filtroApenasPendentes)
-                          Chip(
-                            label: const Text('Pendentes'),
-                            backgroundColor: Colors.orange.withOpacity(0.1),
-                            deleteIcon: const Icon(Icons.close, size: 14),
-                            onDeleted: () {
-                              setState(() => _filtroApenasPendentes = false);
-                            },
-                          ),
-                        if (_filtroCategoria != 'Todas')
-                          Chip(
-                            label: Text(_filtroCategoria),
-                            backgroundColor: Colors.purple.withOpacity(0.1),
-                            deleteIcon: const Icon(Icons.close, size: 14),
-                            onDeleted: () {
-                              setState(() => _filtroCategoria = 'Todas');
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-                Expanded(
-                  child: _getPagamentosFiltrados().isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 8),
-                          itemCount: _getPagamentosFiltrados().length,
-                          itemBuilder: (context, index) {
-                            final pagamento = _getPagamentosFiltrados()[index];
-                            return _buildContaCard(pagamento);
-                          },
-                        ),
-                ),
-              ],
-            ),
-      // 🔥 FAB AGORA USA O MODAL!
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
-        onPressed: () {
-          AdicionarContaModal.show(
-            context: context,
-            onSalvo: () {
-              _carregarDados();
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildResumoCardAPagar() {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-              colors: [AppColors.primary, AppColors.secondary]),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('A PAGAR',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white)),
-            const SizedBox(height: 2),
-            Text(_formatarValor(_resumo['totalPendente'] ?? 0),
-                style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white)),
-            Text(
-                '${_resumo['qtdPendente'] ?? 0} ${_resumo['qtdPendente'] == 1 ? 'conta' : 'contas'}',
-                style: const TextStyle(fontSize: 11, color: Colors.white70)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildResumoCardPago() {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.successLight,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('PAGO',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.success)),
-            const SizedBox(height: 2),
-            Text(
-              _formatarValor(_resumo['totalPago'] ?? 0),
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary(context)),
-            ),
-            Text(
-              '${_resumo['qtdPago'] ?? 0} ${_resumo['qtdPago'] == 1 ? 'conta' : 'contas'}',
-              style: TextStyle(
-                  fontSize: 11, color: AppColors.textSecondary(context)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // 🟢 CARD PRINCIPAL - COM PARCELAS CORRETAS!
-  Widget _buildContaCard(PagamentoMes pagamento) {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _getInfoParcelas(pagamento.contaId),
-      builder: (context, snapshot) {
-        final infoParcelas = snapshot.data ?? {};
-        final temParcelas = infoParcelas.isNotEmpty;
-        final parcelaAtual = infoParcelas['atual'] as int?;
-        final totalParcelas = infoParcelas['total'] as int?;
-        final parcelasRestantes = infoParcelas['restantes'] as int?;
-        final concluido = infoParcelas['concluido'] == true;
-        final categoria = infoParcelas['categoria'] ?? 'Outros';
-
-        if (_filtroParcelas && !temParcelas) {
-          return const SizedBox.shrink();
-        }
-
-        if (_filtroCategoria != 'Todas' && categoria != _filtroCategoria) {
-          return const SizedBox.shrink();
-        }
-
-        final atrasado = pagamento.estaAtrasado && !pagamento.estaPago;
-        final Color corCategoria = AppColors.getCategoryColor(categoria);
-        final cor = pagamento.estaPago
-            ? AppColors.success
-            : (atrasado ? AppColors.error : corCategoria);
-        final corFundo = pagamento.estaPago
-            ? AppColors.successLight
-            : (atrasado ? AppColors.errorLight : corCategoria.withOpacity(0.1));
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.cardBackground(context),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border(context)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: corFundo,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  pagamento.estaPago
-                      ? Icons.check_circle
-                      : (atrasado ? Icons.warning_amber : Icons.receipt),
-                  color: cor,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      pagamento.contaNome,
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary(context)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-
-                    // Linha da categoria
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: corCategoria,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          categoria,
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: AppColors.textSecondary(context)),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 4),
-
-                    // 🟢 LINHA DAS PARCELAS - CORRIGIDA!
-                    if (temParcelas && totalParcelas != null)
-                      Wrap(
-                        spacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          if (concluido) ...[
-                            // ✅ Caso 1: Já acabou
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.check_circle,
-                                      size: 12, color: Colors.green),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Concluído',
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.green,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ] else ...[
-                            // 🔁 Caso 2: Ainda tem parcelas
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.repeat,
-                                      size: 12, color: AppColors.primary),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    parcelaAtual != null
-                                        ? '$parcelaAtual/$totalParcelas'
-                                        : '0/$totalParcelas',
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            if (parcelasRestantes != null &&
-                                parcelasRestantes > 0) ...[
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  'Faltam $parcelasRestantes',
-                                  style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.orange,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ],
-                      ),
-
-                    const SizedBox(height: 4),
-
-                    // Data de vencimento
-                    Text(
-                      'Vence ${pagamento.dataVencimentoFormatada}',
-                      style: TextStyle(
-                          fontSize: 10,
-                          color: AppColors.textSecondary(context)),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+          : SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _formatarValor(pagamento.valor),
-                    style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.bold, color: cor),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!pagamento.estaPago)
-                        SizedBox(
-                          width: 60,
-                          height: 28,
-                          child: ElevatedButton(
-                            onPressed: () => _pagarConta(pagamento),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              padding: EdgeInsets.zero,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6)),
-                              elevation: 0,
-                              minimumSize: const Size(60, 28),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface(context),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: AppColors.border(context)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.chevron_left,
+                                        size: 18),
+                                    onPressed: () => _navegarMes(-1),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    style: IconButton.styleFrom(
+                                      foregroundColor:
+                                          AppColors.textSecondary(context),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${meses[_mesSelecionado.month - 1]} ${_mesSelecionado.year}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.textPrimary(context),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: const Icon(Icons.chevron_right,
+                                        size: 18),
+                                    onPressed: () => _navegarMes(1),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    style: IconButton.styleFrom(
+                                      foregroundColor:
+                                          AppColors.textSecondary(context),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            child: const Text('PAGAR',
-                                style: TextStyle(
-                                    fontSize: 10, fontWeight: FontWeight.bold)),
-                          ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 36,
+                              child: ElevatedButton(
+                                onPressed: () => AdicionarContaModal.show(
+                                    context: context,
+                                    onSalvo: () => _carregarDados()),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20)),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.add, size: 16),
+                                    SizedBox(width: 6),
+                                    Text('ADICIONAR',
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 16),
-                        color: Colors.red[300],
-                        onPressed: () => _excluirConta(
-                            pagamento.contaId, pagamento.contaNome),
-                        padding: EdgeInsets.zero,
-                        constraints:
-                            const BoxConstraints(minWidth: 28, minHeight: 28),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        _buildResumoCard(
+                            'A Pagar', totalPendente, AppColors.error),
+                        const SizedBox(width: 12),
+                        _buildResumoCard('Pago', totalPago, AppColors.success),
+                        const SizedBox(width: 12),
+                        _buildResumoCard('Total', total, AppColors.primary),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: _pagamentos.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.receipt,
+                                    size: 64, color: AppColors.muted(context)),
+                                const SizedBox(height: 16),
+                                Text('Nenhuma conta para este mês',
+                                    style: TextStyle(
+                                        color:
+                                            AppColors.textSecondary(context))),
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _carregarDados,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              itemCount: _pagamentos.length,
+                              itemBuilder: (context, index) {
+                                final pagamento = _pagamentos[index];
+                                final estaPago = pagamento['status'] == 1;
+                                final atrasado =
+                                    !estaPago && _isAtrasado(pagamento);
+                                final cor = estaPago
+                                    ? AppColors.success
+                                    : (atrasado
+                                        ? AppColors.error
+                                        : AppColors.primary);
+                                final contaId = pagamento['conta_id'] as int;
+                                final parcelasInfo = _parcelasCache[contaId];
+                                final categoriaCor = AppColors.getCategoryColor(
+                                    pagamento['categoria'] ?? 'Outros');
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.cardBackground(context),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                        color: AppColors.border(context)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: cor.withOpacity(0.1),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        child: Icon(
+                                          estaPago
+                                              ? Icons.check_circle
+                                              : (atrasado
+                                                  ? Icons.warning_amber_rounded
+                                                  : Icons.receipt_long),
+                                          color: cor,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              pagamento['conta_nome'] ??
+                                                  'Sem nome',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.textPrimary(
+                                                    context),
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Wrap(
+                                              spacing: 6,
+                                              runSpacing: 4,
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: categoriaCor
+                                                        .withOpacity(0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Container(
+                                                        width: 6,
+                                                        height: 6,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: categoriaCor,
+                                                          shape:
+                                                              BoxShape.circle,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      Text(
+                                                        pagamento[
+                                                                'categoria'] ??
+                                                            'Outros',
+                                                        style: TextStyle(
+                                                            fontSize: 9,
+                                                            color: categoriaCor,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .w500),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        AppColors.textSecondary(
+                                                                context)
+                                                            .withOpacity(0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
+                                                  ),
+                                                  child: Text(
+                                                    'Vence: ${_formatarDataVencimento(pagamento)}',
+                                                    style: TextStyle(
+                                                      fontSize: 9,
+                                                      color: AppColors
+                                                          .textSecondary(
+                                                              context),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            if (parcelasInfo != null &&
+                                                parcelasInfo['total'] > 1) ...[
+                                              const SizedBox(height: 6),
+                                              Wrap(
+                                                spacing: 6,
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: AppColors.primary
+                                                          .withOpacity(0.1),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8),
+                                                    ),
+                                                    child: Text(
+                                                      'Parcela ${parcelasInfo['atual']}/${parcelasInfo['total']}',
+                                                      style: TextStyle(
+                                                          fontSize: 9,
+                                                          color:
+                                                              AppColors.primary,
+                                                          fontWeight:
+                                                              FontWeight.w500),
+                                                    ),
+                                                  ),
+                                                  if (parcelasInfo[
+                                                          'restantes'] >
+                                                      0)
+                                                    Container(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 6,
+                                                          vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: AppColors.warning
+                                                            .withOpacity(0.1),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8),
+                                                      ),
+                                                      child: Text(
+                                                        'Faltam ${parcelasInfo['restantes']}',
+                                                        style: TextStyle(
+                                                            fontSize: 9,
+                                                            color: AppColors
+                                                                .warning,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .w500),
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            Formatador.moeda(
+                                                pagamento['valor'] ?? 0),
+                                            style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.bold,
+                                                color: cor),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (estaPago)
+                                                GestureDetector(
+                                                  onTap: () =>
+                                                      _desfazerPagamento(
+                                                          pagamento),
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.all(5),
+                                                    decoration: BoxDecoration(
+                                                      color: AppColors.warning
+                                                          .withOpacity(0.1),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              6),
+                                                    ),
+                                                    child: Icon(Icons.undo,
+                                                        size: 14,
+                                                        color:
+                                                            AppColors.warning),
+                                                  ),
+                                                ),
+                                              if (!estaPago)
+                                                GestureDetector(
+                                                  onTap: () =>
+                                                      _pagarConta(pagamento),
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.all(5),
+                                                    decoration: BoxDecoration(
+                                                      color: AppColors.success
+                                                          .withOpacity(0.1),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              6),
+                                                    ),
+                                                    child: Icon(Icons.check,
+                                                        size: 14,
+                                                        color:
+                                                            AppColors.success),
+                                                  ),
+                                                ),
+                                              const SizedBox(width: 4),
+                                              GestureDetector(
+                                                onTap: () =>
+                                                    _editarConta(pagamento),
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.all(5),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.primary
+                                                        .withOpacity(0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
+                                                  ),
+                                                  child: Icon(Icons.edit,
+                                                      size: 14,
+                                                      color: AppColors.primary),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              GestureDetector(
+                                                onTap: () =>
+                                                    _excluirConta(pagamento),
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.all(5),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.error
+                                                        .withOpacity(0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
+                                                  ),
+                                                  child: Icon(
+                                                      Icons.delete_outline,
+                                                      size: 14,
+                                                      color: AppColors.error),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
                   ),
                 ],
               ),
-            ],
-          ),
-        );
-      },
+            ),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.receipt_outlined,
-              size: 56, color: AppColors.muted(context)),
-          const SizedBox(height: 12),
-          Text(
-            'Nenhuma conta para este mês',
-            style: TextStyle(
-                fontSize: 15, color: AppColors.textSecondary(context)),
-          ),
-          if (_filtroParcelas ||
-              _filtroApenasPendentes ||
-              _filtroCategoria != 'Todas')
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: TextButton(
-                onPressed: () {
-                  setState(() {
-                    _filtroParcelas = false;
-                    _filtroApenasPendentes = false;
-                    _filtroCategoria = 'Todas';
-                  });
-                },
-                child: Text(
-                  'Limpar filtros',
-                  style: TextStyle(color: AppColors.primary),
-                ),
-              ),
-            ),
-          const SizedBox(height: 16),
-
-          // 🔥 BOTÃO DO EMPTY STATE AGORA USA MODAL!
-          ElevatedButton.icon(
-            onPressed: () {
-              AdicionarContaModal.show(
-                context: context,
-                onSalvo: () {
-                  _carregarDados();
-                },
-              );
-            },
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('ADICIONAR CONTA',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-          ),
-        ],
+  Widget _buildResumoCard(String titulo, double valor, Color cor) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border(context)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(titulo,
+                style: TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary(context))),
+            const SizedBox(height: 2),
+            Text(Formatador.moeda(valor),
+                style: TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.bold, color: cor)),
+          ],
+        ),
       ),
     );
   }

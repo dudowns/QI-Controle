@@ -36,14 +36,13 @@ class SyncService {
 
   Future<void> syncNow() async {
     debugPrint('🔄 Sincronização manual solicitada');
-    final results = await _connectivity.checkConnectivity();
-    final isConnected =
-        results.any((result) => result != ConnectivityResult.none);
 
-    if (isConnected) {
+    // 🔥 REMOVIDA A VERIFICAÇÃO DE CONEXÃO - SINCRONIZA SEMPRE
+    // Isso vai tentar sincronizar independente do status de internet
+    try {
       await _syncManager.syncAll();
-    } else {
-      debugPrint('⚠️ Sem conexão, sincronização será feita quando online');
+    } catch (e) {
+      debugPrint('❌ Erro na sincronização: $e');
     }
   }
 

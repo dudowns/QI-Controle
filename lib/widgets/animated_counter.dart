@@ -1,5 +1,6 @@
+// lib/widgets/animated_counter.dart
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
+import 'dart:math';
 
 class AnimatedCounter extends StatefulWidget {
   final double value;
@@ -10,7 +11,7 @@ class AnimatedCounter extends StatefulWidget {
   const AnimatedCounter({
     super.key,
     required this.value,
-    this.duration = const Duration(milliseconds: 1000),
+    this.duration = const Duration(milliseconds: 800),
     this.style,
     required this.formatter,
   });
@@ -34,7 +35,7 @@ class _AnimatedCounterState extends State<AnimatedCounter>
     _animation = Tween<double>(begin: 0, end: widget.value).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: Curves.easeOutQuart,
+        curve: Curves.easeOutCubic,
       ),
     );
     _controller.forward();
@@ -49,7 +50,7 @@ class _AnimatedCounterState extends State<AnimatedCounter>
       ).animate(
         CurvedAnimation(
           parent: _controller,
-          curve: Curves.easeOutQuart,
+          curve: Curves.easeOutCubic,
         ),
       );
       _controller.forward(from: 0);

@@ -27,13 +27,13 @@ class _PerfilScreenState extends State<PerfilScreen> {
         elevation: 0,
       ),
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              const Color(0xFF7B2CBF),
-              const Color(0xFF9D4EDD),
+              Color(0xFF7B2CBF),
+              Color(0xFF9D4EDD),
             ],
           ),
         ),

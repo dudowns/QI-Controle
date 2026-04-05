@@ -252,7 +252,7 @@ class ThemeSettingsScreen extends StatelessWidget {
       trailing: isSelected
           ? Container(
               padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.primary,
                 shape: BoxShape.circle,
               ),

@@ -1,12 +1,10 @@
 // lib/screens/renda_fixa_screen.dart
-
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../repositories/renda_fixa_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/renda_fixa_model.dart';
 import '../services/renda_fixa_diaria.dart';
-import '../utils/currency_formatter.dart'; // ✅ OK!
-import '../utils/date_helper.dart';
+import '../utils/currency_formatter.dart';
+import '../utils/date_formatter.dart';
 import 'novo_investimento_dialog.dart';
 import 'detalhes_renda_fixa.dart';
 import '../constants/app_colors.dart';
@@ -19,11 +17,20 @@ class RendaFixaScreen extends StatefulWidget {
 }
 
 class _RendaFixaScreenState extends State<RendaFixaScreen> {
-  final RendaFixaRepository _repository = RendaFixaRepository();
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   List<RendaFixaModel> _investimentos = [];
-  bool _carregando = true;
-  String _mensagemStatus = '';
+  bool _isLoading = true;
+
+  double _totalAplicado = 0;
+  double _totalAtual = 0;
+  double _rendimentoTotal = 0;
+
+  String get _userId {
+    final user = _supabase.auth.currentUser;
+    if (user == null) throw Exception('Usuário não logado');
+    return user.id;
+  }
 
   @override
   void initState() {
@@ -32,45 +39,381 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
   }
 
   Future<void> _carregarDados() async {
-    setState(() {
-      _carregando = true;
-      _mensagemStatus = 'Carregando investimentos...';
-    });
-
+    if (!mounted) return;
+    setState(() => _isLoading = true);
     try {
-      _investimentos = await _repository.getAll();
-      _mensagemStatus = 'Carregados ${_investimentos.length} investimentos';
+      final response = await _supabase
+          .from('renda_fixa')
+          .select()
+          .eq('user_id', _userId)
+          .order('data_aplicacao', ascending: false);
+
+      _investimentos =
+          response.map((json) => RendaFixaModel.fromJson(json)).toList();
+      _calcularTotais();
     } catch (e) {
-      _mensagemStatus = 'Erro: $e';
       debugPrint('❌ Erro ao carregar renda fixa: $e');
-    } finally {
-      setState(() => _carregando = false);
-    }
-  }
-
-  Future<void> _salvarInvestimento(RendaFixaModel investimento) async {
-    try {
-      await _repository.insert(investimento);
-      await _carregarDados();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Investimento adicionado!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro: $e'),
-            backgroundColor: Colors.red,
-          ),
+              content: Text('Erro ao carregar: $e'),
+              backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _calcularTotais() {
+    final hoje = DateTime.now();
+    double aplicado = 0;
+    double atual = 0;
+
+    for (var inv in _investimentos) {
+      aplicado += inv.valorAplicado;
+      final valorHoje = RendaFixaDiaria.calcularValorEm(inv, hoje);
+      atual += valorHoje;
+    }
+
+    _totalAplicado = aplicado;
+    _totalAtual = atual;
+    _rendimentoTotal = atual - aplicado;
+  }
+
+  Future<void> _adicionarInvestimento(RendaFixaModel investimento) async {
+    try {
+      await _supabase.from('renda_fixa').insert({
+        ...investimento.toJson(),
+        'user_id': _userId,
+      });
+      await _carregarDados();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('✅ ${investimento.nome} adicionado!'),
+              backgroundColor: AppColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro: $e'), backgroundColor: AppColors.error),
         );
       }
     }
+  }
+
+  // 🔥 CORRIGIDO: id agora é String (UUID)
+  Future<void> _excluirInvestimento(String id, String nome) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir Investimento'),
+        content: Text('Deseja excluir "$nome"?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child:
+                  const Text('Excluir', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      try {
+        await _supabase.from('renda_fixa').delete().eq('id', id);
+        await _carregarDados();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('🗑️ $nome excluído!'),
+                backgroundColor: Colors.orange),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Erro: $e'), backgroundColor: AppColors.error),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background(context),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        SizedBox(
+                          height: 36,
+                          child: ElevatedButton(
+                            onPressed: () => _mostrarDialogAdicionar(),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20)),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.add, size: 16),
+                                SizedBox(width: 6),
+                                Text('ADICIONAR',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        _buildResumoCard(
+                            'Aplicado', _totalAplicado, Colors.blue),
+                        const SizedBox(width: 12),
+                        _buildResumoCard(
+                            'Valor Atual', _totalAtual, AppColors.primary),
+                        const SizedBox(width: 12),
+                        _buildResumoCard('Rendimento', _rendimentoTotal,
+                            _rendimentoTotal >= 0 ? Colors.green : Colors.red),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: _investimentos.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.savings,
+                                    size: 64, color: AppColors.muted(context)),
+                                const SizedBox(height: 16),
+                                Text('Nenhum investimento em renda fixa',
+                                    style: TextStyle(
+                                        color:
+                                            AppColors.textSecondary(context))),
+                                const SizedBox(height: 8),
+                                Text('Toque em ADICIONAR para começar',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color:
+                                            AppColors.textSecondary(context))),
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _carregarDados,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              itemCount: _investimentos.length,
+                              itemBuilder: (context, index) {
+                                final inv = _investimentos[index];
+                                return Dismissible(
+                                  // 🔥 CORRIGIDO: key agora usa id como String
+                                  key: Key(inv.id ?? index.toString()),
+                                  direction: DismissDirection.endToStart,
+                                  background: Container(
+                                    alignment: Alignment.centerRight,
+                                    padding: const EdgeInsets.only(right: 20),
+                                    color: Colors.red,
+                                    child: const Icon(Icons.delete,
+                                        color: Colors.white),
+                                  ),
+                                  confirmDismiss: (direction) async {
+                                    return await showDialog(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('Excluir'),
+                                        content: Text('Excluir "${inv.nome}"?'),
+                                        actions: [
+                                          TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context, false),
+                                              child: const Text('Cancelar')),
+                                          TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context, true),
+                                              child: const Text('Excluir',
+                                                  style: TextStyle(
+                                                      color: Colors.red))),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                  // 🔥 CORRIGIDO: passa id como String
+                                  onDismissed: (direction) =>
+                                      _excluirInvestimento(inv.id!, inv.nome),
+                                  child: _buildRendaFixaCard(inv),
+                                );
+                              },
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildResumoCard(String titulo, double valor, Color cor) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surface(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border(context)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(titulo,
+                style: TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary(context))),
+            const SizedBox(height: 2),
+            Text(CurrencyFormatter.format(valor),
+                style: TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.bold, color: cor)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRendaFixaCard(RendaFixaModel inv) {
+    final hoje = DateTime.now();
+    final valorHoje = RendaFixaDiaria.calcularValorEm(inv, hoje);
+    final rendimento = valorHoje - inv.valorAplicado;
+    final isPositive = rendimento >= 0;
+    final cor = isPositive ? Colors.green : Colors.red;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey[200]!, width: 1),
+      ),
+      elevation: 0,
+      child: InkWell(
+        onTap: () => _verDetalhes(inv),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _getCorTipo(inv.tipoRenda).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(_getIconeTipo(inv.tipoRenda),
+                    color: _getCorTipo(inv.tipoRenda), size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(inv.nome,
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _getCorTipo(inv.tipoRenda).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(inv.tipoRenda,
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  color: _getCorTipo(inv.tipoRenda),
+                                  fontWeight: FontWeight.w500)),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(DateFormatter.formatDate(inv.dataVencimento),
+                            style: TextStyle(
+                                fontSize: 10, color: Colors.grey[500])),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                        '${_getTaxaFormatada(inv)} • ${inv.liquidezDiaria ? "Liquidez Diária" : "No vencimento"}',
+                        style:
+                            TextStyle(fontSize: 10, color: Colors.grey[500])),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(CurrencyFormatter.format(valorHoje),
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: cor)),
+                  const SizedBox(height: 2),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                        color: cor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                            isPositive
+                                ? Icons.arrow_upward
+                                : Icons.arrow_downward,
+                            size: 10,
+                            color: cor),
+                        const SizedBox(width: 2),
+                        Text(
+                            '${isPositive ? '+' : ''}${CurrencyFormatter.format(rendimento)}',
+                            style: TextStyle(
+                                fontSize: 9,
+                                color: cor,
+                                fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Color _getCorTipo(String tipo) {
@@ -78,11 +421,10 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
       case 'CDB':
         return Colors.blue;
       case 'LCI':
+        return Colors.green;
       case 'LCA':
         return Colors.green;
-      case 'Tesouro Prefixado':
-      case 'Tesouro Selic':
-      case 'Tesouro IPCA+':
+      case 'Tesouro Direto':
         return Colors.orange;
       default:
         return AppColors.primary;
@@ -94,192 +436,44 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
       case 'CDB':
         return Icons.account_balance;
       case 'LCI':
+        return Icons.apartment;
       case 'LCA':
         return Icons.apartment;
-      case 'Tesouro Prefixado':
-      case 'Tesouro Selic':
-      case 'Tesouro IPCA+':
+      case 'Tesouro Direto':
         return Icons.attach_money;
       default:
         return Icons.savings;
     }
   }
 
-  String _getTipoDescricao(RendaFixaModel inv) {
-    return inv.tipoRenda;
+  String _getTaxaFormatada(RendaFixaModel inv) {
+    switch (inv.indexador) {
+      case Indexador.preFixado:
+        return '${inv.taxa.toStringAsFixed(2)}% a.a.';
+      case Indexador.posFixadoCDI:
+        return '${inv.taxa.toStringAsFixed(0)}% do CDI';
+      case Indexador.ipca:
+        return 'IPCA + ${inv.taxa.toStringAsFixed(2)}%';
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Renda Fixa'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _carregarDados,
-          ),
-        ],
-      ),
-      body: _carregando
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Text(_mensagemStatus),
-                ],
-              ),
-            )
-          : _investimentos.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.savings_outlined,
-                        size: 80,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Nenhum investimento em renda fixa',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Toque no + para adicionar',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[500],
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _investimentos.length,
-                  itemBuilder: (context, index) {
-                    final inv = _investimentos[index];
-                    final hoje = DateHelper.agoraBrasilia();
-                    final valorHoje =
-                        RendaFixaDiaria.calcularValorEm(inv, hoje);
-                    final rendimento = valorHoje - inv.valorAplicado;
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(16),
-                        leading: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: _getCorTipo(inv.tipoRenda).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            _getIconeTipo(inv.tipoRenda),
-                            color: _getCorTipo(inv.tipoRenda),
-                          ),
-                        ),
-                        title: Text(
-                          inv.nome,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${_getTipoDescricao(inv)} • ${DateFormat('dd/MM/yyyy').format(inv.dataVencimento)}',
-                              style: TextStyle(
-                                  fontSize: 12, color: Colors.grey[600]),
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(
-                                  rendimento >= 0
-                                      ? Icons.trending_up
-                                      : Icons.trending_down,
-                                  size: 12,
-                                  color: rendimento >= 0
-                                      ? Colors.green
-                                      : Colors.red,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  CurrencyFormatter.format(rendimento), // ✅ OK!
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: rendimento >= 0
-                                        ? Colors.green
-                                        : Colors.red,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        trailing: SizedBox(
-                          width: 100,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                CurrencyFormatter.format(valorHoje), // ✅ OK!
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'aplicado ${CurrencyFormatter.format(inv.valorAplicado)}', // ✅ OK!
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  DetalhesRendaFixaScreen(investimento: inv),
-                            ),
-                          );
-                        },
-                      ),
-                    );
-                  },
-                ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add),
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (_) => NovoInvestimentoDialog(
-              onSalvar: _salvarInvestimento,
-            ),
-          );
+  void _mostrarDialogAdicionar() {
+    showDialog(
+      context: context,
+      builder: (_) => NovoInvestimentoDialog(
+        onSalvar: (investimento) async {
+          await _adicionarInvestimento(investimento);
         },
       ),
     );
+  }
+
+  void _verDetalhes(RendaFixaModel inv) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DetalhesRendaFixaScreen(investimento: inv),
+      ),
+    ).then((_) => _carregarDados());
   }
 }

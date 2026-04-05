@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
-import '../services/auth_service.dart';
 import 'login_screen.dart';
-import 'main_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -12,30 +10,15 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  final AuthService _auth = AuthService();
-
   @override
   void initState() {
     super.initState();
-    _verificarLogin();
+    _irParaLogin();
   }
 
-  Future<void> _verificarLogin() async {
+  Future<void> _irParaLogin() async {
     await Future.delayed(const Duration(seconds: 2));
-
-    if (!mounted) return;
-
-    final logado = _auth.estaLogado;
-    debugPrint('🔍 Splash: Usuário logado? $logado');
-
-    if (logado) {
-      debugPrint('🚀 Splash: Indo para MainScreen');
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const MainScreen()),
-      );
-    } else {
-      debugPrint('🚀 Splash: Indo para LoginScreen');
+    if (mounted) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -47,49 +30,80 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [AppColors.primary, AppColors.secondary],
+            colors: [
+              AppColors.primary,
+              AppColors.secondary,
+            ],
           ),
         ),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.account_balance_wallet,
-                  size: 80,
-                  color: Colors.white,
+              // Animação de pulso no ícone
+              TweenAnimationBuilder(
+                tween: Tween<double>(begin: 0.8, end: 1.0),
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.elasticOut,
+                builder: (context, double scale, child) {
+                  return Transform.scale(
+                    scale: scale,
+                    child: child,
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white.withOpacity(0.3),
+                        blurRadius: 30,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_wallet,
+                    size: 70,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-              const SizedBox(height: 24),
-              const Text(
-                'Controle Financeiro',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              const SizedBox(height: 32),
+              // Título com fade in
+              const FadeTransition(
+                opacity: AlwaysStoppedAnimation(1.0),
+                child: Text(
+                  'Controle Financeiro',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1.2,
+                  ),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
+              // Subtítulo
               const Text(
-                'Gerencie suas finanças com estilo',
+                'Organize suas finanças com estilo',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   color: Colors.white70,
+                  letterSpacing: 0.5,
                 ),
               ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 60),
+              // Loading
               const CircularProgressIndicator(
                 valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                strokeWidth: 2,
               ),
             ],
           ),

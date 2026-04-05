@@ -1,3 +1,4 @@
+// lib/database/db_helper.dart
 import 'dart:math';
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../services/performance_service.dart';
 import '../utils/date_helper.dart';
 import '../services/logger_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ========== ENUM PARA STATUS DE PAGAMENTO ==========
 enum StatusPagamento {
@@ -41,12 +43,10 @@ class DBHelper {
 
   static Database? _database;
 
-  // Cache para consultas frequentes
   static final Map<String, CacheEntry> _queryCache = {};
 
   static const Duration cacheValidity = Duration(minutes: 5);
 
-  // Constantes para nomes de tabelas
   static const String tabelaLancamentos = 'lancamentos';
   static const String tabelaMetas = 'metas';
   static const String tabelaDepositosMeta = 'depositos_meta';
@@ -57,6 +57,7 @@ class DBHelper {
   static const String tabelaPagamentos = 'pagamentos_mensais';
   static const String tabelaContasFixas = 'contas_fixas';
   static const String tabelaParcelas = 'parcelas';
+  static const String tabelaTransacoes = 'transacoes'; // 🔥 ADICIONADO
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -76,11 +77,14 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 24, // 🔥 ATUALIZADO PARA VERSÃO 24
+      version: 27, // 🔥 VERSÃO ATUALIZADA
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
+        await db.execute('PRAGMA journal_mode = WAL');
+        await db.execute('PRAGMA synchronous = NORMAL');
+        await db.execute('PRAGMA cache_size = -20000');
       },
     );
   }
@@ -88,7 +92,6 @@ class DBHelper {
   Future<void> _onCreate(Database db, int version) async {
     LoggerService.info('🔨 Criando tabelas versão $version');
 
-    // Tabela de lançamentos (COM CAMPOS DE SINCRONIZAÇÃO)
     await db.execute('''
       CREATE TABLE $tabelaLancamentos(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,13 +103,12 @@ class DBHelper {
         categoria TEXT NOT NULL,
         data TEXT NOT NULL,
         observacao TEXT,
-        sync_status TEXT DEFAULT 'synced',
+        sync_status TEXT DEFAULT 'pending',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     ''');
 
-    // Tabela de metas (COM CAMPOS DE SINCRONIZAÇÃO)
     await db.execute('''
       CREATE TABLE $tabelaMetas(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,13 +123,12 @@ class DBHelper {
         cor TEXT,
         icone TEXT,
         concluida INTEGER DEFAULT 0,
-        sync_status TEXT DEFAULT 'synced',
+        sync_status TEXT DEFAULT 'pending',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     ''');
 
-    // Tabela de depósitos de metas
     await db.execute('''
       CREATE TABLE $tabelaDepositosMeta(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -137,14 +138,13 @@ class DBHelper {
         valor REAL NOT NULL,
         data_deposito TEXT NOT NULL,
         observacao TEXT,
-        sync_status TEXT DEFAULT 'synced',
+        sync_status TEXT DEFAULT 'pending',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (meta_id) REFERENCES $tabelaMetas(id) ON DELETE CASCADE
       )
     ''');
 
-    // Tabela de investimentos (COM CAMPOS DE SINCRONIZAÇÃO)
     await db.execute('''
       CREATE TABLE $tabelaInvestimentos(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -160,13 +160,12 @@ class DBHelper {
         setor TEXT,
         dividend_yield REAL,
         ultima_atualizacao TEXT,
-        sync_status TEXT DEFAULT 'synced',
+        sync_status TEXT DEFAULT 'pending',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     ''');
 
-    // Tabela de proventos (COM CAMPOS DE SINCRONIZAÇÃO)
     await db.execute('''
       CREATE TABLE $tabelaProventos(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -180,13 +179,12 @@ class DBHelper {
         data_com TEXT,
         total_recebido REAL,
         sync_automatico INTEGER DEFAULT 0,
-        sync_status TEXT DEFAULT 'synced',
+        sync_status TEXT DEFAULT 'pending',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     ''');
 
-    // Tabela de renda fixa (COM CAMPOS DE SINCRONIZAÇÃO)
     await db.execute('''
       CREATE TABLE $tabelaRendaFixa(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -208,13 +206,12 @@ class DBHelper {
         liquidez TEXT DEFAULT 'Diária',
         is_lci INTEGER DEFAULT 0,
         status TEXT DEFAULT 'ativo',
-        sync_status TEXT DEFAULT 'synced',
+        sync_status TEXT DEFAULT 'pending',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     ''');
 
-    // Tabela de contas (COM CAMPOS DE SINCRONIZAÇÃO)
     await db.execute('''
       CREATE TABLE $tabelaContas(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -230,13 +227,12 @@ class DBHelper {
         parcelas_pagas INTEGER DEFAULT 0,
         data_inicio TEXT,
         data_fim TEXT,
-        sync_status TEXT DEFAULT 'synced',
+        sync_status TEXT DEFAULT 'pending',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     ''');
 
-    // Tabela de pagamentos mensais (COM CAMPOS DE SINCRONIZAÇÃO)
     await db.execute('''
       CREATE TABLE $tabelaPagamentos(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -247,14 +243,14 @@ class DBHelper {
         valor REAL NOT NULL,
         data_pagamento TEXT,
         status INTEGER NOT NULL,
-        sync_status TEXT DEFAULT 'synced',
+        lancamento_id INTEGER,
+        sync_status TEXT DEFAULT 'pending',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (conta_id) REFERENCES $tabelaContas(id) ON DELETE CASCADE
       )
     ''');
 
-    // Tabelas antigas (mantidas por compatibilidade)
     await db.execute('''
       CREATE TABLE IF NOT EXISTS $tabelaContasFixas(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -284,7 +280,6 @@ class DBHelper {
       )
     ''');
 
-    // Tabela de logs de integridade
     await db.execute('''
       CREATE TABLE IF NOT EXISTS integridade_logs(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -295,7 +290,25 @@ class DBHelper {
       )
     ''');
 
+    // 🔥 TABELA DE TRANSAÇÕES
+    await db.execute('''
+      CREATE TABLE $tabelaTransacoes(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticker TEXT NOT NULL,
+        tipo_transacao TEXT NOT NULL,
+        quantidade REAL NOT NULL,
+        preco_unitario REAL NOT NULL,
+        taxa REAL DEFAULT 0,
+        data TEXT NOT NULL,
+        user_id TEXT,
+        sync_status TEXT DEFAULT 'pending',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    ''');
+
     await _criarIndices(db);
+    await _criarIndicesCompostos(db);
     LoggerService.success('✅ Tabelas criadas com sucesso!');
   }
 
@@ -306,7 +319,6 @@ class DBHelper {
     final nomesIndices =
         indicesExistentes.map((e) => e['name'] as String).toList();
 
-    // Índices existentes
     if (!nomesIndices.contains('idx_lancamentos_data')) {
       await db.execute(
           'CREATE INDEX idx_lancamentos_data ON $tabelaLancamentos(data)');
@@ -383,6 +395,10 @@ class DBHelper {
       await db.execute(
           'CREATE INDEX idx_pagamentos_status ON $tabelaPagamentos(status)');
     }
+    if (!nomesIndices.contains('idx_pagamentos_lancamento_id')) {
+      await db.execute(
+          'CREATE INDEX idx_pagamentos_lancamento_id ON $tabelaPagamentos(lancamento_id)');
+    }
     if (!nomesIndices.contains('idx_contas_ativa')) {
       await db.execute('CREATE INDEX idx_contas_ativa ON $tabelaContas(ativa)');
     }
@@ -390,8 +406,6 @@ class DBHelper {
       await db.execute(
           'CREATE INDEX idx_contas_sync_status ON $tabelaContas(sync_status)');
     }
-
-    // Índices antigos (mantidos)
     if (!nomesIndices.contains('idx_contas_fixas_data_inicio')) {
       await db.execute(
           'CREATE INDEX idx_contas_fixas_data_inicio ON $tabelaContasFixas(data_inicio)');
@@ -408,6 +422,65 @@ class DBHelper {
       await db.execute(
           'CREATE INDEX idx_parcelas_data_vencimento ON $tabelaParcelas(data_vencimento)');
     }
+    // 🔥 ÍNDICES PARA TRANSAÇÕES
+    if (!nomesIndices.contains('idx_transacoes_user_id')) {
+      await db.execute(
+          'CREATE INDEX idx_transacoes_user_id ON $tabelaTransacoes(user_id)');
+    }
+    if (!nomesIndices.contains('idx_transacoes_data')) {
+      await db.execute(
+          'CREATE INDEX idx_transacoes_data ON $tabelaTransacoes(data DESC)');
+    }
+    if (!nomesIndices.contains('idx_transacoes_ticker')) {
+      await db.execute(
+          'CREATE INDEX idx_transacoes_ticker ON $tabelaTransacoes(ticker)');
+    }
+  }
+
+  Future<void> _criarIndicesCompostos(Database db) async {
+    LoggerService.info('🔧 Criando índices compostos para performance...');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_lancamentos_data_tipo 
+      ON $tabelaLancamentos(data, tipo)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_lancamentos_data_categoria 
+      ON $tabelaLancamentos(data, categoria)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_lancamentos_tipo_categoria 
+      ON $tabelaLancamentos(tipo, categoria)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_lancamentos_data_tipo_valor 
+      ON $tabelaLancamentos(data, tipo, valor)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_pagamentos_ano_mes_status 
+      ON $tabelaPagamentos(ano_mes, status)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_pagamentos_status_dia 
+      ON $tabelaPagamentos(status, (ano_mes % 100))
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_contas_ativa_tipo 
+      ON $tabelaContas(ativa, tipo)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_metas_concluida_data_fim 
+      ON $tabelaMetas(concluida, data_fim)
+    ''');
+
+    LoggerService.success('✅ Índices compostos criados!');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -415,14 +488,12 @@ class DBHelper {
 
     if (oldVersion < 17) {
       LoggerService.info('🔧 Recriando tabela proventos...');
-
       List<Map<String, dynamic>> proventosExistentes = [];
       try {
         proventosExistentes = await db.query('proventos');
       } catch (e) {
         LoggerService.warning('⚠️ Erro ao fazer backup: $e');
       }
-
       await db.execute('DROP TABLE IF EXISTS proventos');
       await db.execute('''
         CREATE TABLE proventos(
@@ -439,7 +510,6 @@ class DBHelper {
           updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
       ''');
-
       for (var p in proventosExistentes) {
         try {
           p.remove('id');
@@ -464,14 +534,12 @@ class DBHelper {
       await db.execute('DROP INDEX IF EXISTS idx_proventos_ticker');
       await db.execute('DROP INDEX IF EXISTS idx_renda_fixa_vencimento');
       await db.execute('DROP INDEX IF EXISTS idx_renda_fixa_status');
-
       await _criarIndices(db);
     }
 
     if (oldVersion < 19) {
       final tableInfo = await db.rawQuery('PRAGMA table_info(renda_fixa)');
       final colunas = tableInfo.map((c) => c['name'] as String).toList();
-
       if (!colunas.contains('tipo_renda')) {
         await db.execute('ALTER TABLE renda_fixa ADD COLUMN tipo_renda TEXT');
       }
@@ -502,7 +570,6 @@ class DBHelper {
           updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
       ''');
-
       await db.execute('''
         CREATE TABLE IF NOT EXISTS parcelas(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -525,7 +592,6 @@ class DBHelper {
 
     if (oldVersion < 22) {
       LoggerService.info('🔧 Criando novas tabelas de contas do mês...');
-
       await db.execute('''
         CREATE TABLE IF NOT EXISTS $tabelaContas(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -543,7 +609,6 @@ class DBHelper {
           updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
       ''');
-
       await db.execute('''
         CREATE TABLE IF NOT EXISTS $tabelaPagamentos(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -557,7 +622,6 @@ class DBHelper {
           FOREIGN KEY (conta_id) REFERENCES $tabelaContas(id) ON DELETE CASCADE
         )
       ''');
-
       await _criarIndices(db);
     }
 
@@ -578,11 +642,9 @@ class DBHelper {
       }
     }
 
-    // 🔥 NOVA MIGRAÇÃO PARA VERSÃO 24 - CAMPOS DE SINCRONIZAÇÃO
     if (oldVersion < 24) {
       LoggerService.info(
           '🔧 Adicionando campos de sincronização (versão 24)...');
-
       final tabelas = [
         tabelaLancamentos,
         tabelaMetas,
@@ -593,36 +655,30 @@ class DBHelper {
         tabelaContas,
         tabelaPagamentos,
       ];
-
       for (var tabela in tabelas) {
         try {
           final tableInfo = await db.rawQuery('PRAGMA table_info($tabela)');
           final colunas = tableInfo.map((c) => c['name'] as String).toList();
-
           if (!colunas.contains('remote_id')) {
             await db.execute('ALTER TABLE $tabela ADD COLUMN remote_id TEXT');
             LoggerService.info('  ✅ Adicionado remote_id em $tabela');
           }
-
           if (!colunas.contains('user_id')) {
             await db.execute('ALTER TABLE $tabela ADD COLUMN user_id TEXT');
             LoggerService.info('  ✅ Adicionado user_id em $tabela');
           }
-
           if (!colunas.contains('sync_status')) {
             await db.execute(
-                'ALTER TABLE $tabela ADD COLUMN sync_status TEXT DEFAULT "synced"');
+                'ALTER TABLE $tabela ADD COLUMN sync_status TEXT DEFAULT "pending"');
             LoggerService.info('  ✅ Adicionado sync_status em $tabela');
           } else {
             await db.execute(
-                'UPDATE $tabela SET sync_status = "synced" WHERE sync_status IS NULL');
+                'UPDATE $tabela SET sync_status = "pending" WHERE sync_status IS NULL OR sync_status = "synced"');
           }
         } catch (e) {
           LoggerService.warning('⚠️ Erro ao migrar tabela $tabela: $e');
         }
       }
-
-      // Adicionar índices de sync_status
       try {
         await db.execute(
             'CREATE INDEX IF NOT EXISTS idx_lancamentos_sync_status ON $tabelaLancamentos(sync_status)');
@@ -640,11 +696,77 @@ class DBHelper {
       } catch (e) {
         LoggerService.warning('⚠️ Erro ao criar índices: $e');
       }
-
       LoggerService.success('✅ Migração para versão 24 concluída!');
     }
 
+    if (oldVersion < 25) {
+      LoggerService.info('🔧 Adicionando coluna lancamento_id (versão 25)...');
+      try {
+        final tableInfo =
+            await db.rawQuery('PRAGMA table_info($tabelaPagamentos)');
+        final colunas = tableInfo.map((c) => c['name'] as String).toList();
+
+        if (!colunas.contains('lancamento_id')) {
+          await db.execute(
+              'ALTER TABLE $tabelaPagamentos ADD COLUMN lancamento_id INTEGER');
+          LoggerService.success(
+              '✅ Coluna lancamento_id adicionada em $tabelaPagamentos');
+        } else {
+          LoggerService.info('ℹ️ Coluna lancamento_id já existe');
+        }
+      } catch (e) {
+        LoggerService.error('❌ Erro ao adicionar lancamento_id', e);
+      }
+
+      try {
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_pagamentos_lancamento_id ON $tabelaPagamentos(lancamento_id)');
+        LoggerService.success('✅ Índice idx_pagamentos_lancamento_id criado');
+      } catch (e) {
+        LoggerService.warning('⚠️ Erro ao criar índice para lancamento_id: $e');
+      }
+    }
+
+    if (oldVersion < 26) {
+      LoggerService.info(
+          '🔧 Criando índices compostos para performance (versão 26)...');
+      await _criarIndicesCompostos(db);
+      LoggerService.success('✅ Índices compostos criados na migração v26');
+    }
+
+    // 🔥 MIGRAÇÃO VERSÃO 27 - TABELA TRANSAÇÕES
+    if (oldVersion < 27) {
+      LoggerService.info('🔧 Criando tabela transacoes (versão 27)...');
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS $tabelaTransacoes(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            tipo_transacao TEXT NOT NULL,
+            quantidade REAL NOT NULL,
+            preco_unitario REAL NOT NULL,
+            taxa REAL DEFAULT 0,
+            data TEXT NOT NULL,
+            user_id TEXT,
+            sync_status TEXT DEFAULT 'pending',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+          )
+        ''');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_transacoes_user_id ON $tabelaTransacoes(user_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_transacoes_data ON $tabelaTransacoes(data DESC)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_transacoes_ticker ON $tabelaTransacoes(ticker)');
+        LoggerService.success('✅ Tabela transacoes criada na migração v27');
+      } catch (e) {
+        LoggerService.error('❌ Erro ao criar tabela transacoes: $e');
+      }
+    }
+
     await _criarIndices(db);
+    LoggerService.success('✅ Migração para versão $newVersion concluída!');
   }
 
   // ========== MÉTODOS GENÉRICOS ==========
@@ -661,19 +783,31 @@ class DBHelper {
     return DateHelper.agoraBrasilia().toIso8601String();
   }
 
+  Future<void> _adicionarUserId(Map<String, dynamic> data) async {
+    if (!data.containsKey('user_id')) {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        data['user_id'] = user.id;
+        LoggerService.info('✅ user_id adicionado: ${user.id}');
+      } else {
+        LoggerService.warning('⚠️ Usuário não logado ao inserir dados');
+      }
+    }
+  }
+
   Future<int> insert(String table, Map<String, dynamic> data) async {
     PerformanceService.start('db_insert_$table');
-
     final db = await database;
     try {
+      await _adicionarUserId(data);
       data['created_at'] = _agoraBrasil();
       data['updated_at'] = _agoraBrasil();
-
+      if (!data.containsKey('sync_status')) {
+        data['sync_status'] = 'pending';
+      }
       final result = await db.insert(table, data);
-
       _clearTableCache(table);
-      LoggerService.info('Insert em $table');
-
+      LoggerService.info('Insert em $table (ID: $result)');
       PerformanceService.stop('db_insert_$table');
       return result;
     } catch (e) {
@@ -684,21 +818,19 @@ class DBHelper {
 
   Future<int> update(String table, Map<String, dynamic> data, int id) async {
     PerformanceService.start('db_update_$table');
-
     final db = await database;
     try {
       data['updated_at'] = _agoraBrasil();
-
+      data.remove('user_id');
+      data['sync_status'] = 'pending';
       final result = await db.update(
         table,
         data,
         where: 'id = ?',
         whereArgs: [id],
       );
-
       _clearTableCache(table);
       _clearQueryCache();
-
       PerformanceService.stop('db_update_$table');
       return result;
     } catch (e) {
@@ -709,7 +841,6 @@ class DBHelper {
 
   Future<int> delete(String table, int id) async {
     PerformanceService.start('db_delete_$table');
-
     final db = await database;
     try {
       final result = await db.delete(
@@ -717,10 +848,8 @@ class DBHelper {
         where: 'id = ?',
         whereArgs: [id],
       );
-
       _clearTableCache(table);
       _clearQueryCache();
-
       PerformanceService.stop('db_delete_$table');
       return result;
     } catch (e) {
@@ -739,16 +868,13 @@ class DBHelper {
     bool useCache = true,
   }) async {
     PerformanceService.start('db_query_$table');
-
     final cacheKey = '${table}_${where}_${orderBy}_${limit}_$offset';
-
     if (useCache &&
         _queryCache.containsKey(cacheKey) &&
         _queryCache[cacheKey]!.isValid) {
       PerformanceService.stop('db_query_$table (cache)');
       return List<Map<String, dynamic>>.from(_queryCache[cacheKey]!.data);
     }
-
     final db = await database;
     final result = await db.query(
       table,
@@ -758,11 +884,9 @@ class DBHelper {
       limit: limit,
       offset: offset,
     );
-
     if (useCache) {
       _queryCache[cacheKey] = CacheEntry(result, DateTime.now());
     }
-
     PerformanceService.stop('db_query_$table');
     return result;
   }
@@ -809,21 +933,10 @@ class DBHelper {
       final valorPorCota = (provento['valor_por_cota'] as num).toDouble();
       provento['total_recebido'] = quantidade * valorPorCota;
     }
-
     if (provento['ticker'] != null) {
       provento['ticker'] = provento['ticker'].toString().toUpperCase();
     }
-
-    final db = await database;
-    try {
-      final id = await db.insert(tabelaProventos, provento);
-
-      _clearTableCache(tabelaProventos);
-      return id;
-    } catch (e) {
-      LoggerService.error('Erro ao inserir provento', e);
-      rethrow;
-    }
+    return await insert(tabelaProventos, provento);
   }
 
   Future<List<Map<String, dynamic>>> getAllProventos() async {
@@ -837,26 +950,10 @@ class DBHelper {
   Future<int> updateProvento(Map<String, dynamic> provento) async {
     final id = provento['id'];
     provento.remove('id');
-
     if (provento['ticker'] != null) {
       provento['ticker'] = provento['ticker'].toString().toUpperCase();
     }
-
-    final db = await database;
-    try {
-      final result = await db.update(
-        tabelaProventos,
-        provento,
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-
-      _clearTableCache(tabelaProventos);
-      return result;
-    } catch (e) {
-      LoggerService.error('Erro ao atualizar provento', e);
-      rethrow;
-    }
+    return await update(tabelaProventos, provento, id);
   }
 
   Future<int> deleteProvento(int id) async {
@@ -955,7 +1052,6 @@ class DBHelper {
       'SELECT SUM(valor) as total FROM $tabelaDepositosMeta WHERE meta_id = ?',
       [metaId],
     );
-
     return (result.first['total'] as num?)?.toDouble() ?? 0.0;
   }
 
@@ -1002,19 +1098,48 @@ class DBHelper {
   Future<int> adicionarConta(Map<String, dynamic> conta) async {
     final db = await database;
 
+    final existing = await db.query(
+      tabelaContas,
+      where: 'nome = ? AND tipo = ?',
+      whereArgs: [conta['nome'], conta['tipo']],
+    );
+
+    if (existing.isNotEmpty) {
+      print('⚠️ Conta "${conta['nome']}" já existe! Retornando ID existente.');
+      return existing.first['id'] as int;
+    }
+
+    await _adicionarUserId(conta);
+
     return await db.transaction((txn) async {
       final contaId = await txn.insert(tabelaContas, conta);
       await _gerarPagamentosFuturos(txn, contaId, conta);
+      _clearTableCache(tabelaPagamentos);
       return contaId;
     });
   }
 
   Future<void> _gerarPagamentosFuturos(
       Transaction txn, int contaId, Map<String, dynamic> conta) async {
+    final existing = await txn.query(
+      tabelaPagamentos,
+      where: 'conta_id = ?',
+      whereArgs: [contaId],
+    );
+
+    if (existing.isNotEmpty) {
+      print(
+          '⚠️ Conta $contaId já tem ${existing.length} pagamentos, pulando geração');
+      return;
+    }
+
     final dataInicio = DateTime.parse(conta['data_inicio'] as String);
     final tipo = conta['tipo'] as String;
     final valor = conta['valor'] as double;
     final diaVencimento = conta['dia_vencimento'] as int;
+
+    final user = Supabase.instance.client.auth.currentUser;
+    final userId = user?.id;
 
     if (tipo == 'parcelada') {
       final parcelasTotal = conta['parcelas_total'] as int;
@@ -1029,9 +1154,11 @@ class DBHelper {
 
         await txn.insert(tabelaPagamentos, {
           'conta_id': contaId,
+          'user_id': userId,
           'ano_mes': anoMes,
           'valor': valor,
           'status': StatusPagamento.pendente.index,
+          'sync_status': 'pending',
         });
       }
     } else {
@@ -1045,25 +1172,48 @@ class DBHelper {
 
         await txn.insert(tabelaPagamentos, {
           'conta_id': contaId,
+          'user_id': userId,
           'ano_mes': anoMes,
           'valor': valor,
           'status': StatusPagamento.pendente.index,
+          'sync_status': 'pending',
         });
       }
     }
   }
 
-  Future<List<Map<String, dynamic>>> getPagamentosDoMes(
-      int ano, int mes) async {
+  // MÉTODO OTIMIZADO - getPagamentosDoMes
+  Future<List<Map<String, dynamic>>> getPagamentosDoMes(int ano, int mes,
+      {bool useCache = true}) async {
+    PerformanceService.start('db_query_pagamentos_mes');
+
+    final cacheKey = 'pagamentos_${ano}_$mes';
+
+    if (useCache &&
+        _queryCache.containsKey(cacheKey) &&
+        _queryCache[cacheKey]!.isValid) {
+      PerformanceService.stop('db_query_pagamentos_mes (cache)');
+      return List<Map<String, dynamic>>.from(_queryCache[cacheKey]!.data);
+    }
+
     final db = await database;
     final anoMes = ano * 100 + mes;
 
     final resultados = await db.rawQuery('''
       SELECT 
-        p.*,
+        p.id,
+        p.conta_id,
+        p.ano_mes,
+        p.valor,
+        p.data_pagamento,
+        p.status,
+        p.lancamento_id,
         c.nome as conta_nome,
         c.dia_vencimento,
-        c.categoria
+        c.categoria,
+        c.tipo as conta_tipo,
+        c.parcelas_total,
+        c.parcelas_pagas
       FROM $tabelaPagamentos p
       INNER JOIN $tabelaContas c ON p.conta_id = c.id
       WHERE p.ano_mes = ?
@@ -1074,15 +1224,23 @@ class DBHelper {
           ELSE 3
         END,
         c.dia_vencimento ASC
+      LIMIT 500
     ''', [anoMes]);
 
+    if (useCache) {
+      _queryCache[cacheKey] = CacheEntry(resultados, DateTime.now());
+    }
+
+    PerformanceService.stop('db_query_pagamentos_mes');
     return resultados;
   }
 
+  // MÉTODO OTIMIZADO - pagarConta
   Future<bool> pagarConta(int pagamentoId, {DateTime? dataPagamento}) async {
+    PerformanceService.start('db_pagar_conta');
     final db = await database;
 
-    return await db.transaction((txn) async {
+    final result = await db.transaction((txn) async {
       final pagamento = await txn.query(
         tabelaPagamentos,
         where: 'id = ?',
@@ -1099,6 +1257,8 @@ class DBHelper {
         {
           'status': StatusPagamento.pago.index,
           'data_pagamento': (dataPagamento ?? DateTime.now()).toIso8601String(),
+          'updated_at': _agoraBrasil(),
+          'sync_status': 'pending',
         },
         where: 'id = ?',
         whereArgs: [pagamentoId],
@@ -1121,6 +1281,8 @@ class DBHelper {
             {
               'parcelas_pagas': parcelasPagas,
               'ativa': parcelasPagas >= parcelasTotal ? 0 : 1,
+              'updated_at': _agoraBrasil(),
+              'sync_status': 'pending',
             },
             where: 'id = ?',
             whereArgs: [contaId],
@@ -1130,10 +1292,26 @@ class DBHelper {
 
       return true;
     });
+
+    _clearTableCache(tabelaPagamentos);
+    _clearTableCache(tabelaContas);
+    _clearQueryCache();
+    PerformanceService.stop('db_pagar_conta');
+    return result;
   }
 
+  // MÉTODO OTIMIZADO - getResumoContasDoMes
   Future<Map<String, dynamic>> getResumoContasDoMes(int ano, int mes) async {
-    final pagamentos = await getPagamentosDoMes(ano, mes);
+    PerformanceService.start('db_resumo_contas_mes');
+
+    final cacheKey = 'resumo_contas_${ano}_$mes';
+
+    if (_queryCache.containsKey(cacheKey) && _queryCache[cacheKey]!.isValid) {
+      PerformanceService.stop('db_resumo_contas_mes (cache)');
+      return Map<String, dynamic>.from(_queryCache[cacheKey]!.data);
+    }
+
+    final pagamentos = await getPagamentosDoMes(ano, mes, useCache: false);
 
     double totalPendente = 0;
     double totalPago = 0;
@@ -1164,7 +1342,7 @@ class DBHelper {
       }
     }
 
-    return {
+    final result = {
       'totalPendente': totalPendente,
       'totalPago': totalPago,
       'qtdPendente': qtdPendente,
@@ -1172,15 +1350,96 @@ class DBHelper {
       'qtdAtrasado': qtdAtrasado,
       'totalContas': pagamentos.length,
     };
+
+    _queryCache[cacheKey] = CacheEntry(result, DateTime.now());
+    PerformanceService.stop('db_resumo_contas_mes');
+    return result;
+  }
+
+  // NOVO MÉTODO - Resumo mensal otimizado (para dashboard)
+  Future<Map<String, dynamic>> getResumoMensalOtimizado(
+      int ano, int mes) async {
+    PerformanceService.start('db_resumo_mensal_otimizado');
+
+    final cacheKey = 'resumo_mensal_${ano}_$mes';
+
+    if (_queryCache.containsKey(cacheKey) && _queryCache[cacheKey]!.isValid) {
+      PerformanceService.stop('db_resumo_mensal_otimizado (cache)');
+      return Map<String, dynamic>.from(_queryCache[cacheKey]!.data);
+    }
+
+    final db = await database;
+    final startDate = DateTime(ano, mes, 1);
+    final endDate = DateTime(ano, mes + 1, 0);
+
+    const query = '''
+      SELECT 
+        COALESCE(SUM(CASE WHEN tipo = 'receita' THEN valor ELSE 0 END), 0) as total_receitas,
+        COALESCE(SUM(CASE WHEN tipo = 'gasto' THEN valor ELSE 0 END), 0) as total_gastos,
+        COALESCE(SUM(CASE WHEN tipo = 'investimento' THEN valor ELSE 0 END), 0) as total_investimentos,
+        COUNT(CASE WHEN tipo = 'receita' THEN 1 END) as qtd_receitas,
+        COUNT(CASE WHEN tipo = 'gasto' THEN 1 END) as qtd_gastos,
+        COUNT(CASE WHEN tipo = 'investimento' THEN 1 END) as qtd_investimentos
+      FROM $tabelaLancamentos
+      WHERE data BETWEEN ? AND ?
+    ''';
+
+    final result = await db.rawQuery(query, [
+      startDate.toIso8601String(),
+      endDate.toIso8601String(),
+    ]);
+
+    final resumo = result.first;
+
+    final topCategorias = await db.rawQuery('''
+      SELECT 
+        categoria,
+        SUM(valor) as total
+      FROM $tabelaLancamentos
+      WHERE data BETWEEN ? AND ? AND tipo = 'gasto'
+      GROUP BY categoria
+      ORDER BY total DESC
+      LIMIT 5
+    ''', [
+      startDate.toIso8601String(),
+      endDate.toIso8601String(),
+    ]);
+
+    final resultMap = {
+      'totalReceitas': (resumo['total_receitas'] as num?)?.toDouble() ?? 0,
+      'totalGastos': (resumo['total_gastos'] as num?)?.toDouble() ?? 0,
+      'totalInvestimentos':
+          (resumo['total_investimentos'] as num?)?.toDouble() ?? 0,
+      'saldo': ((resumo['total_receitas'] as num?)?.toDouble() ?? 0) -
+          ((resumo['total_gastos'] as num?)?.toDouble() ?? 0) -
+          ((resumo['total_investimentos'] as num?)?.toDouble() ?? 0),
+      'qtdReceitas': (resumo['qtd_receitas'] as num?)?.toInt() ?? 0,
+      'qtdGastos': (resumo['qtd_gastos'] as num?)?.toInt() ?? 0,
+      'qtdInvestimentos': (resumo['qtd_investimentos'] as num?)?.toInt() ?? 0,
+      'topCategorias': topCategorias
+          .map((e) => {
+                'categoria': e['categoria'],
+                'total': (e['total'] as num?)?.toDouble() ?? 0,
+              })
+          .toList(),
+    };
+
+    _queryCache[cacheKey] = CacheEntry(resultMap, DateTime.now());
+    PerformanceService.stop('db_resumo_mensal_otimizado');
+    return resultMap;
   }
 
   Future<int> deletarConta(int contaId) async {
     final db = await database;
-    return await db.delete(
+    final result = await db.delete(
       tabelaContas,
       where: 'id = ?',
       whereArgs: [contaId],
     );
+    _clearTableCache(tabelaContas);
+    _clearTableCache(tabelaPagamentos);
+    _clearQueryCache();
+    return result;
   }
 
   // ========== FUNÇÕES DE CÁLCULO PARA RENDA FIXA ==========
@@ -1195,7 +1454,6 @@ class DBHelper {
   int _calcularDiasUteis(DateTime inicio, DateTime fim) {
     int diasUteis = 0;
     DateTime atual = inicio;
-
     while (atual.isBefore(fim) || atual.isAtSameMomentAs(fim)) {
       if (atual.weekday != DateTime.saturday &&
           atual.weekday != DateTime.sunday) {
@@ -1217,25 +1475,20 @@ class DBHelper {
 
   List<Map<String, dynamic>> calcularEvolucaoDiaria(Map<String, dynamic> item) {
     List<Map<String, dynamic>> evolucao = [];
-
     try {
       final dataAplicacao = DateTime.parse(item['data_aplicacao']);
       final dataVencimento = DateTime.parse(item['data_vencimento']);
       final valorInicial = (item['valor'] as num).toDouble();
       final percentualCDI = (item['taxa'] as num).toDouble();
       final hoje = DateTime.now();
-
       final diasUteisTotal = _calcularDiasUteis(dataAplicacao, dataVencimento);
       double valorAtual = valorInicial;
-
       for (int i = 1; i <= diasUteisTotal; i++) {
         final data = _proximoDiaUtil(dataAplicacao, i);
         if (data.isAfter(hoje)) break;
-
         final rendimentoHoje =
             calcularRendimentoDiario(valorAtual, percentualCDI);
         valorAtual += rendimentoHoje;
-
         if (i % 7 == 0 || i == diasUteisTotal) {
           evolucao.add({
             'data': data.toIso8601String(),
@@ -1246,15 +1499,12 @@ class DBHelper {
           });
         }
       }
-
       final diasUteisAteHoje = _calcularDiasUteis(dataAplicacao, hoje);
       double valorHoje = valorInicial;
-
       for (int i = 1; i <= diasUteisAteHoje; i++) {
         final rendimento = calcularRendimentoDiario(valorHoje, percentualCDI);
         valorHoje += rendimento;
       }
-
       evolucao.add({
         'data': hoje.toIso8601String(),
         'valor': valorHoje,
@@ -1263,12 +1513,10 @@ class DBHelper {
         'dia': diasUteisAteHoje,
         'hoje': true,
       });
-
       evolucao.sort((a, b) => a['data'].compareTo(b['data']));
     } catch (e) {
       LoggerService.error('Erro ao calcular evolução diária', e);
     }
-
     return evolucao;
   }
 
@@ -1277,18 +1525,14 @@ class DBHelper {
       final dataAplicacao = DateTime.parse(item['data_aplicacao']);
       final valorInicial = (item['valor'] as num).toDouble();
       final percentualCDI = (item['taxa'] as num).toDouble();
-
       if (data.isBefore(dataAplicacao)) return valorInicial;
-
       final diasUteis = _calcularDiasUteis(dataAplicacao, data);
       double valorAtual = valorInicial;
-
       for (int i = 1; i <= diasUteis; i++) {
         final rendimentoHoje =
             calcularRendimentoDiario(valorAtual, percentualCDI);
         valorAtual += rendimentoHoje;
       }
-
       return valorAtual;
     } catch (e) {
       LoggerService.error('Erro ao calcular valor em data', e);
@@ -1321,15 +1565,12 @@ class DBHelper {
     final rendimentoBruto = valor * (taxa / 100) * (dias / 365);
     double iof = 0;
     double ir = 0;
-
     if (!isLCI) {
       iof = calcularIOF(dias, rendimentoBruto);
       ir = calcularIR(dias, rendimentoBruto - iof);
     }
-
     final rendimentoLiquido = rendimentoBruto - iof - ir;
     final valorFinal = valor + rendimentoLiquido;
-
     return {
       'rendimentoBruto': rendimentoBruto,
       'iof': iof,
@@ -1344,15 +1585,15 @@ class DBHelper {
   Future<void> insertLancamentosEmLote(
       List<Map<String, dynamic>> lancamentos) async {
     final db = await database;
-
     await db.transaction((txn) async {
       for (var lancamento in lancamentos) {
+        await _adicionarUserId(lancamento);
         lancamento['created_at'] = _agoraBrasil();
         lancamento['updated_at'] = _agoraBrasil();
+        lancamento['sync_status'] = 'pending';
         await txn.insert(tabelaLancamentos, lancamento);
       }
     });
-
     _clearTableCache(tabelaLancamentos);
     _clearQueryCache();
   }
@@ -1360,12 +1601,12 @@ class DBHelper {
   Future<void> updateInvestimentosEmLote(
       List<Map<String, dynamic>> investimentos) async {
     final db = await database;
-
     await db.transaction((txn) async {
       for (var item in investimentos) {
         final id = item['id'];
         item.remove('id');
         item['updated_at'] = _agoraBrasil();
+        item['sync_status'] = 'pending';
         await txn.update(
           tabelaInvestimentos,
           item,
@@ -1374,22 +1615,18 @@ class DBHelper {
         );
       }
     });
-
     _clearTableCache(tabelaInvestimentos);
     _clearQueryCache();
   }
 
   Future<void> deleteEmLote(String table, List<int> ids) async {
     if (ids.isEmpty) return;
-
     final db = await database;
     final placeholders = List.filled(ids.length, '?').join(',');
-
     await db.execute(
       'DELETE FROM $table WHERE id IN ($placeholders)',
       ids,
     );
-
     _clearTableCache(table);
     _clearQueryCache();
   }
@@ -1405,30 +1642,24 @@ class DBHelper {
     bool useCache = true,
   }) async {
     final db = await database;
-
     String where = '1=1';
     List<dynamic> whereArgs = [];
-
     if (tipo != null && tipo != 'Todos') {
       where += ' AND tipo = ?';
       whereArgs.add(tipo);
     }
-
     if (categoria != null && categoria != 'Todas') {
       where += ' AND categoria = ?';
       whereArgs.add(categoria);
     }
-
     if (dataInicio != null) {
       where += ' AND date(data) >= date(?)';
       whereArgs.add(dataInicio.toIso8601String());
     }
-
     if (dataFim != null) {
       where += ' AND date(data) <= date(?)';
       whereArgs.add(dataFim.toIso8601String());
     }
-
     String orderBy;
     switch (ordem) {
       case OrdemLancamento.dataDesc:
@@ -1444,18 +1675,14 @@ class DBHelper {
         orderBy = 'valor ASC, data ASC';
         break;
     }
-
     final offset = (pagina - 1) * porPagina;
-
     final cacheKey =
         'lancamentos_paginados_${pagina}_${tipo}_${categoria}_${dataInicio}_${dataFim}_$ordem';
-
     if (useCache &&
         _queryCache.containsKey(cacheKey) &&
         _queryCache[cacheKey]!.isValid) {
       return List<Map<String, dynamic>>.from(_queryCache[cacheKey]!.data);
     }
-
     final result = await db.query(
       tabelaLancamentos,
       where: where,
@@ -1464,11 +1691,9 @@ class DBHelper {
       limit: porPagina,
       offset: offset,
     );
-
     if (useCache) {
       _queryCache[cacheKey] = CacheEntry(result, DateTime.now());
     }
-
     return result;
   }
 
@@ -1486,17 +1711,14 @@ class DBHelper {
     final agora = DateTime.now();
     final mesAlvo = mes ?? agora.month;
     final anoAlvo = ano ?? agora.year;
-
     final primeiroDia = DateTime(anoAlvo, mesAlvo, 1);
     final ultimoDia = DateTime(anoAlvo, mesAlvo + 1, 0);
-
     final db = await database;
     final results = await db.query(
       tabelaProventos,
       where: 'date(data_pagamento) BETWEEN date(?) AND date(?)',
       whereArgs: [primeiroDia.toIso8601String(), ultimoDia.toIso8601String()],
     );
-
     return results.fold<double>(
       0,
       (sum, item) => sum + ((item['total_recebido'] as num?)?.toDouble() ?? 0),
@@ -1510,11 +1732,11 @@ class DBHelper {
       {
         'preco_atual': preco,
         'ultima_atualizacao': _agoraBrasil(),
+        'sync_status': 'pending',
       },
       where: 'id = ?',
       whereArgs: [id],
     );
-
     _clearTableCache(tabelaInvestimentos);
     return result;
   }
@@ -1526,11 +1748,11 @@ class DBHelper {
       {
         'valor_atual': valorAtual,
         'updated_at': _agoraBrasil(),
+        'sync_status': 'pending',
       },
       where: 'id = ?',
       whereArgs: [id],
     );
-
     _clearTableCache(tabelaMetas);
     return result;
   }
@@ -1542,11 +1764,11 @@ class DBHelper {
       {
         'concluida': 1,
         'updated_at': _agoraBrasil(),
+        'sync_status': 'pending',
       },
       where: 'id = ?',
       whereArgs: [id],
     );
-
     _clearTableCache(tabelaMetas);
     return result;
   }
@@ -1560,7 +1782,6 @@ class DBHelper {
       'erros': <String>[],
       'tabelas': <String, int>{},
     };
-
     try {
       final tabelas = [
         tabelaLancamentos,
@@ -1572,7 +1793,6 @@ class DBHelper {
         tabelaContas,
         tabelaPagamentos,
       ];
-
       for (final tabela in tabelas) {
         try {
           final result =
@@ -1586,7 +1806,6 @@ class DBHelper {
               'erro', 'Falha na tabela $tabela', e.toString());
         }
       }
-
       final fkErrors = await db.rawQuery('''
         SELECT 
           (SELECT COUNT(*) FROM $tabelaDepositosMeta dm 
@@ -1596,7 +1815,6 @@ class DBHelper {
            LEFT JOIN $tabelaContas c ON p.conta_id = c.id 
            WHERE c.id IS NULL) as pagamentos_orfãos
       ''');
-
       if (fkErrors.isNotEmpty) {
         if ((fkErrors.first['depositos_orfãos'] as int) > 0) {
           resultados['valido'] = false;
@@ -1607,14 +1825,12 @@ class DBHelper {
           resultados['erros'].add('Pagamentos sem conta associada');
         }
       }
-
       LoggerService.info('✅ Validação de integridade concluída');
     } catch (e) {
       LoggerService.error('Erro na validação de integridade', e);
       resultados['valido'] = false;
       resultados['erros'].add('Erro geral: $e');
     }
-
     return resultados;
   }
 
@@ -1627,15 +1843,12 @@ class DBHelper {
         'mensagem': mensagem,
         'detalhes': detalhes,
       });
-    } catch (e) {
-      // Não faz nada se não conseguir logar
-    }
+    } catch (e) {}
   }
 
   Future<Map<String, dynamic>> repararIntegridade() async {
     final db = await database;
     final reparos = <String, dynamic>{'removidos': 0, 'corrigidos': 0};
-
     try {
       await db.transaction((txn) async {
         final removidosDepositos = await txn.rawDelete('''
@@ -1644,25 +1857,70 @@ class DBHelper {
         ''');
         reparos['removidos'] =
             (reparos['removidos'] as int) + removidosDepositos;
-
         final removidosPagamentos = await txn.rawDelete('''
           DELETE FROM $tabelaPagamentos 
           WHERE conta_id NOT IN (SELECT id FROM $tabelaContas)
         ''');
         reparos['removidos'] =
             (reparos['removidos'] as int) + removidosPagamentos;
-
         await _logIntegridade(
             'reparo', 'Reparo concluído', 'Removidos: ${reparos['removidos']}');
       });
-
       LoggerService.success(
           '✅ Reparo concluído: ${reparos['removidos']} registros removidos');
+      _clearQueryCache();
     } catch (e) {
       LoggerService.error('Erro no reparo de integridade', e);
       reparos['erro'] = e.toString();
     }
-
     return reparos;
+  }
+
+  // NOVO MÉTODO - Limpar cache manualmente
+  void limparCacheCompleto() {
+    _queryCache.clear();
+    LoggerService.info('🗑️ Cache completamente limpo');
+  }
+
+  // NOVO MÉTODO - Otimizar banco de dados
+  Future<void> otimizarBanco() async {
+    final db = await database;
+    await db.execute('PRAGMA optimize');
+    await db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+    LoggerService.success('✅ Banco de dados otimizado');
+  }
+
+  // NOVO MÉTODO - Estatísticas do banco
+  Future<Map<String, dynamic>> getEstatisticasBanco() async {
+    final db = await database;
+
+    final tamanhoQuery = await db.rawQuery('''
+      SELECT page_count * page_size as size 
+      FROM pragma_page_count(), pragma_page_size()
+    ''');
+
+    final tabelasInfo = <String, int>{};
+    final tabelas = [
+      tabelaLancamentos,
+      tabelaMetas,
+      tabelaInvestimentos,
+      tabelaProventos,
+      tabelaRendaFixa,
+      tabelaContas,
+      tabelaPagamentos,
+    ];
+
+    for (var tabela in tabelas) {
+      final count = await db.rawQuery('SELECT COUNT(*) as total FROM $tabela');
+      tabelasInfo[tabela] = (count.first['total'] as int?) ?? 0;
+    }
+
+    return {
+      'tamanhoBytes': tamanhoQuery.first['size'] ?? 0,
+      'tamanhoMB':
+          ((tamanhoQuery.first['size'] as num?)?.toDouble() ?? 0) / 1024 / 1024,
+      'cacheEntries': _queryCache.length,
+      'tabelas': tabelasInfo,
+    };
   }
 }

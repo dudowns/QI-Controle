@@ -67,11 +67,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         foregroundColor: Colors.white,
       ),
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: const [
+            colors: [
               Color(0xFF7B2CBF),
               Color(0xFF9D4EDD),
             ],
@@ -134,7 +134,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             suffixIcon: IconButton(
               icon: Icon(
                 _mostrarSenha ? Icons.visibility : Icons.visibility_off,
-                color: Color(0xFF7B2CBF),
+                color: const Color(0xFF7B2CBF),
               ),
               onPressed: () => setState(() => _mostrarSenha = !_mostrarSenha),
             ),
@@ -158,7 +158,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             suffixIcon: IconButton(
               icon: Icon(
                 _mostrarConfirmar ? Icons.visibility : Icons.visibility_off,
-                color: Color(0xFF7B2CBF),
+                color: const Color(0xFF7B2CBF),
               ),
               onPressed: () =>
                   setState(() => _mostrarConfirmar = !_mostrarConfirmar),

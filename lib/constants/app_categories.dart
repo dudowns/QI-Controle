@@ -12,7 +12,9 @@ class AppCategories {
   ];
 
   // ========== CATEGORIAS DE GASTOS (DESPESAS) ==========
+  // 🔥 UNIFICADO: inclui todas as categorias de contas também
   static const List<String> gastos = [
+    // Gastos comuns
     'Transporte',
     'Alimentação',
     'Moradia',
@@ -22,21 +24,38 @@ class AppCategories {
     'Cartão',
     'Investimentos',
     'Cuidados Pessoais',
+    'Empréstimo',
+    // Contas do mês (fixas)
+    'Água',
+    'Luz',
+    'Internet',
+    'Telefone',
+    'IPVA',
+    'IPTU',
+    'Financiamento',
+    'Cartão de Crédito',
     'Outros',
   ];
 
   // ========== CONTAS DO MÊS (FIXAS) ==========
   static const List<String> contas = [
+    // Gastos comuns
+    'Transporte',
+    'Alimentação',
+    'Moradia',
+    'Lazer',
+    'Saúde',
+    'Educação',
+    'Cartão',
+    'Investimentos',
+    'Cuidados Pessoais',
+    'Empréstimo',
     'Água',
     'Luz',
     'Internet',
     'Telefone',
-    'Aluguel',
     'IPVA',
     'IPTU',
-    'Academia',
-    'Streaming',
-    'Empréstimo',
     'Financiamento',
     'Cartão de Crédito',
     'Outros',

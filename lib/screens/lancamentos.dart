@@ -1,25 +1,10 @@
 // lib/screens/lancamentos.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../database/db_helper.dart';
-import '../repositories/lancamento_repository.dart';
+import 'package:provider/provider.dart';
+import '../services/supabase_service.dart';
 import '../models/lancamento_model.dart';
 import '../constants/app_colors.dart';
-import '../constants/app_sizes.dart';
-import '../constants/app_categories.dart';
-import '../widgets/primary_card.dart';
-import '../widgets/modern_card.dart';
-import '../widgets/gradient_button.dart';
-import '../widgets/animated_counter.dart';
-import '../widgets/loading_indicator.dart';
-import '../widgets/empty_state.dart';
-import '../widgets/skeleton_loader.dart';
 import '../utils/formatters.dart';
-import '../services/performance_service.dart';
-import '../widgets/nova_transacao_modal.dart';
-import '../widgets/editar_transacao_modal.dart'; // 🔥 IMPORT DO MODAL!
-
-enum Ordenacao { dataDesc, dataAsc, valorDesc, valorAsc }
 
 class LancamentosScreen extends StatefulWidget {
   const LancamentosScreen({super.key});
@@ -28,992 +13,1075 @@ class LancamentosScreen extends StatefulWidget {
   State<LancamentosScreen> createState() => _LancamentosScreenState();
 }
 
-class _LancamentosScreenState extends State<LancamentosScreen>
-    with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
-  final LancamentoRepository _lancamentoRepo = LancamentoRepository();
+class _LancamentosScreenState extends State<LancamentosScreen> {
+  late final SupabaseService _supabaseService;
 
-  List<Map<String, dynamic>> lancamentos = [];
-  List<Map<String, dynamic>>? _lancamentosFiltradosCache;
+  List<Lancamento> _lancamentos = [];
+  bool _isLoading = true;
 
-  Map<String, dynamic>? _resumoMes;
+  DateTime _mesSelecionado = DateTime.now();
+  String _filtroTipo = 'Todos';
+  String _filtroCategoria = 'Todas';
 
-  bool carregando = true;
-  bool _primeiraCarga = true;
-  bool _temMaisItens = true;
-  int _paginaAtual = 1;
-  final ScrollController _scrollController = ScrollController();
+  double _totalReceitas = 0;
+  double _totalDespesas = 0;
+  double _saldo = 0;
 
-  late AnimationController _animationController;
+  List<String> get _categorias {
+    final todas = [..._categoriasReceitas, ..._categoriasDespesas];
+    return ['Todas', ...todas.toSet().toList()];
+  }
 
-  String filtroTipo = 'Todos';
-  String filtroCategoria = 'Todas';
-  DateTime? dataInicio;
-  DateTime? dataFim;
-  Ordenacao _ordenacaoAtual = Ordenacao.dataDesc;
-
-  final List<String> tipos = const ['Todos', 'Receita', 'Gasto'];
-
-  final List<String> categorias = [
-    'Todas',
-    ...AppCategories.gastos,
-    ...AppCategories.receitas,
+  final List<String> _categoriasReceitas = [
+    'Salário',
+    'Bico ou Extra',
+    'Venda de Ativos',
+    'Outros'
   ];
 
+  final List<String> _categoriasDespesas = [
+    'Transporte',
+    'Alimentação',
+    'Moradia',
+    'Lazer',
+    'Saúde',
+    'Educação',
+    'Cartão',
+    'Investimentos',
+    'Cuidados Pessoais',
+    'Empréstimo',
+    'Água',
+    'Luz',
+    'Internet',
+    'Telefone',
+    'IPVA',
+    'IPTU',
+    'Cartão de Crédito',
+    'Outros'
+  ];
+
+  List<String> get _tipos {
+    return ['Todos', 'Receitas', 'Despesas'];
+  }
+
+  List<Lancamento> get _lancamentosFiltrados {
+    var filtrados = List<Lancamento>.from(_lancamentos);
+
+    filtrados = filtrados
+        .where((l) =>
+            l.data.year == _mesSelecionado.year &&
+            l.data.month == _mesSelecionado.month)
+        .toList();
+
+    if (_filtroTipo == 'Receitas') {
+      filtrados =
+          filtrados.where((l) => l.tipo == TipoLancamento.receita).toList();
+    } else if (_filtroTipo == 'Despesas') {
+      filtrados =
+          filtrados.where((l) => l.tipo == TipoLancamento.gasto).toList();
+    }
+
+    if (_filtroCategoria != 'Todas') {
+      filtrados =
+          filtrados.where((l) => l.categoria == _filtroCategoria).toList();
+    }
+
+    filtrados.sort((a, b) => b.data.compareTo(a.data));
+    return filtrados;
+  }
+
   @override
-  bool get wantKeepAlive => true;
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _supabaseService = Provider.of<SupabaseService>(context, listen: false);
+  }
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
-    _carregarLancamentos();
-
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..forward();
+    _carregarDados();
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
-      _carregarMaisLancamentos();
-    }
-  }
-
-  Future<void> _carregarLancamentos() async {
-    if (!mounted) return;
-
-    PerformanceService.start('carregarLancamentos');
-
-    setState(() {
-      carregando = true;
-      _paginaAtual = 1;
-    });
-
+  Future<void> _carregarDados() async {
+    setState(() => _isLoading = true);
     try {
-      final novosLancamentos = await _lancamentoRepo.getAllLancamentos();
-      lancamentos = [...novosLancamentos];
-      _lancamentosFiltradosCache = null;
-      _temMaisItens = lancamentos.length >= 20;
-
-      await _carregarResumoMes();
-
-      PerformanceService.stop('carregarLancamentos');
+      _lancamentos = await _supabaseService.getLancamentos();
+      _calcularTotais();
     } catch (e) {
-      _mostrarErro('Erro ao carregar lançamentos: $e');
+      debugPrint('Erro ao carregar lançamentos: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Erro ao carregar: $e'),
+              backgroundColor: AppColors.error),
+        );
+      }
     } finally {
-      if (mounted) {
-        setState(() {
-          carregando = false;
-          _primeiraCarga = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _carregarResumoMes() async {
-    try {
-      _resumoMes = await _lancamentoRepo.getResumoDoMes(DateTime.now());
-    } catch (e) {
-      debugPrint('❌ Erro ao carregar resumo do mês: $e');
-    }
-  }
+  void _calcularTotais() {
+    double receitas = 0;
+    double despesas = 0;
 
-  Future<void> _carregarMaisLancamentos() async {
-    if (!_temMaisItens || carregando || !mounted) return;
-
-    try {
-      final maisLancamentos = await _lancamentoRepo.getLancamentosPaginados(
-        pagina: _paginaAtual + 1,
-        tipo: filtroTipo != 'Todos' ? filtroTipo : null,
-        categoria: filtroCategoria != 'Todas' ? filtroCategoria : null,
-        dataInicio: dataInicio,
-        dataFim: dataFim,
-      );
-
-      if (mounted) {
-        setState(() {
-          lancamentos = [...lancamentos, ...maisLancamentos];
-          _paginaAtual++;
-          _temMaisItens = maisLancamentos.length >= 20;
-          _lancamentosFiltradosCache = null;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        _mostrarErro('Erro ao carregar mais lançamentos: $e');
+    for (var l in _lancamentosFiltrados) {
+      if (l.tipo == TipoLancamento.receita) {
+        receitas += l.valor;
+      } else {
+        despesas += l.valor;
       }
     }
+
+    _totalReceitas = receitas;
+    _totalDespesas = despesas;
+    _saldo = receitas - despesas;
   }
 
-  void _mostrarErro(String mensagem) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensagem),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  List<Map<String, dynamic>> get _lancamentosFiltrados {
-    if (_lancamentosFiltradosCache != null) {
-      return _lancamentosFiltradosCache!;
-    }
-
-    final filtrados = lancamentos.where((l) {
-      if (filtroTipo != 'Todos') {
-        final tipoItem = l['tipo']?.toString().toLowerCase() ?? '';
-        final tipoFiltro = filtroTipo.toLowerCase();
-
-        if (tipoFiltro == 'receita' &&
-            !(tipoItem == 'receita' || tipoItem == 'receitas')) {
-          return false;
-        }
-        if (tipoFiltro == 'gasto' &&
-            !(tipoItem == 'gasto' ||
-                tipoItem == 'gastos' ||
-                tipoItem == 'despesa')) {
-          return false;
-        }
-      }
-
-      if (filtroCategoria != 'Todas') {
-        if (l['categoria'] != filtroCategoria) return false;
-      }
-
-      if (dataInicio != null) {
-        try {
-          final data = DateTime.parse(l['data']);
-          if (data.isBefore(dataInicio!)) return false;
-        } catch (_) {}
-      }
-
-      if (dataFim != null) {
-        try {
-          final data = DateTime.parse(l['data']);
-          if (data.isAfter(dataFim!)) return false;
-        } catch (_) {}
-      }
-
-      return true;
-    }).toList();
-
-    switch (_ordenacaoAtual) {
-      case Ordenacao.dataDesc:
-        filtrados.sort((a, b) => b['data'].compareTo(a['data']));
-        break;
-      case Ordenacao.dataAsc:
-        filtrados.sort((a, b) => a['data'].compareTo(b['data']));
-        break;
-      case Ordenacao.valorDesc:
-        filtrados.sort((a, b) => (b['valor'] ?? 0).compareTo(a['valor'] ?? 0));
-        break;
-      case Ordenacao.valorAsc:
-        filtrados.sort((a, b) => (a['valor'] ?? 0).compareTo(b['valor'] ?? 0));
-        break;
-    }
-
-    _lancamentosFiltradosCache = filtrados;
-    return filtrados;
-  }
-
-  double get _totalReceitas {
-    return _lancamentosFiltrados.where((l) {
-      final tipo = l['tipo']?.toString().toLowerCase();
-      return tipo == 'receita' || tipo == 'receitas';
-    }).fold(0, (sum, l) => sum + (l['valor'] ?? 0));
-  }
-
-  double get _totalDespesas {
-    return _lancamentosFiltrados.where((l) {
-      final tipo = l['tipo']?.toString().toLowerCase();
-      return tipo == 'gasto' || tipo == 'gastos' || tipo == 'despesa';
-    }).fold(0, (sum, l) => sum + (l['valor'] ?? 0));
-  }
-
-  double get _saldo => _totalReceitas - _totalDespesas;
-
-  void _limparFiltros() {
+  void _navegarMes(int delta) {
     setState(() {
-      filtroTipo = 'Todos';
-      filtroCategoria = 'Todas';
-      dataInicio = null;
-      dataFim = null;
-      _ordenacaoAtual = Ordenacao.dataDesc;
-      _lancamentosFiltradosCache = null;
+      _mesSelecionado =
+          DateTime(_mesSelecionado.year, _mesSelecionado.month + delta, 1);
     });
+    _carregarDados();
   }
 
-  void _aplicarFiltros() {
-    setState(() {
-      _lancamentosFiltradosCache = null;
-    });
-  }
+  Future<void> _adicionarLancamento() async {
+    final descricaoCtrl = TextEditingController();
+    final valorCtrl = TextEditingController();
+    final observacaoCtrl = TextEditingController();
+    String tipo = 'gasto';
+    String categoria = 'Outros';
+    DateTime data = DateTime.now();
 
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-
-    return Scaffold(
-      backgroundColor: AppColors.background(context),
-      appBar: AppBar(
-        toolbarHeight: 50,
-        title: const Text(
-          'Gastos',
-          style: TextStyle(fontSize: 18),
-        ),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.sort, size: 20),
-            onPressed: _mostrarOpcoesOrdenacao,
-            tooltip: 'Ordenar',
-          ),
-          IconButton(
-            icon: const Icon(Icons.filter_list, size: 20),
-            onPressed: _mostrarFiltros,
-            tooltip: 'Filtrar',
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh, size: 20),
-            onPressed: _carregarLancamentos,
-            tooltip: 'Atualizar',
-          ),
-        ],
-      ),
-      body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white, size: 24),
-        onPressed: () {
-          NovaTransacaoModal.show(
-            context: context,
-            onSalvo: () {
-              _carregarLancamentos();
-            },
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateModal) {
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.8,
+            decoration: BoxDecoration(
+              color: AppColors.surface(context),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const Text('Novo Lançamento',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                                child: _buildTipoBotao(
+                                    '💰 Receita',
+                                    'receita',
+                                    Colors.green,
+                                    tipo,
+                                    (v) => setStateModal(() => tipo = v))),
+                            const SizedBox(width: 12),
+                            Expanded(
+                                child: _buildTipoBotao(
+                                    '💸 Despesa',
+                                    'gasto',
+                                    Colors.red,
+                                    tipo,
+                                    (v) => setStateModal(() => tipo = v))),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        TextField(
+                          controller: descricaoCtrl,
+                          decoration: const InputDecoration(
+                              labelText: 'Descrição',
+                              hintText: 'Ex: Salário, Mercado...',
+                              border: OutlineInputBorder()),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: valorCtrl,
+                          decoration: const InputDecoration(
+                              labelText: 'Valor (R\$)',
+                              hintText: '0,00',
+                              border: OutlineInputBorder()),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          value: categoria,
+                          items: (tipo == 'receita'
+                                  ? _categoriasReceitas
+                                  : _categoriasDespesas)
+                              .map((cat) {
+                            return DropdownMenuItem(
+                                value: cat, child: Text(cat));
+                          }).toList(),
+                          onChanged: (value) =>
+                              setStateModal(() => categoria = value!),
+                          decoration: const InputDecoration(
+                              labelText: 'Categoria',
+                              border: OutlineInputBorder()),
+                        ),
+                        const SizedBox(height: 16),
+                        InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: data,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                            );
+                            if (picked != null)
+                              setStateModal(() => data = picked);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 16),
+                            decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8)),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.calendar_today),
+                                const SizedBox(width: 12),
+                                Text(Formatador.data(data)),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: observacaoCtrl,
+                          decoration: const InputDecoration(
+                              labelText: 'Observação (opcional)',
+                              border: OutlineInputBorder()),
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              if (descricaoCtrl.text.isEmpty ||
+                                  valorCtrl.text.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content:
+                                          Text('Preencha descrição e valor!')),
+                                );
+                                return;
+                              }
+                              Navigator.pop(context);
+                              final novoLancamento = Lancamento(
+                                descricao: descricaoCtrl.text,
+                                tipo: tipo == 'receita'
+                                    ? TipoLancamento.receita
+                                    : TipoLancamento.gasto,
+                                categoria: categoria,
+                                valor: double.parse(
+                                    valorCtrl.text.replaceAll(',', '.')),
+                                data: data,
+                                observacao: observacaoCtrl.text.isNotEmpty
+                                    ? observacaoCtrl.text
+                                    : null,
+                              );
+                              try {
+                                await _supabaseService
+                                    .addLancamento(novoLancamento);
+                                await _carregarDados();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content:
+                                            Text('✅ Lançamento adicionado!'),
+                                        backgroundColor: AppColors.success),
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text('Erro: $e'),
+                                        backgroundColor: AppColors.error),
+                                  );
+                                }
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary),
+                            child: const Text('SALVAR',
+                                style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),
     );
   }
 
-  Widget _buildBody() {
-    if (_primeiraCarga) {
-      return const _LancamentosSkeleton();
-    }
-
-    if (carregando && lancamentos.isEmpty) {
-      return const LoadingIndicator(message: 'Carregando lançamentos...');
-    }
-
-    return Column(
-      children: [
-        _buildResumoCardCompacto(),
-        if (_filtrosAtivos) _buildFiltrosIndicador(),
-        Expanded(
-          child: lancamentos.isEmpty
-              ? _buildEmptyState()
-              : _lancamentosFiltrados.isEmpty
-                  ? _buildSemResultados()
-                  : _buildLista(),
+  Widget _buildTipoBotao(String label, String value, Color cor,
+      String tipoAtual, Function(String) onTap) {
+    final isSelected = tipoAtual == value;
+    return GestureDetector(
+      onTap: () => onTap(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? cor.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: isSelected ? cor : Colors.grey[300]!,
+              width: isSelected ? 2 : 1),
         ),
-      ],
-    );
-  }
-
-  Widget _buildResumoCardCompacto() {
-    final receitas = _resumoMes?['receitas'] ?? _totalReceitas;
-    final despesas = _resumoMes?['despesas'] ?? _totalDespesas;
-    final saldo = _resumoMes?['saldo'] ?? _saldo;
-
-    return Container(
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.secondary],
-        ),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Saldo',
-                    style: TextStyle(color: Colors.white70, fontSize: 11),
-                  ),
-                  const SizedBox(height: 2),
-                  AnimatedCounter(
-                    value: saldo,
-                    formatter: Formatador.moeda,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  Formatador.mesAno(DateTime.now()),
-                  style: const TextStyle(color: Colors.white, fontSize: 11),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildResumoItemCompacto(
-                  'Receitas',
-                  receitas,
-                  Icons.arrow_upward,
-                  AppColors.success,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildResumoItemCompacto(
-                  'Despesas',
-                  despesas,
-                  Icons.arrow_downward,
-                  AppColors.error,
-                ),
-              ),
-            ],
-          ),
-        ],
+        child: Center(
+            child: Text(label,
+                style: TextStyle(color: isSelected ? cor : Colors.grey[600]))),
       ),
     );
   }
 
-  Widget _buildResumoItemCompacto(
-      String titulo, double valor, IconData icone, Color cor) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(icone, size: 14, color: cor),
-          const SizedBox(width: 6),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                titulo,
-                style: const TextStyle(color: Colors.white70, fontSize: 10),
-              ),
-              AnimatedCounter(
-                value: valor,
-                formatter: Formatador.moeda,
-                style: TextStyle(
-                  color: cor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  Future<void> _editarLancamento(Lancamento lancamento) async {
+    final descricaoCtrl = TextEditingController(text: lancamento.descricao);
+    final valorCtrl = TextEditingController(
+        text: lancamento.valor.toString().replaceAll('.', ','));
+    final observacaoCtrl =
+        TextEditingController(text: lancamento.observacao ?? '');
+    String tipo =
+        lancamento.tipo == TipoLancamento.receita ? 'receita' : 'gasto';
+    String categoria = lancamento.categoria;
+    DateTime data = lancamento.data;
 
-  Widget _buildFiltrosIndicador() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              _textoFiltrosAtivos,
-              style: TextStyle(
-                fontSize: 11,
-                color: AppColors.textSecondary(context),
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
-          TextButton.icon(
-            onPressed: _limparFiltros,
-            icon: const Icon(Icons.clear, size: 14),
-            label: const Text('Limpar', style: TextStyle(fontSize: 11)),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              minimumSize: Size.zero,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLista() {
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.all(12),
-      itemCount: _lancamentosFiltrados.length + (_temMaisItens ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (index == _lancamentosFiltrados.length) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(12),
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
-        final item = _lancamentosFiltrados[index];
-        return _LancamentoCardCompacto(
-          item: item,
-          onRefresh: _carregarLancamentos,
-        );
-      },
-    );
-  }
-
-  bool get _filtrosAtivos {
-    return filtroTipo != 'Todos' ||
-        filtroCategoria != 'Todas' ||
-        dataInicio != null ||
-        dataFim != null ||
-        _ordenacaoAtual != Ordenacao.dataDesc;
-  }
-
-  String get _textoFiltrosAtivos {
-    List<String> filtros = [];
-
-    if (filtroTipo != 'Todos') filtros.add('Tipo: $filtroTipo');
-    if (filtroCategoria != 'Todas') filtros.add('Categoria: $filtroCategoria');
-    if (dataInicio != null) {
-      filtros.add('De: ${DateFormat('dd/MM').format(dataInicio!)}');
-    }
-    if (dataFim != null) {
-      filtros.add('Até: ${DateFormat('dd/MM').format(dataFim!)}');
-    }
-
-    switch (_ordenacaoAtual) {
-      case Ordenacao.dataDesc:
-        filtros.add('Ordenado por: Data');
-        break;
-      case Ordenacao.dataAsc:
-        filtros.add('Ordenado por: Data (antigo)');
-        break;
-      case Ordenacao.valorDesc:
-        filtros.add('Ordenado por: Maior valor');
-        break;
-      case Ordenacao.valorAsc:
-        filtros.add('Ordenado por: Menor valor');
-        break;
-    }
-
-    return filtros.join(' • ');
-  }
-
-  Widget _buildEmptyState() {
-    return EmptyState(
-      icon: Icons.receipt,
-      message: 'Nenhum lançamento cadastrado',
-      buttonText: 'Adicionar lançamento',
-      onButtonPressed: () {
-        NovaTransacaoModal.show(
-          context: context,
-          onSalvo: () {
-            _carregarLancamentos();
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildSemResultados() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.filter_alt, size: 48),
-          const SizedBox(height: 12),
-          Text(
-            'Nenhum resultado com os filtros atuais',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.textSecondary(context),
-            ),
-          ),
-          const SizedBox(height: 12),
-          GradientButton(
-            text: 'Limpar filtros',
-            icon: Icons.clear,
-            onPressed: _limparFiltros,
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _mostrarOpcoesOrdenacao() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Ordenar por',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              _buildOrdenacaoItem(
-                'Data (recente)',
-                Ordenacao.dataDesc,
-                Icons.calendar_today,
-              ),
-              _buildOrdenacaoItem(
-                'Data (antigo)',
-                Ordenacao.dataAsc,
-                Icons.calendar_today,
-              ),
-              _buildOrdenacaoItem(
-                'Maior valor',
-                Ordenacao.valorDesc,
-                Icons.trending_up,
-              ),
-              _buildOrdenacaoItem(
-                'Menor valor',
-                Ordenacao.valorAsc,
-                Icons.trending_down,
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildOrdenacaoItem(String titulo, Ordenacao valor, IconData icone) {
-    return ListTile(
-      leading: Icon(
-        icone,
-        size: 20,
-        color: _ordenacaoAtual == valor ? AppColors.primary : Colors.grey,
-      ),
-      title: Text(
-        titulo,
-        style: TextStyle(
-          fontSize: 14,
-          color: _ordenacaoAtual == valor
-              ? AppColors.primary
-              : AppColors.textPrimary(context),
-          fontWeight:
-              _ordenacaoAtual == valor ? FontWeight.bold : FontWeight.normal,
-        ),
-      ),
-      trailing: _ordenacaoAtual == valor
-          ? const Icon(Icons.check, color: AppColors.primary, size: 18)
-          : null,
-      onTap: () {
-        setState(() {
-          _ordenacaoAtual = valor;
-          _lancamentosFiltradosCache = null;
-        });
-        Navigator.pop(context);
-      },
-    );
-  }
-
-  void _mostrarFiltros() {
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateModal) {
-            return Container(
-              padding: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Filtros',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Tipo',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      children: tipos.map((tipo) {
-                        return FilterChip(
-                          label:
-                              Text(tipo, style: const TextStyle(fontSize: 12)),
-                          selected: filtroTipo == tipo,
-                          onSelected: (_) {
-                            setStateModal(() {
-                              filtroTipo = tipo;
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text('Categoria',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      children: categorias.map((categoria) {
-                        return FilterChip(
-                          label: Text(categoria,
-                              style: const TextStyle(fontSize: 11)),
-                          selected: filtroCategoria == categoria,
-                          onSelected: (_) {
-                            setStateModal(() {
-                              filtroCategoria = categoria;
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text('Período',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 8),
-                    Row(
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateModal) {
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.8,
+            decoration: BoxDecoration(
+              color: AppColors.surface(context),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const Text('Editar Lançamento',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
                       children: [
-                        Expanded(
-                          child: _buildDataPickerCompacto(
-                            'Início',
-                            dataInicio,
-                            (date) => setStateModal(() => dataInicio = date),
+                        Row(
+                          children: [
+                            Expanded(
+                                child: _buildTipoBotao(
+                                    '💰 Receita',
+                                    'receita',
+                                    Colors.green,
+                                    tipo,
+                                    (v) => setStateModal(() => tipo = v))),
+                            const SizedBox(width: 12),
+                            Expanded(
+                                child: _buildTipoBotao(
+                                    '💸 Despesa',
+                                    'gasto',
+                                    Colors.red,
+                                    tipo,
+                                    (v) => setStateModal(() => tipo = v))),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        TextField(
+                            controller: descricaoCtrl,
+                            decoration: const InputDecoration(
+                                labelText: 'Descrição',
+                                border: OutlineInputBorder())),
+                        const SizedBox(height: 16),
+                        TextField(
+                            controller: valorCtrl,
+                            decoration: const InputDecoration(
+                                labelText: 'Valor (R\$)',
+                                border: OutlineInputBorder()),
+                            keyboardType: TextInputType.number),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          value: categoria,
+                          items: (tipo == 'receita'
+                                  ? _categoriasReceitas
+                                  : _categoriasDespesas)
+                              .map((cat) {
+                            return DropdownMenuItem(
+                                value: cat, child: Text(cat));
+                          }).toList(),
+                          onChanged: (value) =>
+                              setStateModal(() => categoria = value!),
+                          decoration: const InputDecoration(
+                              labelText: 'Categoria',
+                              border: OutlineInputBorder()),
+                        ),
+                        const SizedBox(height: 16),
+                        InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: data,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                            );
+                            if (picked != null)
+                              setStateModal(() => data = picked);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 16),
+                            decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8)),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.calendar_today),
+                                const SizedBox(width: 12),
+                                Text(Formatador.data(data)),
+                              ],
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _buildDataPickerCompacto(
-                            'Fim',
-                            dataFim,
-                            (date) => setStateModal(() => dataFim = date),
-                          ),
+                        const SizedBox(height: 16),
+                        TextField(
+                            controller: observacaoCtrl,
+                            decoration: const InputDecoration(
+                                labelText: 'Observação (opcional)',
+                                border: OutlineInputBorder()),
+                            maxLines: 2),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: const Text('Excluir'),
+                                      content: Text(
+                                          'Excluir "${lancamento.descricao}"?'),
+                                      actions: [
+                                        TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, false),
+                                            child: const Text('Cancelar')),
+                                        TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, true),
+                                            child: const Text('Excluir',
+                                                style: TextStyle(
+                                                    color: Colors.red))),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirm == true) {
+                                    Navigator.pop(context);
+                                    try {
+                                      await _supabaseService
+                                          .deleteLancamento(lancamento.id!);
+                                      await _carregarDados();
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                              content: Text(
+                                                  '🗑️ "${lancamento.descricao}" excluído!'),
+                                              backgroundColor: Colors.orange),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                              content: Text('Erro: $e'),
+                                              backgroundColor: AppColors.error),
+                                        );
+                                      }
+                                    }
+                                  }
+                                },
+                                style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.red),
+                                child: const Text('EXCLUIR'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  if (descricaoCtrl.text.isEmpty ||
+                                      valorCtrl.text.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text(
+                                              'Preencha descrição e valor!')),
+                                    );
+                                    return;
+                                  }
+                                  Navigator.pop(context);
+                                  final lancamentoAtualizado = Lancamento(
+                                    id: lancamento.id,
+                                    descricao: descricaoCtrl.text,
+                                    tipo: tipo == 'receita'
+                                        ? TipoLancamento.receita
+                                        : TipoLancamento.gasto,
+                                    categoria: categoria,
+                                    valor: double.parse(
+                                        valorCtrl.text.replaceAll(',', '.')),
+                                    data: data,
+                                    observacao: observacaoCtrl.text.isNotEmpty
+                                        ? observacaoCtrl.text
+                                        : null,
+                                  );
+                                  try {
+                                    await _supabaseService
+                                        .updateLancamento(lancamentoAtualizado);
+                                    await _carregarDados();
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                            content: Text(
+                                                '✅ Lançamento atualizado!'),
+                                            backgroundColor: AppColors.success),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                            content: Text('Erro: $e'),
+                                            backgroundColor: AppColors.error),
+                                      );
+                                    }
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary),
+                                child: const Text('ATUALIZAR',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    Row(
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final meses = [
+      'Jan',
+      'Fev',
+      'Mar',
+      'Abr',
+      'Mai',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Set',
+      'Out',
+      'Nov',
+      'Dez'
+    ];
+
+    return Scaffold(
+      backgroundColor: AppColors.background(context),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {
-                              setStateModal(() {
-                                filtroTipo = 'Todos';
-                                filtroCategoria = 'Todas';
-                                dataInicio = null;
-                                dataFim = null;
-                              });
-                            },
-                            child: const Text('Limpar',
-                                style: TextStyle(fontSize: 13)),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface(context),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: AppColors.border(context)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                      icon: const Icon(Icons.chevron_left,
+                                          size: 18),
+                                      onPressed: () => _navegarMes(-1),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints()),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                      '${meses[_mesSelecionado.month - 1]} ${_mesSelecionado.year}',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color:
+                                              AppColors.textPrimary(context))),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                      icon: const Icon(Icons.chevron_right,
+                                          size: 18),
+                                      onPressed: () => _navegarMes(1),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints()),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 36,
+                              child: ElevatedButton(
+                                onPressed: _adicionarLancamento,
+                                style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(20))),
+                                child: const Row(children: [
+                                  Icon(Icons.add, size: 16),
+                                  SizedBox(width: 6),
+                                  Text('ADICIONAR',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold))
+                                ]),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        _buildResumoCard('Saldo', _saldo, AppColors.primary),
+                        const SizedBox(width: 12),
+                        _buildResumoCard(
+                            'Receitas', _totalReceitas, AppColors.success),
+                        const SizedBox(width: 12),
+                        _buildResumoCard(
+                            'Despesas', _totalDespesas, AppColors.error),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          height: 32,
+                          decoration: BoxDecoration(
+                              border:
+                                  Border.all(color: AppColors.border(context)),
+                              borderRadius: BorderRadius.circular(20)),
+                          child: DropdownButton<String>(
+                            value: _filtroTipo,
+                            isExpanded: false,
+                            underline: const SizedBox(),
+                            icon: Icon(Icons.arrow_drop_down,
+                                size: 18,
+                                color: AppColors.textSecondary(context)),
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textPrimary(context)),
+                            items: _tipos
+                                .map((tipo) => DropdownMenuItem(
+                                    value: tipo, child: Text(tipo)))
+                                .toList(),
+                            onChanged: (value) =>
+                                setState(() => _filtroTipo = value!),
                           ),
                         ),
                         const SizedBox(width: 12),
-                        Expanded(
-                          child: GradientButton(
-                            text: 'Aplicar',
-                            onPressed: () {
-                              _aplicarFiltros();
-                              Navigator.pop(context);
-                            },
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          height: 32,
+                          decoration: BoxDecoration(
+                              border:
+                                  Border.all(color: AppColors.border(context)),
+                              borderRadius: BorderRadius.circular(20)),
+                          child: DropdownButton<String>(
+                            value: _filtroCategoria,
+                            isExpanded: false,
+                            underline: const SizedBox(),
+                            icon: Icon(Icons.arrow_drop_down,
+                                size: 18,
+                                color: AppColors.textSecondary(context)),
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textPrimary(context)),
+                            items: _categorias
+                                .map((cat) => DropdownMenuItem(
+                                    value: cat,
+                                    child: Row(children: [
+                                      Container(
+                                          width: 10,
+                                          height: 10,
+                                          decoration: BoxDecoration(
+                                              color: _getCategoriaCor(cat),
+                                              shape: BoxShape.circle)),
+                                      const SizedBox(width: 6),
+                                      Text(cat),
+                                    ])))
+                                .toList(),
+                            onChanged: (value) =>
+                                setState(() => _filtroCategoria = value!),
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  Expanded(
+                    child: _lancamentosFiltrados.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.receipt,
+                                    size: 64, color: AppColors.muted(context)),
+                                const SizedBox(height: 16),
+                                Text('Nenhum lançamento',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        color:
+                                            AppColors.textSecondary(context))),
+                                const SizedBox(height: 8),
+                                Text('Clique em ADICIONAR para começar',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textHint(context))),
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _carregarDados,
+                            color: AppColors.primary,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              itemCount: _lancamentosFiltrados.length,
+                              itemBuilder: (context, index) {
+                                final l = _lancamentosFiltrados[index];
+                                return _buildLancamentoCard(l);
+                              },
+                            ),
+                          ),
+                  ),
+                ],
               ),
-            );
-          },
-        );
-      },
+            ),
     );
   }
 
-  Widget _buildDataPickerCompacto(
-      String label, DateTime? data, Function(DateTime) onSelect) {
-    return InkWell(
-      onTap: () async {
-        final picked = await showDatePicker(
-          context: context,
-          initialDate: data ?? DateTime.now(),
-          firstDate: DateTime(2020),
-          lastDate: DateTime.now(),
-          locale: const Locale('pt', 'BR'),
-        );
-        if (picked != null) onSelect(picked);
-      },
+  Widget _buildResumoCard(String titulo, double valor, Color cor) {
+    return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
-          color: AppColors.surface(context),
-          border: Border.all(color: AppColors.border(context)),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
+            color: AppColors.cardBackground(context),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border(context))),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.calendar_today, size: 14, color: AppColors.primary),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                data == null ? label : DateFormat('dd/MM').format(data),
+            Text(titulo,
                 style: TextStyle(
-                  fontSize: 12,
-                  color: data == null
-                      ? AppColors.textHint(context)
-                      : AppColors.textPrimary(context),
-                ),
-              ),
-            ),
+                    fontSize: 11, color: AppColors.textSecondary(context))),
+            const SizedBox(height: 4),
+            Text(Formatador.moeda(valor),
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold, color: cor)),
           ],
         ),
       ),
     );
   }
-}
 
-// Card de lançamento compacto - AGORA COM MODAL!
-class _LancamentoCardCompacto extends StatelessWidget {
-  final Map<String, dynamic> item;
-  final VoidCallback onRefresh;
-
-  const _LancamentoCardCompacto({
-    required this.item,
-    required this.onRefresh,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tipoLower = item['tipo']?.toString().toLowerCase() ?? '';
-    final isReceita = tipoLower == 'receita' || tipoLower == 'receitas';
+  Widget _buildLancamentoCard(Lancamento lancamento) {
+    final isReceita = lancamento.tipo == TipoLancamento.receita;
     final cor = isReceita ? AppColors.success : AppColors.error;
     final icone = isReceita ? Icons.arrow_upward : Icons.arrow_downward;
+    final prefixo = isReceita ? '+' : '-';
+    final categoriaCor = _getCategoriaCor(lancamento.categoria);
+    final isAuto =
+        lancamento.observacao?.contains('Pago automaticamente') ?? false;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeInOut,
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ModernCard(
-        onTap: () async {
-          // ✅ AGORA USA O MODAL DE EDIÇÃO!
-          await EditarTransacaoModal.show(
-            context: context,
-            lancamento: item,
-            onAtualizado: () {
-              onRefresh.call();
-            },
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: cor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icone, color: cor, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item['descricao'] ?? 'Sem descrição',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: AppColors.textPrimary(context),
+    return Dismissible(
+      key: Key(
+          lancamento.id ?? DateTime.now().millisecondsSinceEpoch.toString()),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        decoration: BoxDecoration(
+            color: Colors.red, borderRadius: BorderRadius.circular(12)),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      confirmDismiss: (direction) async {
+        return await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Excluir'),
+            content: Text('Excluir "${lancamento.descricao}"?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancelar')),
+              TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Excluir',
+                      style: TextStyle(color: Colors.red))),
+            ],
+          ),
+        );
+      },
+      onDismissed: (direction) async {
+        try {
+          await _supabaseService.deleteLancamento(lancamento.id!);
+          await _carregarDados();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                  content: Text('🗑️ "${lancamento.descricao}" excluído!'),
+                  backgroundColor: Colors.orange),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                  content: Text('Erro: $e'), backgroundColor: AppColors.error),
+            );
+          }
+        }
+      },
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: AppColors.border(context), width: 1)),
+        elevation: 0,
+        color: AppColors.cardBackground(context),
+        child: InkWell(
+          onTap: () => _editarLancamento(lancamento),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                        color: cor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10)),
+                    child: Icon(icone, color: cor, size: 20)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(lancamento.descricao,
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary(context))),
+                      const SizedBox(height: 2),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                                color: categoriaCor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10)),
+                            child:
+                                Row(mainAxisSize: MainAxisSize.min, children: [
+                              Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                      color: categoriaCor,
+                                      shape: BoxShape.circle)),
+                              const SizedBox(width: 4),
+                              Text(lancamento.categoria,
+                                  style: TextStyle(
+                                      fontSize: 9,
+                                      color: categoriaCor,
+                                      fontWeight: FontWeight.w500)),
+                            ]),
+                          ),
+                          Text(Formatador.data(lancamento.data),
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.textSecondary(context))),
+                          if (isAuto)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                  color: AppColors.info.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10)),
+                              child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.schedule,
+                                        size: 8, color: AppColors.info),
+                                    const SizedBox(width: 4),
+                                    Text('Automático',
+                                        style: TextStyle(
+                                            fontSize: 9,
+                                            color: AppColors.info,
+                                            fontWeight: FontWeight.w500)),
+                                  ]),
+                            ),
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('$prefixo ${Formatador.moeda(lancamento.valor)}',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: cor)),
+                    const SizedBox(height: 4),
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: cor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            item['categoria'] ?? 'Outros',
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: cor,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          Formatador.data(DateTime.parse(item['data'])),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: AppColors.textSecondary(context),
-                          ),
-                        ),
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                                color: AppColors.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(5)),
+                            child: Icon(Icons.edit,
+                                size: 12, color: AppColors.primary)),
+                        const SizedBox(width: 4),
+                        Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                                color: AppColors.error.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(5)),
+                            child: const Icon(Icons.delete_outline,
+                                size: 12, color: AppColors.error)),
                       ],
                     ),
                   ],
                 ),
-              ),
-              AnimatedCounter(
-                value: item['valor']?.toDouble() ?? 0,
-                formatter: Formatador.moeda,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: cor,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-}
 
-class _LancamentosSkeleton extends StatelessWidget {
-  const _LancamentosSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          margin: const EdgeInsets.all(12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey[300],
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  SkeletonLoader(
-                    child: Container(
-                      width: 80,
-                      height: 30,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SkeletonLoader(
-                    child: Container(
-                      width: 60,
-                      height: 24,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: SkeletonLoader(
-                      child: Container(
-                        height: 40,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: SkeletonLoader(
-                      child: Container(
-                        height: 40,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: 5,
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: SkeletonLoader(
-                  child: Container(
-                    height: 70,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
+  Color _getCategoriaCor(String categoria) {
+    final cores = {
+      'Salário': Colors.green,
+      'Bico ou Extra': Colors.orange,
+      'Venda de Ativos': Colors.purple,
+      'Transporte': Colors.blue,
+      'Alimentação': Colors.orange,
+      'Moradia': Colors.green,
+      'Lazer': Colors.pink,
+      'Saúde': Colors.red,
+      'Educação': Colors.purple,
+      'Água': Colors.cyan,
+      'Luz': Colors.yellow,
+      'Internet': Colors.blue,
+    };
+    return cores[categoria] ?? Colors.grey;
   }
 }

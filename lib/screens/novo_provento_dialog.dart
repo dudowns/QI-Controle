@@ -138,7 +138,7 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
 
               // Tipo de Provento
               DropdownButtonFormField<String>(
-                value: _tipoProvento,
+                initialValue: _tipoProvento,
                 items: _tiposProvento.map((tipo) {
                   return DropdownMenuItem(
                     value: tipo,

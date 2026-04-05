@@ -168,9 +168,9 @@ class _AdicionarDepositoModalState extends State<AdicionarDepositoModal> {
         // CABEÇALHO
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: AppColors.primary,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Row(
             children: [
@@ -239,7 +239,7 @@ class _AdicionarDepositoModalState extends State<AdicionarDepositoModal> {
                           ),
                           Text(
                             Formatador.moeda(valorRestante),
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               color: AppColors.primary,
                               fontSize: 16,
@@ -269,8 +269,8 @@ class _AdicionarDepositoModalState extends State<AdicionarDepositoModal> {
                   decoration: InputDecoration(
                     hintText: '0,00',
                     hintStyle: TextStyle(color: AppColors.textHint(context)),
-                    prefixIcon:
-                        Icon(Icons.attach_money, color: AppColors.primary),
+                    prefixIcon: const Icon(Icons.attach_money,
+                        color: AppColors.primary),
                     prefixText: 'R\$ ',
                     filled: true,
                     fillColor: AppColors.surface(context),
@@ -307,7 +307,8 @@ class _AdicionarDepositoModalState extends State<AdicionarDepositoModal> {
                   decoration: InputDecoration(
                     hintText: 'Ex: Depósito mensal, Bônus, etc',
                     hintStyle: TextStyle(color: AppColors.textHint(context)),
-                    prefixIcon: Icon(Icons.note, color: AppColors.primary),
+                    prefixIcon:
+                        const Icon(Icons.note, color: AppColors.primary),
                     filled: true,
                     fillColor: AppColors.surface(context),
                     border: OutlineInputBorder(

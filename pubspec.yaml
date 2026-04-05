@@ -45,8 +45,8 @@ dependencies:
   share_plus: ^7.0.0
   http: ^1.1.0
 
-  app_links: ^6.0.0  # Adicione esta
-  url_launcher: ^6.3.0  # Adicione esta
+  app_links: ^6.0.0
+  url_launcher: ^6.3.0
   
   # ========== SEGURANÇA ==========
   crypto: ^3.0.0
@@ -55,8 +55,10 @@ dependencies:
   
   # ========== UTILITÁRIOS ==========
   uuid: ^4.0.0
+  file_picker: ^8.0.0
+  
   # ========== CONECTIVIDADE ==========
-  connectivity_plus: ^6.0.0  # 🔥 ADICIONADO
+  connectivity_plus: ^6.0.0
 
   # ========== PERFORMANCE ==========
   flutter_native_splash: ^2.3.8
@@ -64,6 +66,11 @@ dependencies:
   provider: ^6.1.5+1
   supabase_flutter: ^2.12.2
   google_sign_in: ^6.3.0
+
+  # 🔥 NOVAS DEPENDÊNCIAS
+  google_fonts: ^6.1.0
+  font_awesome_flutter: ^10.7.0
+  cached_network_image: ^3.3.0
 
 
 dev_dependencies:
@@ -79,12 +86,28 @@ flutter:
     - assets/icon/
     - assets/images/
   
-  # ========== FONTES (COMENTADAS) ==========
-  # fonts:
-  #   - family: Poppins
-  #     fonts:
-  #       - asset: assets/fonts/Poppins-Regular.ttf
-  #         weight: 400
+  # ========== FONTES ==========
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Poppins-Bold.ttf
+          weight: 700
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
 
 # ========== CONFIGURAÇÃO DO ÍCONE ==========
 flutter_launcher_icons:

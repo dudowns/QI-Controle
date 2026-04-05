@@ -204,7 +204,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
 
               // 🔥 Categoria - DINÂMICA por tipo!
               DropdownButtonFormField<String>(
-                value: _categoriaSelecionada,
+                initialValue: _categoriaSelecionada,
                 decoration: const InputDecoration(
                   labelText: 'Categoria',
                   border: OutlineInputBorder(),

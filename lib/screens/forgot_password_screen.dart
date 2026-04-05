@@ -66,11 +66,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         foregroundColor: Colors.white,
       ),
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: const [
+            colors: [
               Color(0xFF7B2CBF),
               Color(0xFF9D4EDD),
             ],

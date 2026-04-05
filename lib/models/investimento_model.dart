@@ -1,106 +1,23 @@
 // lib/models/investimento_model.dart
-
-import 'package:flutter/material.dart'; // 🔥 IMPORT ADICIONADO para Colors
-
-enum TipoInvestimento {
-  acao,
-  fii,
-  etf,
-  bdr,
-  cripto,
-}
-
-extension TipoInvestimentoExtension on TipoInvestimento {
-  String get nome {
-    switch (this) {
-      case TipoInvestimento.acao:
-        return 'ACAO';
-      case TipoInvestimento.fii:
-        return 'FII';
-      case TipoInvestimento.etf:
-        return 'ETF';
-      case TipoInvestimento.bdr:
-        return 'BDR';
-      case TipoInvestimento.cripto:
-        return 'CRIPTO';
-    }
-  }
-
-  static TipoInvestimento fromString(String tipo) {
-    switch (tipo.toUpperCase()) {
-      case 'ACAO':
-        return TipoInvestimento.acao;
-      case 'FII':
-        return TipoInvestimento.fii;
-      case 'ETF':
-        return TipoInvestimento.etf;
-      case 'BDR':
-        return TipoInvestimento.bdr;
-      case 'CRIPTO':
-        return TipoInvestimento.cripto;
-      default:
-        return TipoInvestimento.acao;
-    }
-  }
-
-  Color get cor {
-    switch (this) {
-      case TipoInvestimento.acao:
-        return Colors.blue;
-      case TipoInvestimento.fii:
-        return Colors.green;
-      case TipoInvestimento.etf:
-        return Colors.purple;
-      case TipoInvestimento.bdr:
-        return Colors.orange;
-      case TipoInvestimento.cripto:
-        return Colors.amber;
-    }
-  }
-
-  IconData get icone {
-    switch (this) {
-      case TipoInvestimento.acao:
-        return Icons.trending_up;
-      case TipoInvestimento.fii:
-        return Icons.apartment;
-      case TipoInvestimento.etf:
-        return Icons.show_chart;
-      case TipoInvestimento.bdr:
-        return Icons.public;
-      case TipoInvestimento.cripto:
-        return Icons.currency_bitcoin;
-    }
-  }
-
-  String get nomeAmigavel {
-    switch (this) {
-      case TipoInvestimento.acao:
-        return 'Ações';
-      case TipoInvestimento.fii:
-        return 'FIIs';
-      case TipoInvestimento.etf:
-        return 'ETFs';
-      case TipoInvestimento.bdr:
-        return 'BDRs';
-      case TipoInvestimento.cripto:
-        return 'Criptomoedas';
-    }
-  }
-}
+import 'package:flutter/material.dart';
 
 class Investimento {
-  final int? id;
+  final String? id; // UUID do Supabase
   final String ticker;
-  final TipoInvestimento tipo;
+  final String tipo;
   final double quantidade;
   final double precoMedio;
-  final double? precoAtual;
-  final DateTime dataCompra;
+  double? precoAtual;
+  final String? dataCompra;
   final String? corretora;
   final String? setor;
   final double? dividendYield;
-  final DateTime? ultimaAtualizacao;
+
+  double get valorInvestido => quantidade * precoMedio;
+  double get valorAtual => quantidade * (precoAtual ?? precoMedio);
+  double get variacaoTotal => valorAtual - valorInvestido;
+  double get variacaoPercentual =>
+      valorInvestido > 0 ? (variacaoTotal / valorInvestido) * 100 : 0;
 
   Investimento({
     this.id,
@@ -109,73 +26,59 @@ class Investimento {
     required this.quantidade,
     required this.precoMedio,
     this.precoAtual,
-    required this.dataCompra,
+    this.dataCompra,
     this.corretora,
     this.setor,
     this.dividendYield,
-    this.ultimaAtualizacao,
   });
-
-  // Getters calculados
-  double get valorInvestido => quantidade * precoMedio;
-
-  double get valorAtual => quantidade * (precoAtual ?? precoMedio);
-
-  double get variacaoTotal => valorAtual - valorInvestido;
-
-  double get variacaoPercentual {
-    if (valorInvestido == 0) return 0;
-    return ((valorAtual - valorInvestido) / valorInvestido) * 100;
-  }
-
-  bool get temPrecoAtualizado => precoAtual != null && precoAtual! > 0;
 
   factory Investimento.fromJson(Map<String, dynamic> json) {
     return Investimento(
-      id: json['id'] as int?,
-      ticker: json['ticker'] as String,
-      tipo: TipoInvestimentoExtension.fromString(json['tipo'] as String),
-      quantidade: (json['quantidade'] as num).toDouble(),
-      precoMedio: (json['preco_medio'] as num).toDouble(),
+      // 🔥 Forçamos a conversão para String para evitar erro de UUID/int
+      id: json['id']?.toString(),
+      ticker: json['ticker']?.toString().toUpperCase() ?? '',
+      tipo: json['tipo']?.toString().toUpperCase() ?? '',
+      // 🔥 Usamos (as num?) antes do toDouble() para aceitar int ou double do Supabase
+      quantidade: (json['quantidade'] as num?)?.toDouble() ?? 0.0,
+      precoMedio: (json['preco_medio'] as num?)?.toDouble() ?? 0.0,
       precoAtual: (json['preco_atual'] as num?)?.toDouble(),
-      dataCompra: DateTime.parse(json['data_compra'] as String),
-      corretora: json['corretora'] as String?,
-      setor: json['setor'] as String?,
+      dataCompra: json['data_compra']?.toString(),
+      corretora: json['corretora']?.toString(),
+      setor: json['setor']?.toString(),
       dividendYield: (json['dividend_yield'] as num?)?.toDouble(),
-      ultimaAtualizacao: json['ultima_atualizacao'] != null
-          ? DateTime.parse(json['ultima_atualizacao'] as String)
-          : null,
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'ticker': ticker,
-      'tipo': tipo.nome,
+    final map = {
+      'ticker': ticker.toUpperCase(),
+      'tipo': tipo.toUpperCase(),
       'quantidade': quantidade,
       'preco_medio': precoMedio,
       'preco_atual': precoAtual,
-      'data_compra': dataCompra.toIso8601String(),
+      'data_compra': dataCompra,
       'corretora': corretora,
       'setor': setor,
       'dividend_yield': dividendYield,
-      'ultima_atualizacao': ultimaAtualizacao?.toIso8601String(),
     };
+
+    // Adiciona o id apenas se ele existir (para updates)
+    if (id != null) map['id'] = id;
+
+    return map;
   }
 
   Investimento copyWith({
-    int? id,
+    String? id,
     String? ticker,
-    TipoInvestimento? tipo,
+    String? tipo,
     double? quantidade,
     double? precoMedio,
     double? precoAtual,
-    DateTime? dataCompra,
+    String? dataCompra,
     String? corretora,
     String? setor,
     double? dividendYield,
-    DateTime? ultimaAtualizacao,
   }) {
     return Investimento(
       id: id ?? this.id,
@@ -188,7 +91,49 @@ class Investimento {
       corretora: corretora ?? this.corretora,
       setor: setor ?? this.setor,
       dividendYield: dividendYield ?? this.dividendYield,
-      ultimaAtualizacao: ultimaAtualizacao ?? this.ultimaAtualizacao,
     );
+  }
+}
+
+// 🔥 CLASSE TIPO INVESTIMENTO
+class TipoInvestimento {
+  static const String acao = 'ACAO';
+  static const String fii = 'FII';
+  static const String etf = 'ETF';
+  static const String bdr = 'BDR';
+  static const String cripto = 'CRIPTO';
+
+  static String getNomeAmigavel(String tipo) {
+    switch (tipo.toUpperCase()) {
+      case acao:
+        return 'Ações';
+      case fii:
+        return 'FIIs';
+      case etf:
+        return 'ETFs';
+      case bdr:
+        return 'BDRs';
+      case cripto:
+        return 'Cripto';
+      default:
+        return tipo;
+    }
+  }
+
+  static Color getCor(String tipo) {
+    switch (tipo.toUpperCase()) {
+      case acao:
+        return const Color(0xFF3B82F6);
+      case fii:
+        return const Color(0xFF10B981);
+      case etf:
+        return const Color(0xFFF59E0B);
+      case bdr:
+        return const Color(0xFF8B5CF6);
+      case cripto:
+        return const Color(0xFFEC489A);
+      default:
+        return const Color(0xFF6B7280);
+    }
   }
 }

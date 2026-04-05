@@ -1,8 +1,8 @@
-// lib/screens/login_screen.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'register_screen.dart';
 import '../services/auth_service.dart';
+import '../services/sync_service.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,6 +13,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final AuthService _auth = AuthService();
+  final SyncService _syncService = SyncService();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _senhaController = TextEditingController();
   bool _carregando = false;
@@ -31,14 +32,18 @@ class _LoginScreenState extends State<LoginScreen> {
       _senhaController.text,
     );
 
-    setState(() => _carregando = false);
-
     if (usuario != null && mounted) {
       _mostrarMensagem('✅ Login realizado!', isError: false);
-      Navigator.pushReplacementNamed(context, '/');
+
+      await _syncService.syncNow();
+
+      // 🔥 VAI PARA MAIN SCREEN
+      Navigator.pushReplacementNamed(context, '/main');
     } else {
       _mostrarMensagem('❌ Email ou senha inválidos', isError: true);
     }
+
+    setState(() => _carregando = false);
   }
 
   Future<void> _loginComGoogle() async {
@@ -48,7 +53,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (usuario != null && mounted) {
       _mostrarMensagem('✅ Login com Google realizado!', isError: false);
-      Navigator.pushReplacementNamed(context, '/');
+
+      await _syncService.syncNow();
+      Navigator.pushReplacementNamed(context, '/main');
     } else {
       _mostrarMensagem('❌ Erro ao fazer login com Google', isError: true);
     }
@@ -59,7 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
       SnackBar(
         content: Text(msg),
         backgroundColor: isError ? Colors.red : Colors.green,
-        duration: const Duration(seconds: 3),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -70,11 +77,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: const [
+            colors: [
               Color(0xFF7B2CBF),
               Color(0xFF9D4EDD),
             ],
@@ -88,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
                   ),
@@ -165,7 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               _mostrarSenha
                                   ? Icons.visibility
                                   : Icons.visibility_off,
-                              color: Color(0xFF7B2CBF),
+                              color: const Color(0xFF7B2CBF),
                             ),
                             onPressed: () =>
                                 setState(() => _mostrarSenha = !_mostrarSenha),
@@ -182,31 +189,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-
-                      // 🔥 BOTÃO ESQUECI MINHA SENHA - ABRE A TELA
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: _carregando
-                              ? null
-                              : () {
-                                  Navigator.pushNamed(
-                                      context, '/forgot-password');
-                                },
-                          style: TextButton.styleFrom(
-                            foregroundColor: const Color(0xFF7B2CBF),
-                          ),
-                          child: const Text(
-                            'Esqueci minha senha?',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Botão Entrar
+                      const SizedBox(height: 24),
                       _carregando
                           ? const CircularProgressIndicator(
                               color: Color(0xFF7B2CBF))
@@ -231,7 +214,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                             ),
-
                       if (!isWindows) ...[
                         const SizedBox(height: 16),
                         Row(
@@ -306,13 +288,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: TextStyle(color: Colors.white70),
                     ),
                     TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const RegisterScreen()),
-                        );
-                      },
+                      onPressed: () =>
+                          Navigator.pushNamed(context, '/register'),
                       child: const Text(
                         'CADASTRE-SE',
                         style: TextStyle(

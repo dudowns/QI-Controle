@@ -63,9 +63,9 @@ class _AdicionarLancamentoModalState extends State<AdicionarLancamentoModal> {
         // 🔝 CABEÇALHO
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: AppColors.primary,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Row(
             children: [
@@ -74,7 +74,7 @@ class _AdicionarLancamentoModalState extends State<AdicionarLancamentoModal> {
                 onPressed: () => Navigator.pop(context),
               ),
               const SizedBox(width: 8),
-              Text(
+              const Text(
                 'Novo Lançamento',
                 style: TextStyle(
                   color: Colors.white,
@@ -141,8 +141,8 @@ class _AdicionarLancamentoModalState extends State<AdicionarLancamentoModal> {
                     decoration: InputDecoration(
                       hintText: 'Ex: Salário, Mercado, etc',
                       hintStyle: TextStyle(color: AppColors.textHint(context)),
-                      prefixIcon:
-                          Icon(Icons.description, color: AppColors.primary),
+                      prefixIcon: const Icon(Icons.description,
+                          color: AppColors.primary),
                       filled: true,
                       fillColor: AppColors.surface(context),
                       border: OutlineInputBorder(
@@ -177,8 +177,8 @@ class _AdicionarLancamentoModalState extends State<AdicionarLancamentoModal> {
                     decoration: InputDecoration(
                       hintText: 'R\$ 0,00',
                       hintStyle: TextStyle(color: AppColors.textHint(context)),
-                      prefixIcon:
-                          Icon(Icons.attach_money, color: AppColors.primary),
+                      prefixIcon: const Icon(Icons.attach_money,
+                          color: AppColors.primary),
                       filled: true,
                       fillColor: AppColors.surface(context),
                       border: OutlineInputBorder(
@@ -291,7 +291,8 @@ class _AdicionarLancamentoModalState extends State<AdicionarLancamentoModal> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.calendar_today, color: AppColors.primary),
+                          const Icon(Icons.calendar_today,
+                              color: AppColors.primary),
                           const SizedBox(width: 12),
                           Text(
                             DateFormat('dd/MM/yyyy').format(_dataLancamento),
@@ -403,7 +404,7 @@ class _AdicionarLancamentoModalState extends State<AdicionarLancamentoModal> {
         widget.onSalvo?.call();
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('✅ Lançamento adicionado!'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,

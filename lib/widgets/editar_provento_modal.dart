@@ -145,8 +145,8 @@ class _EditarProventoModalState extends State<EditarProventoModal> {
         widget.onAtualizado?.call();
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('✅ Provento atualizado!'),
+          const SnackBar(
+            content: Text('✅ Provento atualizado!'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
           ),
@@ -246,9 +246,9 @@ class _EditarProventoModalState extends State<EditarProventoModal> {
         // 🔝 CABEÇALHO
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: AppColors.primary,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Row(
             children: [
@@ -306,8 +306,8 @@ class _EditarProventoModalState extends State<EditarProventoModal> {
                     decoration: InputDecoration(
                       hintText: 'Ex: PETR4, VALE3',
                       hintStyle: TextStyle(color: AppColors.textHint(context)),
-                      prefixIcon:
-                          Icon(Icons.trending_up, color: AppColors.primary),
+                      prefixIcon: const Icon(Icons.trending_up,
+                          color: AppColors.primary),
                       filled: true,
                       fillColor: AppColors.surface(context),
                       border: OutlineInputBorder(
@@ -351,7 +351,7 @@ class _EditarProventoModalState extends State<EditarProventoModal> {
                                 hintText: '0,00',
                                 hintStyle: TextStyle(
                                     color: AppColors.textHint(context)),
-                                prefixIcon: Icon(Icons.attach_money,
+                                prefixIcon: const Icon(Icons.attach_money,
                                     color: AppColors.primary),
                                 prefixText: 'R\$ ',
                                 filled: true,
@@ -400,7 +400,7 @@ class _EditarProventoModalState extends State<EditarProventoModal> {
                                 hintText: '1',
                                 hintStyle: TextStyle(
                                     color: AppColors.textHint(context)),
-                                prefixIcon: Icon(Icons.numbers,
+                                prefixIcon: const Icon(Icons.numbers,
                                     color: AppColors.primary),
                                 filled: true,
                                 fillColor: AppColors.surface(context),
@@ -451,7 +451,8 @@ class _EditarProventoModalState extends State<EditarProventoModal> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.calendar_today, color: AppColors.primary),
+                          const Icon(Icons.calendar_today,
+                              color: AppColors.primary),
                           const SizedBox(width: 12),
                           Text(
                             DateFormat('dd/MM/yyyy').format(_dataPagamento),
@@ -493,7 +494,7 @@ class _EditarProventoModalState extends State<EditarProventoModal> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.event, color: AppColors.primary),
+                            const Icon(Icons.event, color: AppColors.primary),
                             const SizedBox(width: 12),
                             Text(
                               _dataCom != null
@@ -529,7 +530,8 @@ class _EditarProventoModalState extends State<EditarProventoModal> {
                     decoration: InputDecoration(
                       hintText: 'Observações adicionais...',
                       hintStyle: TextStyle(color: AppColors.textHint(context)),
-                      prefixIcon: Icon(Icons.note, color: AppColors.primary),
+                      prefixIcon:
+                          const Icon(Icons.note, color: AppColors.primary),
                       filled: true,
                       fillColor: AppColors.surface(context),
                       border: OutlineInputBorder(

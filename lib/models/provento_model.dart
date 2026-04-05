@@ -1,7 +1,7 @@
 // lib/models/provento_model.dart
 
-import 'package:flutter/material.dart'; // 🔥 IMPORT ADICIONADO para Colors
-import 'package:intl/intl.dart'; // 🔥 IMPORT ADICIONADO para formatação
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 enum TipoProvento {
   dividendo,
@@ -24,7 +24,7 @@ extension TipoProventoExtension on TipoProvento {
     }
   }
 
-  static TipoProvento fromString(String tipo) {
+  static TipoProvento fromString(String? tipo) {
     switch (tipo) {
       case 'Dividendo':
         return TipoProvento.dividendo;
@@ -65,7 +65,7 @@ extension TipoProventoExtension on TipoProvento {
 }
 
 class Provento {
-  final int? id;
+  final String? id; // 🔥 Alterado de int? para String? (UUID)
   final String ticker;
   final TipoProvento tipo;
   final double valorPorCota;
@@ -99,37 +99,46 @@ class Provento {
 
   factory Provento.fromJson(Map<String, dynamic> json) {
     return Provento(
-      id: json['id'] as int?,
-      ticker: json['ticker'] as String,
+      // 🔥 Forçamos String para o ID
+      id: json['id']?.toString(),
+      ticker: json['ticker']?.toString() ?? '',
       tipo: TipoProventoExtension.fromString(
-          json['tipo_provento'] as String? ?? 'Dividendo'),
-      valorPorCota: (json['valor_por_cota'] as num).toDouble(),
-      quantidade: (json['quantidade'] as num?)?.toDouble() ?? 1,
-      dataPagamento: DateTime.parse(json['data_pagamento'] as String),
+          json['tipo_provento']?.toString() ?? 'Dividendo'),
+      // 🔥 Conversão robusta de num para double
+      valorPorCota: (json['valor_por_cota'] as num?)?.toDouble() ?? 0.0,
+      quantidade: (json['quantidade'] as num?)?.toDouble() ?? 1.0,
+      dataPagamento: json['data_pagamento'] != null
+          ? DateTime.parse(json['data_pagamento'] as String)
+          : DateTime.now(),
       dataCom: json['data_com'] != null
           ? DateTime.parse(json['data_com'] as String)
           : null,
       totalRecebido: (json['total_recebido'] as num?)?.toDouble(),
-      syncAutomatico: (json['sync_automatico'] as int?) == 1,
+      // 🔥 No Supabase booleano é bool nativo
+      syncAutomatico: json['sync_automatico'] is bool
+          ? json['sync_automatico']
+          : (json['sync_automatico'] == 1),
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'ticker': ticker,
+    final map = {
+      'ticker': ticker.toUpperCase().trim(),
       'tipo_provento': tipo.nome,
       'valor_por_cota': valorPorCota,
       'quantidade': quantidade,
       'data_pagamento': dataPagamento.toIso8601String(),
       'data_com': dataCom?.toIso8601String(),
       'total_recebido': totalRecebido,
-      'sync_automatico': syncAutomatico ? 1 : 0,
+      'sync_automatico': syncAutomatico,
     };
+
+    if (id != null) map['id'] = id;
+    return map;
   }
 
   Provento copyWith({
-    int? id,
+    String? id, // 🔥 Alterado para String?
     String? ticker,
     TipoProvento? tipo,
     double? valorPorCota,

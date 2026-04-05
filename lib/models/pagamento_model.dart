@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'conta_model.dart';
 
 class PagamentoMes {
-  int? id;
-  int contaId;
+  String? id; // 🔥 Alterado de int? para String? (UUID do Supabase)
+  String contaId; // 🔥 Alterado de int para String (UUID da Conta pai)
   String contaNome;
   int anoMes;
   double valor;
@@ -26,32 +26,49 @@ class PagamentoMes {
   });
 
   factory PagamentoMes.fromJson(Map<String, dynamic> json) {
+    // 🔥 Lógica para converter o status (aceita índice int ou nome String)
+    StatusPagamento parseStatus(dynamic statusJson) {
+      if (statusJson is int) return StatusPagamento.values[statusJson];
+      if (statusJson is String) {
+        return StatusPagamento.values.firstWhere(
+          (e) => e.name.toLowerCase() == statusJson.toLowerCase(),
+          orElse: () => StatusPagamento.pendente,
+        );
+      }
+      return StatusPagamento.pendente;
+    }
+
     return PagamentoMes(
-      id: json['id'] as int?,
-      contaId: json['conta_id'] as int,
-      contaNome: json['conta_nome'] as String,
-      anoMes: json['ano_mes'] as int,
-      valor: (json['valor'] as num).toDouble(),
+      id: json['id']?.toString(),
+      contaId: json['conta_id']?.toString() ?? '',
+      contaNome: json['conta_nome']?.toString() ?? 'Conta Removida',
+      anoMes: (json['ano_mes'] as num?)?.toInt() ?? 0,
+      valor: (json['valor'] as num?)?.toDouble() ?? 0.0,
       dataPagamento: json['data_pagamento'] != null
-          ? DateTime.parse(json['data_pagamento'])
+          ? DateTime.parse(json['data_pagamento'] as String)
           : null,
-      status: StatusPagamento.values[json['status'] as int],
-      diaVencimento: json['dia_vencimento'] as int,
+      status: parseStatus(json['status']),
+      diaVencimento: (json['dia_vencimento'] as num?)?.toInt() ?? 1,
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
+    final map = {
       'conta_id': contaId,
       'ano_mes': anoMes,
       'valor': valor,
       'data_pagamento': dataPagamento?.toIso8601String(),
-      'status': status.index,
+      // 🔥 Salvamos como String no Supabase para facilitar a leitura no dashboard
+      'status': status.name,
+      'dia_vencimento': diaVencimento,
     };
+
+    if (id != null) map['id'] = id;
+    return map;
   }
 
   String get mesAnoFormatado {
+    if (anoMes < 100) return 'Data Inválida';
     final ano = anoMes ~/ 100;
     final mes = anoMes % 100;
     return DateFormat('MMMM/yyyy', 'pt_BR').format(DateTime(ano, mes));
@@ -62,6 +79,7 @@ class PagamentoMes {
   }
 
   String get dataVencimentoFormatada {
+    if (anoMes < 100) return '--/--/----';
     final ano = anoMes ~/ 100;
     final mes = anoMes % 100;
     return '$diaFormatado/${mes.toString().padLeft(2, '0')}/$ano';
@@ -70,12 +88,14 @@ class PagamentoMes {
   bool get estaPago => status == StatusPagamento.pago;
 
   bool get estaAtrasado {
-    if (estaPago) return false;
+    if (estaPago || anoMes < 100) return false;
 
     final hoje = DateTime.now();
     final ano = anoMes ~/ 100;
     final mes = anoMes % 100;
-    final dataVencimento = DateTime(ano, mes, diaVencimento);
+
+    // Vencimento no último momento do dia
+    final dataVencimento = DateTime(ano, mes, diaVencimento, 23, 59, 59);
 
     return dataVencimento.isBefore(hoje);
   }

@@ -1,7 +1,7 @@
 // lib/models/lancamento_model.dart
 
-import 'package:flutter/material.dart'; // 🔥 IMPORT ADICIONADO para Colors
-import 'package:intl/intl.dart'; // 🔥 IMPORT ADICIONADO para formatação
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 enum TipoLancamento {
   receita,
@@ -45,7 +45,7 @@ extension TipoLancamentoExtension on TipoLancamento {
 }
 
 class Lancamento {
-  final int? id;
+  final String? id; // 🔥 Alterado de int? para String? (UUID)
   final String descricao;
   final TipoLancamento tipo;
   final String categoria;
@@ -67,16 +67,21 @@ class Lancamento {
     this.updatedAt,
   });
 
-  // Para converter do JSON do banco
+  // Para converter do JSON do banco (Supabase)
   factory Lancamento.fromJson(Map<String, dynamic> json) {
     return Lancamento(
-      id: json['id'] as int?,
-      descricao: json['descricao'] as String,
-      tipo: TipoLancamentoExtension.fromString(json['tipo'] as String),
-      categoria: json['categoria'] as String,
-      valor: (json['valor'] as num).toDouble(),
-      data: DateTime.parse(json['data'] as String),
-      observacao: json['observacao'] as String?,
+      // 🔥 Forçamos String para o ID
+      id: json['id']?.toString(),
+      descricao: json['descricao']?.toString() ?? '',
+      tipo: TipoLancamentoExtension.fromString(
+          json['tipo']?.toString() ?? 'gasto'),
+      categoria: json['categoria']?.toString() ?? 'Geral',
+      // 🔥 Garantimos que qualquer número do banco vire double no Flutter
+      valor: (json['valor'] as num?)?.toDouble() ?? 0.0,
+      data: json['data'] != null
+          ? DateTime.parse(json['data'] as String)
+          : DateTime.now(),
+      observacao: json['observacao']?.toString(),
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : null,
@@ -88,8 +93,7 @@ class Lancamento {
 
   // Para converter para JSON (salvar no banco)
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
+    final map = {
       'descricao': descricao,
       'tipo': tipo.nome,
       'categoria': categoria,
@@ -97,11 +101,18 @@ class Lancamento {
       'data': data.toIso8601String(),
       'observacao': observacao,
     };
+
+    // Adiciona o id apenas se ele não for nulo (para atualizações)
+    if (id != null) {
+      map['id'] = id;
+    }
+
+    return map;
   }
 
   // Cópia com alterações (útil para edição)
   Lancamento copyWith({
-    int? id,
+    String? id, // 🔥 Alterado para String?
     String? descricao,
     TipoLancamento? tipo,
     String? categoria,

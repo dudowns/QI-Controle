@@ -454,7 +454,7 @@ class ExportService {
         }
       };
 
-      final jsonString = JsonEncoder.withIndent('  ').convert(data);
+      final jsonString = const JsonEncoder.withIndent('  ').convert(data);
       final fileName =
           'backup_completo_${_fileDateFormat.format(DateTime.now())}.json';
       final path = await _getExportPath(fileName);

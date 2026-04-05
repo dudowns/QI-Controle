@@ -94,7 +94,7 @@ class AppColors {
     'Bico ou Extra': Color(0xFFFBC02D),
     'Venda de Ativos': Color(0xFF7E57C2),
 
-    // ===== GASTOS =====
+    // ===== GASTOS COMUNS =====
     'Transporte': Color(0xFF42A5F5),
     'Alimentação': Color(0xFFFF7043),
     'Moradia': Color(0xFF66BB6A),
@@ -103,9 +103,10 @@ class AppColors {
     'Educação': Color(0xFFAB47BC),
     'Cartão': Color(0xFFFF9800),
     'Investimentos': Color(0xFF7E57C2),
-    'Cuidados Pessoais': Color(0xFF9C27B0),
+    'Cuidados Pessoais': Color(0xFFE91E63),
+    'Empréstimo': Color(0xFFF44336),
 
-    // ===== CONTAS =====
+    // ===== CONTAS DO MÊS =====
     'Água': Color(0xFF00ACC1),
     'Luz': Color(0xFFFFD54F),
     'Internet': Color(0xFF42A5F5),
@@ -115,7 +116,6 @@ class AppColors {
     'IPTU': Color(0xFFFF5722),
     'Academia': Color(0xFF9C27B0),
     'Streaming': Color(0xFFE91E63),
-    'Empréstimo': Color(0xFFF44336),
     'Financiamento': Color(0xFFD32F2F),
     'Cartão de Crédito': Color(0xFFFF9800),
 

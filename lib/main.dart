@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,8 +9,12 @@ import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/main_screen.dart';
+import 'screens/lancamentos.dart';
 import 'services/auth_service.dart';
 import 'services/theme_service.dart';
+import 'services/loading_service.dart'; // 🔥 NOVO
+import 'database/db_helper.dart';
+import 'screens/investimentos.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,8 +35,12 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => ThemeService()..loadTheme(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeService()..loadTheme()),
+        ChangeNotifierProvider(
+            create: (_) => LoadingService()), // 🔥 ADICIONADO
+      ],
       child: Consumer<ThemeService>(
         builder: (context, themeService, child) {
           return MaterialApp(
@@ -52,24 +61,12 @@ class MyApp extends StatelessWidget {
             locale: const Locale('pt', 'BR'),
             home: const SplashScreen(),
             routes: {
+              '/login': (context) => const LoginScreen(),
               '/register': (context) => const RegisterScreen(),
               '/forgot-password': (context) => const ForgotPasswordScreen(),
-              '/main': (context) => const MainScreen(),
-            },
-            onGenerateRoute: (settings) {
-              if (settings.name == '/main') {
-                final auth = Supabase.instance.client.auth;
-                if (auth.currentSession != null) {
-                  return MaterialPageRoute(
-                    builder: (context) => const MainScreen(),
-                  );
-                } else {
-                  return MaterialPageRoute(
-                    builder: (context) => const LoginScreen(),
-                  );
-                }
-              }
-              return null;
+              '/main': (context) => MainScreen(key: MainScreen.navigatorKey),
+              '/lancamentos': (context) => const LancamentosScreen(),
+              '/investimentos': (context) => const InvestimentosScreen(),
             },
           );
         },
@@ -86,7 +83,6 @@ class MyApp extends StatelessWidget {
         primary: Color(0xFF7B2CBF),
         secondary: Color(0xFF9D4EDD),
         surface: Colors.white,
-        background: Color(0xFFF8F9FA),
         error: Color(0xFFC62828),
       ),
       scaffoldBackgroundColor: const Color(0xFFF8F9FA),
@@ -126,7 +122,6 @@ class MyApp extends StatelessWidget {
         primary: Color(0xFF9D4EDD),
         secondary: Color(0xFF7B2CBF),
         surface: Color(0xFF1E1E1E),
-        background: Color(0xFF121212),
         error: Color(0xFFEF5350),
       ),
       scaffoldBackgroundColor: const Color(0xFF121212),

@@ -1,493 +1,273 @@
 // lib/screens/dashboard.dart
 import 'package:flutter/material.dart';
-import 'package:animate_do/animate_do.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-import '../database/db_helper.dart';
-import '../repositories/lancamento_repository.dart';
-import '../repositories/dashboard_repository.dart';
-import '../services/backup_service_plus.dart';
-import '../utils/date_helper.dart';
+import 'package:provider/provider.dart';
+import '../services/supabase_service.dart';
 import '../constants/app_colors.dart';
-import '../constants/app_sizes.dart';
-import '../widgets/gradient_card.dart';
-import '../widgets/primary_card.dart';
-import '../widgets/modern_card.dart';
-import '../widgets/gradient_button.dart';
-import '../widgets/animated_counter.dart';
-import '../widgets/loading_indicator.dart';
-import '../widgets/empty_state.dart';
-import '../widgets/skeleton_loader.dart';
+import '../models/lancamento_model.dart';
+import '../constants/app_categories.dart';
 import '../utils/formatters.dart';
-import '../services/performance_service.dart';
-import 'nova_transacao.dart';
-import 'backup_screen.dart';
-
-class DashboardData {
-  final double saldo;
-  final double receitas;
-  final double despesas;
-  final Map<String, double> gastosPorCategoria;
-  final DateTime mesReferencia;
-  final int totalLancamentos;
-
-  const DashboardData({
-    required this.saldo,
-    required this.receitas,
-    required this.despesas,
-    required this.gastosPorCategoria,
-    required this.mesReferencia,
-    required this.totalLancamentos,
-  });
-
-  bool get temDados => receitas > 0 || despesas > 0;
-  bool get temGastos => gastosPorCategoria.isNotEmpty;
-  double get totalMovimentado => receitas + despesas;
-}
+import '../widgets/animated_counter.dart';
+import 'main_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  State<DashboardScreen> createState() => DashboardScreenState();
+  State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class DashboardScreenState extends State<DashboardScreen>
-    with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
-  final LancamentoRepository _lancamentoRepo = LancamentoRepository();
-  final DashboardRepository _dashboardRepo = DashboardRepository();
-  final BackupServicePlus _backupService = BackupServicePlus();
-
-  DashboardData? _dados;
-  bool _carregando = true;
-  bool _primeiraCarga = true;
-  String? _erro;
-
-  late DateTime _mesSelecionado;
-  final Map<DateTime, DashboardData> _cache = {};
-
-  late AnimationController _animationController;
-
-  Map<String, dynamic> _infoBackup = {'existe': false};
-  bool _carregandoBackup = false;
+class _DashboardScreenState extends State<DashboardScreen>
+    with AutomaticKeepAliveClientMixin {
+  late final SupabaseService _supabaseService;
 
   @override
   bool get wantKeepAlive => true;
 
+  DateTime mesAtual = DateTime.now();
+  Map<String, dynamic>? dados;
+  bool loading = true;
+  String? erro;
+
+  double _mediaGastosDiaria = 0;
+  MapEntry<String, double>? _maiorGasto;
+  double _taxaEconomia = 0;
+  List<Map<String, dynamic>> _ultimos3Meses = [];
+  List<Map<String, dynamic>> _ultimasTransacoes = [];
+
+  final NumberFormat _realFormat = NumberFormat.currency(
+    locale: 'pt_BR',
+    symbol: 'R\$',
+    decimalDigits: 2,
+  );
+
+  final List<String> _meses = [
+    'jan',
+    'fev',
+    'mar',
+    'abr',
+    'mai',
+    'jun',
+    'jul',
+    'ago',
+    'set',
+    'out',
+    'nov',
+    'dez'
+  ];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _supabaseService = Provider.of<SupabaseService>(context, listen: false);
+  }
+
   @override
   void initState() {
     super.initState();
-    _mesSelecionado = DateTime(DateTime.now().year, DateTime.now().month);
     _carregarDados();
-    _carregarInfoBackup();
-
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..forward();
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _carregarInfoBackup() async {
-    if (!mounted) return;
-    setState(() => _carregandoBackup = true);
-    try {
-      final backups = await _backupService.listarBackups();
-      if (backups.isNotEmpty) {
-        final ultimoBackup = backups.first;
-        final nome = ultimoBackup.path.split('\\').last;
-
-        DateTime? dataBackup = DateHelper.dataDoNomeArquivo(nome);
-
-        if (dataBackup == null) {
-          final dataUtc = await ultimoBackup.lastModified();
-          dataBackup = DateHelper.utcParaBrasilia(dataUtc);
-        }
-
-        if (mounted) {
-          setState(() {
-            _infoBackup = {
-              'existe': true,
-              'data': dataBackup,
-              'caminho': ultimoBackup.path,
-            };
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _infoBackup = {'existe': false};
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('Erro ao verificar backup: $e');
-      if (mounted) {
-        setState(() {
-          _infoBackup = {'existe': false};
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _carregandoBackup = false);
-      }
-    }
   }
 
   Future<void> _carregarDados() async {
     if (!mounted) return;
-
-    PerformanceService.start('carregarDashboard');
-
     setState(() {
-      _carregando = true;
-      _erro = null;
+      loading = true;
+      erro = null;
     });
 
     try {
-      if (_cache.containsKey(_mesSelecionado)) {
-        if (mounted) {
-          setState(() {
-            _dados = _cache[_mesSelecionado];
-            _carregando = false;
-            _primeiraCarga = false;
-          });
-        }
-        PerformanceService.stop('carregarDashboard');
-        return;
-      }
+      final primeiroDia = DateTime(mesAtual.year, mesAtual.month, 1);
+      final ultimoDia = DateTime(mesAtual.year, mesAtual.month + 1, 0);
 
-      final primeiroDia =
-          DateTime(_mesSelecionado.year, _mesSelecionado.month, 1);
-      final ultimoDia =
-          DateTime(_mesSelecionado.year, _mesSelecionado.month + 1, 0);
+      // Buscar lançamentos do mês
+      final lancamentos = await _supabaseService.getLancamentos();
 
-      final resumo = await _dashboardRepo.getResumoMes(_mesSelecionado);
-      final gastos =
-          await _dashboardRepo.getGastosPorCategoria(primeiroDia, ultimoDia);
+      // Filtrar pelo mês atual
+      final lancamentosMes = lancamentos
+          .where((l) =>
+              l.data.isAfter(primeiroDia.subtract(const Duration(days: 1))) &&
+              l.data.isBefore(ultimoDia.add(const Duration(days: 1))))
+          .toList();
 
-      final dados = DashboardData(
-        saldo: resumo['saldo'],
-        receitas: resumo['receitas'],
-        despesas: resumo['despesas'],
-        gastosPorCategoria: Map.fromIterable(
-          gastos,
-          key: (item) => item['categoria'],
-          value: (item) => item['total'],
-        ),
-        mesReferencia: _mesSelecionado,
-        totalLancamentos: resumo['totalLancamentos'],
-      );
+      // Calcular receitas e despesas
+      double receitas = 0;
+      double despesas = 0;
+      final Map<String, double> gastosPorCategoria = {};
 
-      _cache[_mesSelecionado] = dados;
-
-      if (_cache.length > 6) {
-        final chavesAntigas = _cache.keys.take(_cache.length - 6).toList();
-        for (var chave in chavesAntigas) {
-          _cache.remove(chave);
-        }
-      }
-
-      if (mounted) {
-        setState(() {
-          _dados = dados;
-          _carregando = false;
-          _primeiraCarga = false;
-        });
-      }
-
-      PerformanceService.stop('carregarDashboard');
-    } catch (e) {
-      debugPrint('❌ Erro ao carregar dashboard: $e');
-      await _carregarDadosLocal();
-    }
-  }
-
-  Future<void> _carregarDadosLocal() async {
-    try {
-      final lancamentos = await _lancamentoRepo.getAllLancamentos();
-      final dados = _processarLancamentos(lancamentos, _mesSelecionado);
-
-      _cache[_mesSelecionado] = dados;
-
-      if (mounted) {
-        setState(() {
-          _dados = dados;
-          _carregando = false;
-          _primeiraCarga = false;
-          _erro = null;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _erro = 'Erro ao carregar dados. Tente novamente.';
-          _carregando = false;
-          _primeiraCarga = false;
-        });
-      }
-    }
-  }
-
-  DashboardData _processarLancamentos(
-    List<Map<String, dynamic>> lancamentos,
-    DateTime mes,
-  ) {
-    double totalReceitas = 0;
-    double totalDespesas = 0;
-    final gastosPorCategoria = <String, double>{};
-    int totalLancamentos = 0;
-
-    final primeiroDiaDoMes = DateTime(mes.year, mes.month, 1);
-    final ultimoDiaDoMes = DateTime(mes.year, mes.month + 1, 0);
-
-    for (var item in lancamentos) {
-      try {
-        final dataLancamento = DateTime.parse(item['data'] as String);
-
-        if (dataLancamento.isBefore(primeiroDiaDoMes) ||
-            dataLancamento.isAfter(ultimoDiaDoMes)) {
-          continue;
-        }
-
-        final valor = _extrairValorSeguro(item["valor"]);
-        if (valor <= 0) continue;
-
-        totalLancamentos++;
-
-        if (item["tipo"]?.toString().toLowerCase() == "receita") {
-          totalReceitas += valor;
+      for (var l in lancamentosMes) {
+        if (l.tipo == TipoLancamento.receita) {
+          receitas += l.valor;
         } else {
-          totalDespesas += valor;
-
-          final categoria = item["categoria"]?.toString() ?? "Outros";
-          gastosPorCategoria[categoria] =
-              (gastosPorCategoria[categoria] ?? 0) + valor;
+          despesas += l.valor;
+          gastosPorCategoria[l.categoria] =
+              (gastosPorCategoria[l.categoria] ?? 0) + l.valor;
         }
-      } catch (e, stackTrace) {
-        debugPrint('Erro ao processar lançamento: $e\n$stackTrace');
-        continue;
       }
+
+      // Gastos por categoria
+      final gastos = gastosPorCategoria.entries.map((entry) {
+        return {
+          'categoria': entry.key,
+          'total': entry.value,
+        };
+      }).toList();
+      gastos.sort(
+          (a, b) => (b['total'] as double).compareTo(a['total'] as double));
+
+      // Buscar últimas transações
+      _ultimasTransacoes =
+          await _supabaseService.getUltimasTransacoes(limit: 5);
+
+      // Buscar evolução mensal
+      await _carregarEvolucaoMensal();
+
+      // Buscar contas pendentes
+      final contasResponse = await _carregarContasPendentes();
+
+      // Buscar patrimônio
+      final patrimonio = await _carregarPatrimonio();
+
+      // Buscar metas ativas
+      final metas = await _supabaseService.getMetas();
+      final metasAtivas = metas.where((m) => !m.concluida).length;
+
+      _calcularEstatisticas(gastos, despesas, receitas);
+
+      dados = {
+        'receitas': receitas,
+        'despesas': despesas,
+        'saldo': receitas - despesas,
+        'gastos': gastos,
+        'contasPendentes': contasResponse['total'],
+        'qtdContas': contasResponse['quantidade'],
+        'patrimonio': patrimonio,
+        'metasAtivas': metasAtivas,
+        'ultimas_transacoes': _ultimasTransacoes,
+      };
+    } catch (e) {
+      debugPrint('❌ Erro: $e');
+      erro = "Erro ao carregar dados";
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
-
-    final categoriasOrdenadas = Map.fromEntries(
-        gastosPorCategoria.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value)));
-
-    return DashboardData(
-      saldo: totalReceitas - totalDespesas,
-      receitas: totalReceitas,
-      despesas: totalDespesas,
-      gastosPorCategoria: categoriasOrdenadas,
-      mesReferencia: mes,
-      totalLancamentos: totalLancamentos,
-    );
   }
 
-  double _extrairValorSeguro(dynamic valorBruto) {
-    if (valorBruto == null) return 0;
-    if (valorBruto is double) return valorBruto;
-    if (valorBruto is int) return valorBruto.toDouble();
-    if (valorBruto is String) {
-      final valorStr = valorBruto.trim().replaceAll(',', '.');
-      return double.tryParse(valorStr) ?? 0;
+  Future<void> _carregarEvolucaoMensal() async {
+    _ultimos3Meses.clear();
+    final todosLancamentos = await _supabaseService.getLancamentos();
+
+    for (int i = 2; i >= 0; i--) {
+      final data = DateTime(mesAtual.year, mesAtual.month - i, 1);
+      final inicio = DateTime(data.year, data.month, 1);
+      final fim = DateTime(data.year, data.month + 1, 0);
+
+      double receitas = 0;
+      double despesas = 0;
+
+      for (var l in todosLancamentos) {
+        if (l.data.isAfter(inicio.subtract(const Duration(days: 1))) &&
+            l.data.isBefore(fim.add(const Duration(days: 1)))) {
+          if (l.tipo == TipoLancamento.receita) {
+            receitas += l.valor;
+          } else {
+            despesas += l.valor;
+          }
+        }
+      }
+
+      _ultimos3Meses.add({
+        'mes': data.month,
+        'receitas': receitas,
+        'despesas': despesas,
+      });
     }
-    return 0;
+  }
+
+  Future<Map<String, dynamic>> _carregarContasPendentes() async {
+    final contas = await _supabaseService.getContas();
+    double total = 0;
+    for (var conta in contas) {
+      total += conta.valor;
+    }
+    return {'total': total, 'quantidade': contas.length};
+  }
+
+  Future<double> _carregarPatrimonio() async {
+    final investimentos = await _supabaseService.getInvestimentos();
+    double patrimonio = 0;
+    for (var inv in investimentos) {
+      patrimonio += inv.valorAtual;
+    }
+    return patrimonio;
+  }
+
+  void _calcularEstatisticas(
+      List gastos, double despesasTotal, double receitasTotal) {
+    final diasNoMes = DateTime(mesAtual.year, mesAtual.month + 1, 0).day;
+    _mediaGastosDiaria = despesasTotal / diasNoMes;
+
+    if (gastos.isNotEmpty) {
+      MapEntry<String, double>? maior;
+      for (var item in gastos) {
+        final valor = (item['total'] as double);
+        final categoria = item['categoria']?.toString() ?? 'Outros';
+        if (maior == null || valor > maior.value) {
+          maior = MapEntry(categoria, valor);
+        }
+      }
+      _maiorGasto = maior;
+    } else {
+      _maiorGasto = null;
+    }
+
+    _taxaEconomia = receitasTotal > 0
+        ? ((receitasTotal - despesasTotal) / receitasTotal) * 100
+        : 0;
   }
 
   void _navegarMes(int delta) {
     setState(() {
-      _mesSelecionado = DateTime(
-        _mesSelecionado.year,
-        _mesSelecionado.month + delta,
-      );
+      mesAtual = DateTime(mesAtual.year, mesAtual.month + delta);
     });
     _carregarDados();
   }
 
-  Future<void> _recarregarComSQL() async {
-    _cache.clear();
-    await _carregarDados();
-    await _carregarInfoBackup();
+  String _formatarMoeda(double valor) {
+    return _realFormat.format(valor);
   }
 
-  Widget _buildLembreteBackup() {
-    if (_carregandoBackup) {
-      return const SizedBox.shrink();
+  String _formatarEixoY(double valor) {
+    if (valor >= 1000) {
+      return '${(valor / 1000).toStringAsFixed(0)}k';
     }
-
-    if (_infoBackup.isEmpty || _infoBackup['existe'] == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _carregarInfoBackup();
-      });
-      return const SizedBox(
-          height: 50, child: Center(child: CircularProgressIndicator()));
-    }
-
-    if (!_infoBackup['existe']) {
-      return Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.orange.shade50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.orange, width: 1),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.warning_amber, color: Colors.orange),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'Nenhum backup encontrado',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const BackupScreen()),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('FAZER AGORA'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final dataBackup = _infoBackup['data'] as DateTime;
-    final hoje = DateHelper.agoraBrasilia();
-
-    final dataBackupSemHora =
-        DateTime(dataBackup.year, dataBackup.month, dataBackup.day);
-    final hojeSemHora = DateTime(hoje.year, hoje.month, hoje.day);
-    final diasAtras = hojeSemHora.difference(dataBackupSemHora).inDays;
-
-    final cor = diasAtras > 7 ? Colors.orange : AppColors.success;
-    final corFundo = diasAtras > 7
-        ? Colors.orange.shade50
-        : AppColors.success.withOpacity(0.1);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: corFundo,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cor, width: 1),
-      ),
-      child: Row(
-        children: [
-          Icon(diasAtras > 7 ? Icons.warning_amber : Icons.backup, color: cor),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Último backup',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).brightness == Brightness.light
-                        ? Colors.grey[600]
-                        : Colors.white70,
-                  ),
-                ),
-                Text(
-                  DateFormat('dd/MM/yyyy').format(dataBackup),
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).brightness == Brightness.light
-                        ? Colors.black87
-                        : Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            diasAtras == 0
-                ? 'Hoje'
-                : diasAtras == 1
-                    ? 'Ontem'
-                    : 'Há $diasAtras dias',
-            style: TextStyle(color: cor, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const BackupScreen()),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('FAZER BACKUP'),
-          ),
-        ],
-      ),
-    );
+    return valor.toStringAsFixed(0);
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
 
-    return Scaffold(
-      backgroundColor: AppColors.background(context),
-      body: SafeArea(
-        child: _buildBody(),
-      ),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_primeiraCarga) {
-      return const _DashboardSkeleton();
+    if (loading) {
+      return const Center(child: CircularProgressIndicator());
     }
 
-    if (_carregando) {
-      return const LoadingIndicator(message: 'Carregando dashboard...');
-    }
-
-    if (_erro != null) {
+    if (erro != null && dados == null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: AppSizes.iconXL,
-              color: AppColors.error.withOpacity(0.5),
-            ),
-            const SizedBox(height: AppSizes.paddingL),
-            Text(
-              _erro!,
-              style: TextStyle(
-                fontSize: 16,
-                color: AppColors.textPrimary(context),
+            Text(erro!,
+                style: TextStyle(color: AppColors.textPrimary(context))),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _carregarDados,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSizes.paddingL),
-            GradientButton(
-              text: 'Tentar novamente',
-              icon: Icons.refresh,
-              onPressed: _recarregarComSQL,
+              child: const Text('Tentar novamente'),
             ),
           ],
         ),
@@ -495,520 +275,274 @@ class DashboardScreenState extends State<DashboardScreen>
     }
 
     return RefreshIndicator(
-      onRefresh: _recarregarComSQL,
+      onRefresh: _carregarDados,
       color: AppColors.primary,
       child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(AppSizes.paddingXL),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            FadeInDown(
-              duration: const Duration(milliseconds: 600),
-              child: _buildCabecalho(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [_buildMonthSelector()],
             ),
-            const SizedBox(height: AppSizes.paddingXL),
-            FadeInLeft(
-              duration: const Duration(milliseconds: 600),
-              delay: const Duration(milliseconds: 200),
-              child: _buildLembreteBackup(),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _buildStatCard('Receitas', _toDouble(dados!['receitas']),
+                    AppColors.success, Icons.trending_up),
+                const SizedBox(width: 12),
+                _buildStatCard('Despesas', _toDouble(dados!['despesas']),
+                    AppColors.error, Icons.trending_down),
+                const SizedBox(width: 12),
+                _buildStatCard(
+                  'Contas Pendentes',
+                  _toDouble(dados!['contasPendentes']),
+                  AppColors.warning,
+                  Icons.receipt,
+                  subtitle: '${dados!['qtdContas']} conta(s)',
+                ),
+                const SizedBox(width: 12),
+                _buildStatCard(
+                  'Patrimônio',
+                  _toDouble(dados!['patrimonio']),
+                  AppColors.primary,
+                  Icons.account_balance,
+                  subtitle: '${dados!['metasAtivas']} meta(s) ativa(s)',
+                ),
+              ],
             ),
-            if (_dados == null || !_dados!.temDados)
-              FadeIn(
-                duration: const Duration(milliseconds: 600),
-                child: _buildSemDados(),
-              )
-            else ...[
-              FadeInDown(
-                duration: const Duration(milliseconds: 600),
-                delay: const Duration(milliseconds: 300),
-                child: _buildSaldoCard(),
-              ),
-              const SizedBox(height: AppSizes.paddingXL),
-              FadeInLeft(
-                duration: const Duration(milliseconds: 600),
-                delay: const Duration(milliseconds: 400),
-                child: _buildResumoRapido(),
-              ),
-              const SizedBox(height: AppSizes.paddingXL),
-              FadeInUp(
-                duration: const Duration(milliseconds: 600),
-                delay: const Duration(milliseconds: 500),
-                child: _buildGraficos(),
-              ),
-              const SizedBox(height: AppSizes.paddingL),
-              FadeInRight(
-                duration: const Duration(milliseconds: 600),
-                delay: const Duration(milliseconds: 600),
-                child: _buildEstatisticas(),
-              ),
-            ],
-            const SizedBox(height: AppSizes.paddingL),
-            ZoomIn(
-              duration: const Duration(milliseconds: 600),
-              delay: const Duration(milliseconds: 700),
-              child: _buildAtualizarBotao(),
+            const SizedBox(height: 20),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 6,
+                  child: _buildExpensesSection(),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    children: [
+                      _buildIncomeExpenseChart(),
+                      const SizedBox(height: 12),
+                      _buildStatsCard(),
+                    ],
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 20),
+            _buildUltimasTransacoesSection(),
           ],
         ),
       ),
     );
   }
 
-  // ========== MÉTODOS DE UI ==========
+  double _toDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
 
-  Widget _buildCabecalho() {
-    return FadeTransition(
-      opacity: _animationController,
+  Widget _buildMonthSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.surface(context),
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: AppColors.border(context)),
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            "Dashboard",
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary(context),
-            ),
+          IconButton(
+            icon: const Icon(Icons.chevron_left, size: 20),
+            onPressed: () => _navegarMes(-1),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
           ),
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface(context),
-              borderRadius: BorderRadius.circular(AppSizes.radiusM),
-              border: Border.all(color: AppColors.border(context)),
-              boxShadow: [
-                BoxShadow(
-                  color: Theme.of(context).brightness == Brightness.light
-                      ? Colors.black12
-                      : Colors.transparent,
-                  blurRadius: 5,
-                ),
-              ],
+          const SizedBox(width: 8),
+          Text(
+            '${_meses[mesAtual.month - 1]}. ${mesAtual.year}',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textPrimary(context)),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.chevron_right, size: 20),
+            onPressed: () => _navegarMes(1),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(String title, double value, Color color, IconData icon,
+      {String? subtitle}) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground(context),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border(context)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(height: 8),
+            AnimatedCounter(
+              value: value,
+              duration: const Duration(milliseconds: 1000),
+              style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.bold, color: color),
+              formatter: (val) => _formatarMoeda(val),
             ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: () => _navegarMes(-1),
-                  color: AppColors.primary,
-                ),
-                Text(
-                  Formatador.mesAno(_mesSelecionado),
+            Text(title,
+                style: TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary(context))),
+            if (subtitle != null)
+              Text(subtitle,
                   style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textPrimary(context),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () => _navegarMes(1),
-                  color: AppColors.primary,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSemDados() {
-    return EmptyState(
-      icon: Icons.pie_chart_outline,
-      message: 'Nenhum lançamento em ${Formatador.mesAno(_mesSelecionado)}',
-      buttonText: 'Adicionar lançamento',
-      onButtonPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => NovaTransacaoScreen()),
-        );
-      },
-    );
-  }
-
-  Widget _buildSaldoCard() {
-    return GradientCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                "Saldo Total",
-                style: TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSizes.paddingS,
-                  vertical: AppSizes.paddingXS,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(AppSizes.radiusXL),
-                ),
-                child: Text(
-                  '${_dados?.totalLancamentos ?? 0} lançamentos',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSizes.paddingS),
-          AnimatedCounter(
-            value: _dados?.saldo ?? 0,
-            formatter: Formatador.moeda,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: AppSizes.paddingXS),
-          Text(
-            'Mês de ${Formatador.mesAno(_mesSelecionado)}',
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResumoRapido() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildInfoCard(
-            'Receitas',
-            _dados?.receitas ?? 0,
-            Icons.arrow_upward,
-            AppColors.success,
-          ),
+                      fontSize: 10, color: AppColors.textSecondary(context))),
+          ],
         ),
-        const SizedBox(width: AppSizes.paddingM),
-        Expanded(
-          child: _buildInfoCard(
-            'Despesas',
-            _dados?.despesas ?? 0,
-            Icons.arrow_downward,
-            AppColors.error,
-          ),
+      ),
+    );
+  }
+
+  Widget _buildExpensesSection() {
+    final gastos = dados!['gastos'] as List;
+    final despesasTotal = _toDouble(dados!['despesas']);
+
+    if (gastos.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground(context),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border(context)),
         ),
-      ],
-    );
-  }
-
-  Widget _buildInfoCard(
-      String titulo, double valor, IconData icone, Color cor) {
-    return ModernCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icone, size: AppSizes.iconXS, color: cor),
-              const SizedBox(width: AppSizes.paddingXS),
-              Text(
-                titulo,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary(context),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSizes.paddingS),
-          AnimatedCounter(
-            value: valor,
-            formatter: Formatador.moeda,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: cor,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGraficos() {
-    return TweenAnimationBuilder(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 600),
-      curve: Curves.easeOutCubic,
-      builder: (context, double value, child) {
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(0, 20 * (1 - value)),
-            child: child,
-          ),
-        );
-      },
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _buildGraficoReceitasDespesas()),
-          const SizedBox(width: AppSizes.paddingM),
-          Expanded(child: _buildGraficoCategorias()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGraficoReceitasDespesas() {
-    final temDados = (_dados?.receitas ?? 0) + (_dados?.despesas ?? 0) > 0;
-
-    return ModernCard(
-      height: 250,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (!temDados)
-            Center(
-              child: Text(
-                'Sem dados',
-                style: TextStyle(
-                  color: AppColors.textSecondary(context),
-                ),
-              ),
-            )
-          else
-            PieChart(
-              PieChartData(
-                sectionsSpace: 2,
-                centerSpaceRadius: 70,
-                sections: [
-                  PieChartSectionData(
-                    value: _dados!.receitas,
-                    color: AppColors.success,
-                    radius: 80,
-                    title:
-                        '${((_dados!.receitas / _dados!.totalMovimentado) * 100).toStringAsFixed(0)}%',
-                    titleStyle: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    titlePositionPercentageOffset: 0.5,
-                  ),
-                  PieChartSectionData(
-                    value: _dados!.despesas,
-                    color: AppColors.error,
-                    radius: 80,
-                    title:
-                        '${((_dados!.despesas / _dados!.totalMovimentado) * 100).toStringAsFixed(0)}%',
-                    titleStyle: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    titlePositionPercentageOffset: 0.5,
-                  ),
-                ],
-              ),
-            ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                "Total",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary(context),
-                ),
-              ),
-              AnimatedCounter(
-                value: _dados?.totalMovimentado ?? 0,
-                formatter: Formatador.moeda,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: AppSizes.paddingXS),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSizes.paddingS,
-                  vertical: 2,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(AppSizes.radiusM),
-                ),
-                child: Text(
-                  'R: ${((_dados?.receitas ?? 0) / (_dados?.totalMovimentado ?? 1) * 100).toStringAsFixed(0)}% | D: ${((_dados?.despesas ?? 0) / (_dados?.totalMovimentado ?? 1) * 100).toStringAsFixed(0)}%',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGraficoCategorias() {
-    if (_dados == null || !_dados!.temGastos) {
-      return ModernCard(
-        height: 250,
         child: Center(
-          child: Text(
-            'Nenhum gasto\nno período',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.textSecondary(context),
-            ),
-          ),
+          child: Text('Nenhum gasto registrado',
+              style: TextStyle(color: AppColors.textSecondary(context))),
         ),
       );
     }
 
-    final todasCategorias = _dados!.gastosPorCategoria.entries.toList();
+    final List<Map<String, dynamic>> pizzaData = gastos.map((item) {
+      final valor = _toDouble(item['total']);
+      return {
+        'categoria': item['categoria']?.toString() ?? 'Outros',
+        'valor': valor,
+        'percentual': despesasTotal > 0 ? (valor / despesasTotal) * 100 : 0,
+        'cor':
+            AppCategories.getColor(item['categoria']?.toString() ?? 'Outros'),
+      };
+    }).toList()
+      ..sort((a, b) => (b['valor'] as double).compareTo(a['valor'] as double));
 
-    final Map<String, double> dadosGrafico = {};
-    double outrosValor = 0;
+    final List<Map<String, dynamic>> topCategorias = pizzaData.take(5).toList();
 
-    for (var entry in todasCategorias) {
-      final percentual = (entry.value / _dados!.despesas) * 100;
-
-      if (percentual >= 5) {
-        dadosGrafico[entry.key] = entry.value;
-      } else {
-        outrosValor += entry.value;
-      }
-    }
-
-    if (outrosValor > 0) {
-      dadosGrafico['Outros'] = outrosValor;
-    }
-
-    return ModernCard(
-      height: 250,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          PieChart(
-            PieChartData(
-              sectionsSpace: 2,
-              centerSpaceRadius: 70,
-              sections: dadosGrafico.entries.map((entry) {
-                final percentual = (entry.value / _dados!.despesas) * 100;
-                return PieChartSectionData(
-                  value: entry.value,
-                  color: AppColors.categoryColors[entry.key] ?? Colors.grey,
-                  radius: 80,
-                  title: '${entry.key}\n${percentual.toStringAsFixed(0)}%',
-                  titleStyle: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                  titlePositionPercentageOffset: 0.5,
-                );
-              }).toList(),
-            ),
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                "Gastos",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary(context),
-                ),
-              ),
-              AnimatedCounter(
-                value: _dados!.despesas,
-                formatter: Formatador.moeda,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
-        ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border(context)),
       ),
-    );
-  }
-
-  Widget _buildEstatisticas() {
-    if (_dados == null) return const SizedBox.shrink();
-
-    final diasNoMes =
-        DateTime(_mesSelecionado.year, _mesSelecionado.month + 1, 0).day;
-
-    return ModernCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '📊 Estatísticas do período',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary(context),
-            ),
-          ),
-          const SizedBox(height: AppSizes.paddingL),
-          _buildEstatisticaItem(
-            'Média de gastos por dia',
-            _dados!.despesas / diasNoMes,
-          ),
-          Divider(
-            height: AppSizes.paddingXL,
-            color: AppColors.divider(context),
-          ),
-          _buildEstatisticaItem(
-            'Maior gasto (categoria)',
-            _dados!.gastosPorCategoria.isNotEmpty
-                ? _dados!.gastosPorCategoria.entries.first.value
-                : 0,
-            label: _dados!.gastosPorCategoria.isNotEmpty
-                ? _dados!.gastosPorCategoria.entries.first.key
-                : null,
-          ),
-          Divider(
-            height: AppSizes.paddingXL,
-            color: AppColors.divider(context),
-          ),
+          const Text('Despesas por Categoria',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 24),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Taxa de economia',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textPrimary(context),
+              Expanded(
+                flex: 5,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: SizedBox(
+                      height: 140,
+                      width: 140,
+                      child: PieChart(
+                        PieChartData(
+                          sectionsSpace: 2,
+                          centerSpaceRadius: 35,
+                          sections: topCategorias.map((item) {
+                            final percentual = item['percentual'] as double;
+                            return PieChartSectionData(
+                              value: item['valor'] as double,
+                              color: item['cor'] as Color,
+                              title: percentual > 6
+                                  ? '${percentual.toStringAsFixed(0)}%'
+                                  : '',
+                              titleStyle: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white),
+                              radius: 65,
+                              showTitle: true,
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSizes.paddingM,
-                  vertical: AppSizes.paddingXS,
-                ),
-                decoration: BoxDecoration(
-                  color: _dados!.saldo >= 0
-                      ? AppColors.success.withOpacity(0.1)
-                      : AppColors.error.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(AppSizes.radiusXL),
-                ),
-                child: Text(
-                  '${((_dados!.saldo / (_dados!.receitas > 0 ? _dados!.receitas : 1)) * 100).toStringAsFixed(1)}%',
-                  style: TextStyle(
-                    color: _dados!.saldo >= 0
-                        ? AppColors.success
-                        : AppColors.error,
-                    fontWeight: FontWeight.bold,
-                  ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 6,
+                child: Column(
+                  children: topCategorias.map((item) {
+                    final categoria = item['categoria'] as String;
+                    final valorItem = item['valor'] as double;
+                    final cor = item['cor'] as Color;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(categoria,
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.textPrimary(context))),
+                              AnimatedCounter(
+                                value: valorItem,
+                                duration: const Duration(milliseconds: 800),
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary(context)),
+                                formatter: (val) => _formatarMoeda(val),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Container(height: 2, width: 35, color: cor),
+                        ],
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
             ],
@@ -1018,46 +552,173 @@ class DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildEstatisticaItem(String titulo, double valor, {String? label}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildIncomeExpenseChart() {
+    if (_ultimos3Meses.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground(context),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border(context)),
+        ),
+        child: Center(
+          child: Text('Carregando dados...',
+              style: TextStyle(color: AppColors.textSecondary(context))),
+        ),
+      );
+    }
+
+    double maxValor = 0;
+    for (var item in _ultimos3Meses) {
+      final receitas = item['receitas'] as double;
+      final despesas = item['despesas'] as double;
+      if (receitas > maxValor) maxValor = receitas;
+      if (despesas > maxValor) maxValor = despesas;
+    }
+    maxValor = maxValor * 1.2;
+    if (maxValor == 0) maxValor = 100;
+
+    final int numeroDeDivisoes = 4;
+    final double intervalo = maxValor / numeroDeDivisoes;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Text(
-              titulo,
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textPrimary(context),
-              ),
-            ),
+          const Text('Receitas vs Despesas',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Receitas: ${_formatarMoeda(_toDouble(dados!['receitas']))}',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.success)),
+              Text('Despesas: ${_formatarMoeda(_toDouble(dados!['despesas']))}',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.error)),
+            ],
           ),
-          if (label != null)
-            Container(
-              margin: const EdgeInsets.only(right: AppSizes.paddingS),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSizes.paddingS,
-                vertical: 2,
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(AppSizes.radiusM),
-              ),
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.primary,
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 180,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: maxValor,
+                minY: 0,
+                barTouchData: BarTouchData(
+                  enabled: true,
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      final item = _ultimos3Meses[group.x.toInt()];
+                      final isReceita = rodIndex == 0;
+                      final valor = isReceita
+                          ? item['receitas'] as double
+                          : item['despesas'] as double;
+                      final label = isReceita ? 'Receitas' : 'Despesas';
+                      return BarTooltipItem(
+                        '$label\n${_formatarMoeda(valor)}',
+                        const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold),
+                      );
+                    },
+                    tooltipBgColor: AppColors.primary,
+                    tooltipRoundedRadius: 8,
+                    tooltipPadding: const EdgeInsets.all(8),
+                  ),
                 ),
+                barGroups: List.generate(_ultimos3Meses.length, (index) {
+                  final item = _ultimos3Meses[index];
+                  return BarChartGroupData(
+                    x: index,
+                    barRods: [
+                      BarChartRodData(
+                          toY: item['receitas'] as double,
+                          color: AppColors.success,
+                          width: 24,
+                          borderRadius: BorderRadius.circular(6)),
+                      BarChartRodData(
+                          toY: item['despesas'] as double,
+                          color: AppColors.error,
+                          width: 24,
+                          borderRadius: BorderRadius.circular(6)),
+                    ],
+                    barsSpace: 10,
+                  );
+                }),
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        final index = value.toInt();
+                        if (index >= 0 && index < _ultimos3Meses.length) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                                '${_meses[(_ultimos3Meses[index]['mes'] as int) - 1]}.',
+                                style: const TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.w500)),
+                          );
+                        }
+                        return const Text('');
+                      },
+                      reservedSize: 32,
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      getTitlesWidget: (value, meta) {
+                        if (value == 0) {
+                          return Text('0',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.textSecondary(context)));
+                        }
+                        if (value > 0 && value <= maxValor) {
+                          return Text(_formatarEixoY(value),
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.textSecondary(context)));
+                        }
+                        return const Text('');
+                      },
+                      interval: intervalo,
+                    ),
+                  ),
+                  topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
+                ),
+                gridData: FlGridData(
+                  show: true,
+                  drawHorizontalLine: true,
+                  drawVerticalLine: false,
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(
+                        color: AppColors.border(context).withOpacity(0.3),
+                        strokeWidth: 0.5,
+                        dashArray: [5, 5]);
+                  },
+                ),
+                borderData: FlBorderData(show: false),
               ),
-            ),
-          AnimatedCounter(
-            value: valor,
-            formatter: Formatador.moeda,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary(context),
             ),
           ),
         ],
@@ -1065,116 +726,200 @@ class DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildAtualizarBotao() {
-    return Center(
-      child: GradientButton(
-        text: 'Atualizar dados',
-        icon: Icons.refresh,
-        onPressed: () {
-          _cache.clear();
-          _carregarDados();
-          _carregarInfoBackup();
-        },
+  Widget _buildStatsCard() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border(context)),
       ),
-    );
-  }
-}
-
-class _DashboardSkeleton extends StatelessWidget {
-  const _DashboardSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSizes.paddingXL),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              SkeletonLoader(
-                child: Container(
-                  width: 150,
-                  height: 30,
-                  color: Colors.white,
-                ),
+              Text('📊 Média de gastos/dia:',
+                  style: TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary(context))),
+              AnimatedCounter(
+                value: _mediaGastosDiaria,
+                duration: const Duration(milliseconds: 800),
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary(context)),
+                formatter: (val) => _formatarMoeda(val),
               ),
-              SkeletonLoader(
-                child: Container(
-                  width: 120,
-                  height: 40,
-                  color: Colors.white,
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('🏆 Maior gasto:',
+                  style: TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary(context))),
+              Expanded(
+                child: AnimatedCounter(
+                  value: _maiorGasto?.value ?? 0,
+                  duration: const Duration(milliseconds: 800),
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.warning),
+                  formatter: (val) {
+                    if (_maiorGasto != null) {
+                      return '${_maiorGasto!.key} ${_formatarMoeda(val)}';
+                    }
+                    return 'Nenhum gasto';
+                  },
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSizes.paddingXL),
-          SkeletonLoader(
-            child: Container(
-              height: 150,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(AppSizes.radiusXXL),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSizes.paddingXL),
+          const SizedBox(height: 10),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: SkeletonLoader(
-                  child: Container(
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppSizes.radiusL),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSizes.paddingM),
-              Expanded(
-                child: SkeletonLoader(
-                  child: Container(
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppSizes.radiusL),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSizes.paddingXL),
-          Row(
-            children: [
-              Expanded(
-                child: SkeletonLoader(
-                  child: Container(
-                    height: 250,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppSizes.radiusL),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSizes.paddingM),
-              Expanded(
-                child: SkeletonLoader(
-                  child: Container(
-                    height: 250,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppSizes.radiusL),
-                    ),
-                  ),
-                ),
+              Text('💰 Taxa de economia:',
+                  style: TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary(context))),
+              AnimatedCounter(
+                value: _taxaEconomia,
+                duration: const Duration(milliseconds: 800),
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: _taxaEconomia >= 0
+                        ? AppColors.success
+                        : AppColors.error),
+                formatter: (val) => '${val.toStringAsFixed(1)}%',
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUltimasTransacoesSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.history, size: 16, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  const Text('Últimas Transações',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ),
+              TextButton(
+                onPressed: () {
+                  MainScreen.navigateTo(1);
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child:
+                    const Text('Ver todas →', style: TextStyle(fontSize: 11)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_ultimasTransacoes.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Text('Nenhuma transação recente',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary(context))),
+              ),
+            )
+          else
+            ..._ultimasTransacoes
+                .map((transacao) => _buildTransacaoItem(transacao)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransacaoItem(Map<String, dynamic> transacao) {
+    final isReceita = transacao['tipo'] == 'receita';
+    final cor = isReceita ? AppColors.success : AppColors.error;
+    final icone = isReceita ? Icons.arrow_upward : Icons.arrow_downward;
+    final prefixo = isReceita ? '+' : '-';
+    final valor = _toDouble(transacao['valor']);
+    final data = DateTime.parse(transacao['data']);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: () {
+          MainScreen.navigateTo(1);
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                  color: cor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8)),
+              child: Icon(icone, color: cor, size: 16),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(transacao['descricao']?.toString() ?? '',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textPrimary(context))),
+                  const SizedBox(height: 2),
+                  Text(transacao['categoria']?.toString() ?? 'Outros',
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: AppColors.textSecondary(context))),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                AnimatedCounter(
+                  value: valor,
+                  duration: const Duration(milliseconds: 600),
+                  style: TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.bold, color: cor),
+                  formatter: (val) => '$prefixo ${Formatador.moeda(val)}',
+                ),
+                const SizedBox(height: 2),
+                Text(DateFormat('dd/MM').format(data),
+                    style: TextStyle(
+                        fontSize: 10, color: AppColors.textSecondary(context))),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,6 +1,6 @@
 // lib/models/meta_model.dart
 
-import 'package:flutter/material.dart'; // 🔥 IMPORT ESSENCIAL!
+import 'package:flutter/material.dart';
 
 enum TipoMeta {
   viagem,
@@ -30,7 +30,7 @@ extension TipoMetaExtension on TipoMeta {
   }
 
   static TipoMeta fromString(String? tipo) {
-    switch (tipo) {
+    switch (tipo?.toLowerCase()) {
       case 'viagem':
         return TipoMeta.viagem;
       case 'carro':
@@ -82,8 +82,8 @@ extension TipoMetaExtension on TipoMeta {
 }
 
 class DepositoMeta {
-  final int? id;
-  final int metaId;
+  final String? id; // 🔥 Alterado para String?
+  final String metaId; // 🔥 Alterado para String (UUID da Meta pai)
   final double valor;
   final DateTime dataDeposito;
   final String? observacao;
@@ -98,27 +98,30 @@ class DepositoMeta {
 
   factory DepositoMeta.fromJson(Map<String, dynamic> json) {
     return DepositoMeta(
-      id: json['id'] as int?,
-      metaId: json['meta_id'] as int,
-      valor: (json['valor'] as num).toDouble(),
-      dataDeposito: DateTime.parse(json['data_deposito'] as String),
-      observacao: json['observacao'] as String?,
+      id: json['id']?.toString(),
+      metaId: json['meta_id']?.toString() ?? '',
+      valor: (json['valor'] as num?)?.toDouble() ?? 0.0,
+      dataDeposito: json['data_deposito'] != null
+          ? DateTime.parse(json['data_deposito'] as String)
+          : DateTime.now(),
+      observacao: json['observacao']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
+    final map = {
       'meta_id': metaId,
       'valor': valor,
       'data_deposito': dataDeposito.toIso8601String(),
       'observacao': observacao,
     };
+    if (id != null) map['id'] = id;
+    return map;
   }
 }
 
 class Meta {
-  final int? id;
+  final String? id; // 🔥 Alterado para String?
   final String titulo;
   final String? descricao;
   final double valorObjetivo;
@@ -142,45 +145,36 @@ class Meta {
     this.depositos,
   });
 
-  // Getters calculados
-  double get progresso {
-    if (valorObjetivo <= 0) return 0;
-    return (valorAtual / valorObjetivo).clamp(0.0, 1.0);
-  }
-
-  double get percentual {
-    return progresso * 100;
-  }
-
-  double get falta {
-    return (valorObjetivo - valorAtual).clamp(0, valorObjetivo);
-  }
-
-  int get diasRestantes {
-    return dataFim.difference(DateTime.now()).inDays;
-  }
-
-  bool get estaAtrasada {
-    return !concluida && DateTime.now().isAfter(dataFim);
-  }
+  double get progresso =>
+      valorObjetivo <= 0 ? 0 : (valorAtual / valorObjetivo).clamp(0.0, 1.0);
+  double get percentual => progresso * 100;
+  double get falta => (valorObjetivo - valorAtual).clamp(0, valorObjetivo);
+  int get diasRestantes => dataFim.difference(DateTime.now()).inDays;
+  bool get estaAtrasada => !concluida && DateTime.now().isAfter(dataFim);
 
   factory Meta.fromJson(Map<String, dynamic> json) {
     return Meta(
-      id: json['id'] as int?,
-      titulo: json['titulo'] as String,
-      descricao: json['descricao'] as String?,
-      valorObjetivo: (json['valor_objetivo'] as num).toDouble(),
-      valorAtual: (json['valor_atual'] as num?)?.toDouble() ?? 0,
-      dataInicio: DateTime.parse(json['data_inicio'] as String),
-      dataFim: DateTime.parse(json['data_fim'] as String),
-      tipo: TipoMetaExtension.fromString(json['cor'] as String?),
-      concluida: (json['concluida'] as int?) == 1,
+      id: json['id']?.toString(),
+      titulo: json['titulo']?.toString() ?? '',
+      descricao: json['descricao']?.toString(),
+      valorObjetivo: (json['valor_objetivo'] as num?)?.toDouble() ?? 0.0,
+      valorAtual: (json['valor_atual'] as num?)?.toDouble() ?? 0.0,
+      dataInicio: json['data_inicio'] != null
+          ? DateTime.parse(json['data_inicio'])
+          : DateTime.now(),
+      dataFim: json['data_fim'] != null
+          ? DateTime.parse(json['data_fim'])
+          : DateTime.now(),
+      tipo: TipoMetaExtension.fromString(json['cor']?.toString()),
+      // 🔥 No Supabase booleano é bool, não int
+      concluida: json['concluida'] is bool
+          ? json['concluida']
+          : (json['concluida'] == 1),
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
+    final map = {
       'titulo': titulo,
       'descricao': descricao,
       'valor_objetivo': valorObjetivo,
@@ -188,13 +182,14 @@ class Meta {
       'data_inicio': dataInicio.toIso8601String(),
       'data_fim': dataFim.toIso8601String(),
       'cor': tipo.nome,
-      'icone': tipo.nome,
-      'concluida': concluida ? 1 : 0,
+      'concluida': concluida,
     };
+    if (id != null) map['id'] = id;
+    return map;
   }
 
   Meta copyWith({
-    int? id,
+    String? id,
     String? titulo,
     String? descricao,
     double? valorObjetivo,

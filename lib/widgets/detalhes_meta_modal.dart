@@ -139,7 +139,7 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
                 color: AppColors.error.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(Icons.delete, color: AppColors.error),
+              child: const Icon(Icons.delete, color: AppColors.error),
             ),
             const SizedBox(width: 12),
             Text(
@@ -197,8 +197,8 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
             await widget.onMetaAlterada!();
           }
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('✅ Depósito excluído!'),
+            const SnackBar(
+              content: Text('✅ Depósito excluído!'),
               backgroundColor: AppColors.success,
               behavior: SnackBarBehavior.floating,
             ),
@@ -247,7 +247,7 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
                 color: AppColors.error.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(Icons.delete, color: AppColors.error),
+              child: const Icon(Icons.delete, color: AppColors.error),
             ),
             const SizedBox(width: 12),
             Text(
@@ -292,8 +292,8 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
           }
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('🗑️ Meta excluída!'),
+            const SnackBar(
+              content: Text('🗑️ Meta excluída!'),
               backgroundColor: AppColors.warning,
               behavior: SnackBarBehavior.floating,
             ),
@@ -344,10 +344,9 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
               // CABEÇALHO
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.primary,
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
                 child: Row(
                   children: [
@@ -467,11 +466,11 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
                                       color: AppColors.success.withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(20),
                                     ),
-                                    child: Row(
+                                    child: const Row(
                                       children: [
                                         Icon(Icons.check_circle,
                                             color: AppColors.success, size: 16),
-                                        const SizedBox(width: 4),
+                                        SizedBox(width: 4),
                                         Text(
                                           'Concluída',
                                           style: TextStyle(

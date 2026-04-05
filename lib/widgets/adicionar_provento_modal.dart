@@ -67,10 +67,9 @@ class _AdicionarProventoModalState extends State<AdicionarProventoModal> {
         children: [
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppColors.primary,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Row(
               children: [
@@ -101,7 +100,7 @@ class _AdicionarProventoModalState extends State<AdicionarProventoModal> {
                       color: Colors.orange.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.warning_amber,
                       size: 64,
                       color: Colors.orange,
@@ -148,9 +147,9 @@ class _AdicionarProventoModalState extends State<AdicionarProventoModal> {
         // 🔝 CABEÇALHO
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: AppColors.primary,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Row(
             children: [
@@ -236,8 +235,8 @@ class _AdicionarProventoModalState extends State<AdicionarProventoModal> {
                     decoration: InputDecoration(
                       hintText: 'R\$ 0,00',
                       hintStyle: TextStyle(color: AppColors.textHint(context)),
-                      prefixIcon:
-                          Icon(Icons.attach_money, color: AppColors.primary),
+                      prefixIcon: const Icon(Icons.attach_money,
+                          color: AppColors.primary),
                       filled: true,
                       fillColor: AppColors.surface(context),
                       border: OutlineInputBorder(
@@ -300,7 +299,8 @@ class _AdicionarProventoModalState extends State<AdicionarProventoModal> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.calendar_today, color: AppColors.primary),
+                          const Icon(Icons.calendar_today,
+                              color: AppColors.primary),
                           const SizedBox(width: 12),
                           Text(
                             DateFormat('dd/MM/yyyy').format(_dataPagamento),
@@ -384,7 +384,7 @@ class _AdicionarProventoModalState extends State<AdicionarProventoModal> {
         widget.onSalvo?.call();
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('✅ Provento adicionado!'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
