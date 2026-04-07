@@ -16,3 +16,4 @@ class LogoService {
     }
   }
 }
+

@@ -72,3 +72,4 @@ class AppCategories {
     return AppColors.categoryColors.containsKey(categoria);
   }
 }
+

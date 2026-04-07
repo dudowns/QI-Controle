@@ -33,7 +33,7 @@ class PrimaryCard extends StatelessWidget {
             boxShadow: [
               BoxShadow(
                 color: Theme.of(context).brightness == Brightness.light
-                    ? Colors.black.withOpacity(0.02)
+                    ? Colors.black.withValues(alpha:0.02)
                     : Colors.transparent, // ✅ Sem sombra no escuro
                 blurRadius: 8,
                 offset: const Offset(0, 2),
@@ -46,3 +46,4 @@ class PrimaryCard extends StatelessWidget {
     );
   }
 }
+

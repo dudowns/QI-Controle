@@ -11,3 +11,4 @@ class AppRoutes {
   static const String backup = '/backup';
   static const String notificacoes = '/notificacoes';
 }
+

@@ -26,7 +26,7 @@ class LancamentoModal extends StatefulWidget {
     return showDialog(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha:0.5),
       builder: (context) => Dialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         shape: RoundedRectangleBorder(
@@ -133,7 +133,7 @@ class _LancamentoModalState extends State<LancamentoModal> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha:0.2),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -172,7 +172,7 @@ class _LancamentoModalState extends State<LancamentoModal> {
                             ? 'Editar transação'
                             : 'Controle de receitas e pagamentos',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
+                          color: Colors.white.withValues(alpha:0.7),
                           fontSize: 13,
                         ),
                       ),
@@ -184,7 +184,7 @@ class _LancamentoModalState extends State<LancamentoModal> {
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha:0.2),
                       shape: BoxShape.circle,
                     ),
                     child:
@@ -488,7 +488,7 @@ class _LancamentoModalState extends State<LancamentoModal> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
+          color: isSelected ? color.withValues(alpha:0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? color : Colors.grey[300]!,
@@ -531,3 +531,4 @@ class _LancamentoModalState extends State<LancamentoModal> {
     return '${meses[data.month - 1]} De ${data.year}';
   }
 }
+

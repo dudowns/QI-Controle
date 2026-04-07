@@ -274,7 +274,6 @@ class NotificationService {
         mensagem,
         scheduledDate,
         notificationDetails,
-        androidAllowWhileIdle: true,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         payload: payload,

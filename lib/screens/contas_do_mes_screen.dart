@@ -1,3 +1,4 @@
+import '../services/logger_service.dart';
 // lib/screens/contas_do_mes_screen.dart
 import 'package:flutter/material.dart';
 import '../repositories/conta_repository.dart';
@@ -37,7 +38,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
           _mesSelecionado.year, _mesSelecionado.month);
       await _carregarParcelasInfo();
     } catch (e) {
-      debugPrint('Erro ao carregar: $e');
+      LoggerService.info('Erro ao carregar: $e');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -117,7 +118,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.1),
+                color: AppColors.success.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.payment, color: AppColors.success),
@@ -144,16 +145,16 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.05),
+                color: AppColors.success.withValues(alpha:0.05),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.success.withOpacity(0.3)),
+                border: Border.all(color: AppColors.success.withValues(alpha:0.3)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.1),
+                      color: AppColors.success.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.receipt, color: AppColors.success),
@@ -174,7 +175,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                         const SizedBox(height: 4),
                         Text(
                           Formatador.moeda(valor),
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 12,
                             color: AppColors.success,
                             fontWeight: FontWeight.bold,
@@ -190,9 +191,9 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.info.withOpacity(0.05),
+                color: AppColors.info.withValues(alpha:0.05),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.info.withOpacity(0.2)),
+                border: Border.all(color: AppColors.info.withValues(alpha:0.2)),
               ),
               child: const Row(
                 children: [
@@ -260,11 +261,11 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                   onSuccess: (_) {
                     _carregarDados();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
+                      const SnackBar(
                         content: Text('↩️ Pagamento desfeito!'),
                         backgroundColor: AppColors.warning,
                         behavior: SnackBarBehavior.floating,
-                        duration: const Duration(seconds: 2),
+                        duration: Duration(seconds: 2),
                       ),
                     );
                   },
@@ -285,7 +286,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
           ScaffoldMessenger.of(context).showSnackBar(snackBar);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
+            const SnackBar(
               content: Text('❌ Erro ao pagar conta'),
               backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
@@ -318,7 +319,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.warning.withOpacity(0.1),
+                color: AppColors.warning.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.undo, color: AppColors.warning),
@@ -345,16 +346,16 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.warning.withOpacity(0.05),
+                color: AppColors.warning.withValues(alpha:0.05),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+                border: Border.all(color: AppColors.warning.withValues(alpha:0.3)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.warning.withOpacity(0.1),
+                      color: AppColors.warning.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.receipt, color: AppColors.warning),
@@ -375,7 +376,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                         const SizedBox(height: 4),
                         Text(
                           Formatador.moeda(pagamento['valor'] ?? 0),
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 12,
                             color: AppColors.warning,
                             fontWeight: FontWeight.bold,
@@ -391,9 +392,9 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.info.withOpacity(0.05),
+                color: AppColors.info.withValues(alpha:0.05),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.info.withOpacity(0.2)),
+                border: Border.all(color: AppColors.info.withValues(alpha:0.2)),
               ),
               child: const Row(
                 children: [
@@ -454,7 +455,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
+            const SnackBar(
               content: Text('❌ Erro ao desfazer pagamento'),
               backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
@@ -495,7 +496,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.1),
+                color: AppColors.error.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.delete, color: AppColors.error),
@@ -586,7 +587,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       body: _isLoading
-          ? Center(
+          ? const Center(
               child: CircularProgressIndicator(
                 color: AppColors.primary,
               ),
@@ -746,7 +747,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                         width: 40,
                                         height: 40,
                                         decoration: BoxDecoration(
-                                          color: cor.withOpacity(0.1),
+                                          color: cor.withValues(alpha:0.1),
                                           borderRadius:
                                               BorderRadius.circular(10),
                                         ),
@@ -790,7 +791,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                       vertical: 2),
                                                   decoration: BoxDecoration(
                                                     color: categoriaCor
-                                                        .withOpacity(0.1),
+                                                        .withValues(alpha:0.1),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             8),
@@ -833,7 +834,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                     color:
                                                         AppColors.textSecondary(
                                                                 context)
-                                                            .withOpacity(0.1),
+                                                            .withValues(alpha:0.1),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             8),
@@ -863,14 +864,14 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                         vertical: 2),
                                                     decoration: BoxDecoration(
                                                       color: AppColors.primary
-                                                          .withOpacity(0.1),
+                                                          .withValues(alpha:0.1),
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               8),
                                                     ),
                                                     child: Text(
                                                       'Parcela ${parcelasInfo['atual']}/${parcelasInfo['total']}',
-                                                      style: TextStyle(
+                                                      style: const TextStyle(
                                                           fontSize: 9,
                                                           color:
                                                               AppColors.primary,
@@ -888,14 +889,14 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                           vertical: 2),
                                                       decoration: BoxDecoration(
                                                         color: AppColors.warning
-                                                            .withOpacity(0.1),
+                                                            .withValues(alpha:0.1),
                                                         borderRadius:
                                                             BorderRadius
                                                                 .circular(8),
                                                       ),
                                                       child: Text(
                                                         'Faltam ${parcelasInfo['restantes']}',
-                                                        style: TextStyle(
+                                                        style: const TextStyle(
                                                             fontSize: 9,
                                                             color: AppColors
                                                                 .warning,
@@ -936,12 +937,12 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                         const EdgeInsets.all(5),
                                                     decoration: BoxDecoration(
                                                       color: AppColors.warning
-                                                          .withOpacity(0.1),
+                                                          .withValues(alpha:0.1),
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               6),
                                                     ),
-                                                    child: Icon(Icons.undo,
+                                                    child: const Icon(Icons.undo,
                                                         size: 14,
                                                         color:
                                                             AppColors.warning),
@@ -956,12 +957,12 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                         const EdgeInsets.all(5),
                                                     decoration: BoxDecoration(
                                                       color: AppColors.success
-                                                          .withOpacity(0.1),
+                                                          .withValues(alpha:0.1),
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               6),
                                                     ),
-                                                    child: Icon(Icons.check,
+                                                    child: const Icon(Icons.check,
                                                         size: 14,
                                                         color:
                                                             AppColors.success),
@@ -976,12 +977,12 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                       const EdgeInsets.all(5),
                                                   decoration: BoxDecoration(
                                                     color: AppColors.primary
-                                                        .withOpacity(0.1),
+                                                        .withValues(alpha:0.1),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             6),
                                                   ),
-                                                  child: Icon(Icons.edit,
+                                                  child: const Icon(Icons.edit,
                                                       size: 14,
                                                       color: AppColors.primary),
                                                 ),
@@ -995,12 +996,12 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                       const EdgeInsets.all(5),
                                                   decoration: BoxDecoration(
                                                     color: AppColors.error
-                                                        .withOpacity(0.1),
+                                                        .withValues(alpha:0.1),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             6),
                                                   ),
-                                                  child: Icon(
+                                                  child: const Icon(
                                                       Icons.delete_outline,
                                                       size: 14,
                                                       color: AppColors.error),
@@ -1048,3 +1049,4 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
     );
   }
 }
+

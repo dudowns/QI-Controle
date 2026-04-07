@@ -79,3 +79,4 @@ class ConfiguracoesScreen extends StatelessWidget {
     );
   }
 }
+

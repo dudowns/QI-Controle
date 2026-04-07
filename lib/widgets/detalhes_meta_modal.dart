@@ -1,3 +1,4 @@
+import '../services/logger_service.dart';
 // lib/widgets/detalhes_meta_modal.dart
 import 'package:flutter/material.dart';
 import '../database/db_helper.dart';
@@ -72,7 +73,7 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
         });
       }
     } catch (e) {
-      debugPrint('❌ Erro ao carregar depósitos: $e');
+      LoggerService.info('❌ Erro ao carregar depósitos: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -136,7 +137,7 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.1),
+                color: AppColors.error.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.delete, color: AppColors.error),
@@ -244,7 +245,7 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.1),
+                color: AppColors.error.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.delete, color: AppColors.error),
@@ -370,7 +371,7 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
                     Container(
                       margin: const EdgeInsets.only(left: 8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha:0.2),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
@@ -410,7 +411,7 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
                           border: Border.all(color: AppColors.border(context)),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.grey.withOpacity(0.05),
+                              color: Colors.grey.withValues(alpha:0.05),
                               blurRadius: 10,
                               offset: const Offset(0, 2),
                             ),
@@ -424,7 +425,7 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
                                 Container(
                                   padding: const EdgeInsets.all(15),
                                   decoration: BoxDecoration(
-                                    color: cor.withOpacity(0.1),
+                                    color: cor.withValues(alpha:0.1),
                                     borderRadius: BorderRadius.circular(15),
                                   ),
                                   child: Icon(icone, color: cor, size: 30),
@@ -463,7 +464,7 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 12, vertical: 6),
                                     decoration: BoxDecoration(
-                                      color: AppColors.success.withOpacity(0.1),
+                                      color: AppColors.success.withValues(alpha:0.1),
                                       borderRadius: BorderRadius.circular(20),
                                     ),
                                     child: const Row(
@@ -619,9 +620,9 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
                             Container(
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: cor.withOpacity(0.05),
+                                color: cor.withValues(alpha:0.05),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: cor.withOpacity(0.2)),
+                                border: Border.all(color: cor.withValues(alpha:0.2)),
                               ),
                               child: Row(
                                 mainAxisAlignment:
@@ -718,7 +719,7 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: cor.withOpacity(0.1),
+                                      color: cor.withValues(alpha:0.1),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
@@ -882,7 +883,7 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
                                                 vertical: 4,
                                               ),
                                               decoration: BoxDecoration(
-                                                color: cor.withOpacity(0.1),
+                                                color: cor.withValues(alpha:0.1),
                                                 borderRadius:
                                                     BorderRadius.circular(12),
                                               ),
@@ -911,3 +912,4 @@ class _DetalhesMetaModalState extends State<DetalhesMetaModal> {
           );
   }
 }
+

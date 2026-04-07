@@ -14,8 +14,6 @@ class AdicionarInvestimentoModal {
 
     final tickerController =
         TextEditingController(text: investimento?.ticker ?? '');
-    final tipoController =
-        TextEditingController(text: investimento?.tipo ?? 'ACAO');
     final quantidadeController = TextEditingController(
       text: investimento?.quantidade.toString() ?? '',
     );
@@ -53,7 +51,7 @@ class AdicionarInvestimentoModal {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: tipoSelecionado,
+                  initialValue: tipoSelecionado,
                   decoration: const InputDecoration(
                     labelText: 'Tipo',
                     border: OutlineInputBorder(),

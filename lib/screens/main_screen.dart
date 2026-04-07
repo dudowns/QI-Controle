@@ -13,28 +13,28 @@ import '../widgets/notificacao_botao.dart';
 import '../database/db_helper.dart';
 import 'dashboard.dart';
 import 'lancamentos.dart';
-import 'contas_do_mes_screen.dart';
+import 'contas_do_mes_screen.dart' as contas_mes;
 import 'investimentos.dart';
 import 'renda_fixa_screen.dart';
-import 'proventos.dart';
+import 'proventos.dart' as proventos;
 import 'metas_screen.dart';
 import 'configuracoes_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
-  static final GlobalKey<_MainScreenState> navigatorKey =
-      GlobalKey<_MainScreenState>();
+  static final GlobalKey<MainScreenState> navigatorKey =
+      GlobalKey<MainScreenState>();
 
   static void navigateTo(int index) {
     navigatorKey.currentState?.mudarTela(index);
   }
 
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  State<MainScreen> createState() => MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
+class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   int _currentIndex = 0;
@@ -71,10 +71,10 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   final List<Widget> _screensList = [
     const DashboardScreen(),
     const LancamentosScreen(),
-    const ContasDoMesScreen(),
+    const contas_mes.ContasDoMesScreen(),
     const InvestimentosScreen(),
     const RendaFixaScreen(),
-    const ProventosScreen(),
+    const proventos.ProventosScreen(),
     const MetasScreen(),
     const ConfiguracoesScreen(),
   ];
@@ -221,9 +221,10 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
 
       if (kDebugMode) debugPrint('✅ Tela alterada para índice: $_currentIndex');
     } else {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint(
             '❌ Não foi possível mudar tela. mounted: $mounted, index: $index, length: ${_screensList.length}');
+      }
     }
   }
 
@@ -304,7 +305,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.green.withOpacity(0.5),
+                              color: Colors.green.withValues(alpha: 0.5),
                               blurRadius: 4,
                               spreadRadius: 1,
                             ),
@@ -327,7 +328,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 Container(
                   margin: const EdgeInsets.only(right: 4),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: IconButton(
@@ -348,7 +349,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 Container(
                   margin: const EdgeInsets.only(right: 4),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: IconButton(
@@ -410,7 +411,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                       boxShadow: [
                         if (Theme.of(context).brightness == Brightness.light)
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             blurRadius: 20,
                             offset: const Offset(0, -5),
                           ),
@@ -439,7 +440,8 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                                           EdgeInsets.all(isSelected ? 6 : 0),
                                       decoration: BoxDecoration(
                                         color: isSelected
-                                            ? AppColors.primary.withOpacity(0.2)
+                                            ? AppColors.primary
+                                                .withValues(alpha: 0.2)
                                             : Colors.transparent,
                                         borderRadius: BorderRadius.circular(12),
                                       ),
@@ -499,7 +501,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.3),
+                    color: AppColors.primary.withValues(alpha: 0.3),
                     blurRadius: 20,
                     offset: const Offset(0, 5),
                   ),
@@ -513,7 +515,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                     child: Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(
@@ -566,7 +568,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                         padding: EdgeInsets.all(isSelected ? 6 : 0),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? AppColors.primary.withOpacity(0.2)
+                              ? AppColors.primary.withValues(alpha: 0.2)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -589,7 +591,8 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                         ),
                       ),
                       selected: isSelected,
-                      selectedTileColor: AppColors.primary.withOpacity(0.1),
+                      selectedTileColor:
+                          AppColors.primary.withValues(alpha: 0.1),
                       onTap: () {
                         setState(() {
                           _currentIndex = item['index'];

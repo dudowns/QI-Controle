@@ -1,7 +1,7 @@
+import '../services/logger_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../services/performance_service.dart';
-import 'logger_service.dart';
 
 class CachePrice {
   final double price;
@@ -246,3 +246,4 @@ class YahooFinanceService {
     };
   }
 }
+

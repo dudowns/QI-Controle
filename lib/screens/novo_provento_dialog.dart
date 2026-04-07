@@ -280,3 +280,4 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
     );
   }
 }
+

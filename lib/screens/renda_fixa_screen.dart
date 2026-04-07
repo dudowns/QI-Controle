@@ -1,6 +1,7 @@
+import '../services/logger_service.dart';
 // lib/screens/renda_fixa_screen.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../database/db_helper.dart';
 import '../models/renda_fixa_model.dart';
 import '../services/renda_fixa_diaria.dart';
 import '../utils/currency_formatter.dart';
@@ -17,7 +18,7 @@ class RendaFixaScreen extends StatefulWidget {
 }
 
 class _RendaFixaScreenState extends State<RendaFixaScreen> {
-  final SupabaseClient _supabase = Supabase.instance.client;
+  final DBHelper _dbHelper = DBHelper();
 
   List<RendaFixaModel> _investimentos = [];
   bool _isLoading = true;
@@ -25,12 +26,6 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
   double _totalAplicado = 0;
   double _totalAtual = 0;
   double _rendimentoTotal = 0;
-
-  String get _userId {
-    final user = _supabase.auth.currentUser;
-    if (user == null) throw Exception('Usuário não logado');
-    return user.id;
-  }
 
   @override
   void initState() {
@@ -42,22 +37,18 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final response = await _supabase
-          .from('renda_fixa')
-          .select()
-          .eq('user_id', _userId)
-          .order('data_aplicacao', ascending: false);
-
+      final dados = await _dbHelper.getAllRendaFixa();
       _investimentos =
-          response.map((json) => RendaFixaModel.fromJson(json)).toList();
+          dados.map((json) => RendaFixaModel.fromJson(json)).toList();
       _calcularTotais();
     } catch (e) {
-      debugPrint('❌ Erro ao carregar renda fixa: $e');
+      LoggerService.info('❌ Erro ao carregar renda fixa: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Erro ao carregar: $e'),
-              backgroundColor: AppColors.error),
+            content: Text('Erro ao carregar: $e'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {
@@ -85,29 +76,30 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
 
   Future<void> _adicionarInvestimento(RendaFixaModel investimento) async {
     try {
-      await _supabase.from('renda_fixa').insert({
-        ...investimento.toJson(),
-        'user_id': _userId,
-      });
+      await _dbHelper.insertRendaFixa(investimento.toJson());
       await _carregarDados();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('✅ ${investimento.nome} adicionado!'),
-              backgroundColor: AppColors.success),
+            content: Text('✅ ${investimento.nome} adicionado!'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text('Erro: $e'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
   }
 
-  // 🔥 CORRIGIDO: id agora é String (UUID)
-  Future<void> _excluirInvestimento(String id, String nome) async {
+  Future<void> _excluirInvestimento(int id, String nome) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -115,31 +107,36 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
         content: Text('Deseja excluir "$nome"?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child:
-                  const Text('Excluir', style: TextStyle(color: Colors.red))),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
         ],
       ),
     );
     if (confirm == true) {
       try {
-        await _supabase.from('renda_fixa').delete().eq('id', id);
+        await _dbHelper.deleteRendaFixa(id);
         await _carregarDados();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('🗑️ $nome excluído!'),
-                backgroundColor: Colors.orange),
+              content: Text('🗑️ $nome excluído!'),
+              backgroundColor: AppColors.warning,
+              behavior: SnackBarBehavior.floating,
+            ),
           );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('Erro: $e'), backgroundColor: AppColors.error),
+              content: Text('Erro ao excluir: $e'),
+              backgroundColor: AppColors.error,
+            ),
           );
         }
       }
@@ -233,8 +230,8 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
                               itemBuilder: (context, index) {
                                 final inv = _investimentos[index];
                                 return Dismissible(
-                                  // 🔥 CORRIGIDO: key agora usa id como String
-                                  key: Key(inv.id ?? index.toString()),
+                                  key: Key(
+                                      inv.id?.toString() ?? index.toString()),
                                   direction: DismissDirection.endToStart,
                                   background: Container(
                                     alignment: Alignment.centerRight,
@@ -264,9 +261,12 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
                                       ),
                                     );
                                   },
-                                  // 🔥 CORRIGIDO: passa id como String
-                                  onDismissed: (direction) =>
-                                      _excluirInvestimento(inv.id!, inv.nome),
+                                  onDismissed: (direction) {
+                                    if (inv.id != null) {
+                                      _excluirInvestimento(
+                                          int.parse(inv.id!), inv.nome);
+                                    }
+                                  },
                                   child: _buildRendaFixaCard(inv),
                                 );
                               },
@@ -329,7 +329,7 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: _getCorTipo(inv.tipoRenda).withOpacity(0.1),
+                  color: _getCorTipo(inv.tipoRenda).withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(_getIconeTipo(inv.tipoRenda),
@@ -350,7 +350,7 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: _getCorTipo(inv.tipoRenda).withOpacity(0.1),
+                            color: _getCorTipo(inv.tipoRenda).withValues(alpha:0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(inv.tipoRenda,
@@ -386,7 +386,7 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                        color: cor.withOpacity(0.1),
+                        color: cor.withValues(alpha:0.1),
                         borderRadius: BorderRadius.circular(8)),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -477,3 +477,4 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
     ).then((_) => _carregarDados());
   }
 }
+

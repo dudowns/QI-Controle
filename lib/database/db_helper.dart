@@ -57,7 +57,7 @@ class DBHelper {
   static const String tabelaPagamentos = 'pagamentos_mensais';
   static const String tabelaContasFixas = 'contas_fixas';
   static const String tabelaParcelas = 'parcelas';
-  static const String tabelaTransacoes = 'transacoes'; // 🔥 ADICIONADO
+  static const String tabelaTransacoes = 'transacoes';
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -77,7 +77,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 27, // 🔥 VERSÃO ATUALIZADA
+      version: 28, // 🔥 VERSÃO AUMENTADA PARA FORCAR UPGRADE
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: (db) async {
@@ -185,6 +185,7 @@ class DBHelper {
       )
     ''');
 
+    // 🔥 TABELA RENDA FIXA COMPLETA (com todas as colunas)
     await db.execute('''
       CREATE TABLE $tabelaRendaFixa(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -196,7 +197,7 @@ class DBHelper {
         taxa REAL NOT NULL,
         data_aplicacao TEXT NOT NULL,
         data_vencimento TEXT NOT NULL,
-        dias INTEGER NOT NULL,
+        dias INTEGER,
         rendimento_bruto REAL,
         iof REAL,
         ir REAL,
@@ -207,6 +208,8 @@ class DBHelper {
         is_lci INTEGER DEFAULT 0,
         status TEXT DEFAULT 'ativo',
         sync_status TEXT DEFAULT 'pending',
+        criado_em TEXT,
+        atualizado_em TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
@@ -290,7 +293,6 @@ class DBHelper {
       )
     ''');
 
-    // 🔥 TABELA DE TRANSAÇÕES
     await db.execute('''
       CREATE TABLE $tabelaTransacoes(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -422,7 +424,6 @@ class DBHelper {
       await db.execute(
           'CREATE INDEX idx_parcelas_data_vencimento ON $tabelaParcelas(data_vencimento)');
     }
-    // 🔥 ÍNDICES PARA TRANSAÇÕES
     if (!nomesIndices.contains('idx_transacoes_user_id')) {
       await db.execute(
           'CREATE INDEX idx_transacoes_user_id ON $tabelaTransacoes(user_id)');
@@ -486,282 +487,64 @@ class DBHelper {
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     LoggerService.info('🔄 Atualizando banco: $oldVersion -> $newVersion');
 
-    if (oldVersion < 17) {
-      LoggerService.info('🔧 Recriando tabela proventos...');
-      List<Map<String, dynamic>> proventosExistentes = [];
+    // 🔥 GARANTIR QUE A TABELA RENDA FIXA TENHA TODAS AS COLUNAS
+    if (oldVersion < 28) {
       try {
-        proventosExistentes = await db.query('proventos');
-      } catch (e) {
-        LoggerService.warning('⚠️ Erro ao fazer backup: $e');
-      }
-      await db.execute('DROP TABLE IF EXISTS proventos');
-      await db.execute('''
-        CREATE TABLE proventos(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ticker TEXT NOT NULL,
-          tipo_provento TEXT,
-          valor_por_cota REAL NOT NULL,
-          quantidade REAL DEFAULT 1,
-          data_pagamento TEXT NOT NULL,
-          data_com TEXT,
-          total_recebido REAL,
-          sync_automatico INTEGER DEFAULT 0,
-          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-      ''');
-      for (var p in proventosExistentes) {
-        try {
-          p.remove('id');
-          p.remove('created_at');
-          p.remove('updated_at');
-          await db.insert('proventos', p);
-        } catch (e) {
-          LoggerService.error('❌ Erro ao restaurar provento', e);
-        }
-      }
-    }
-
-    if (oldVersion < 18) {
-      await db.execute('DROP INDEX IF EXISTS idx_lancamentos_data');
-      await db.execute('DROP INDEX IF EXISTS idx_lancamentos_tipo');
-      await db.execute('DROP INDEX IF EXISTS idx_lancamentos_categoria');
-      await db.execute('DROP INDEX IF EXISTS idx_metas_concluida');
-      await db.execute('DROP INDEX IF EXISTS idx_metas_data_fim');
-      await db.execute('DROP INDEX IF EXISTS idx_investimentos_ticker');
-      await db.execute('DROP INDEX IF EXISTS idx_investimentos_tipo');
-      await db.execute('DROP INDEX IF EXISTS idx_proventos_data_pagamento');
-      await db.execute('DROP INDEX IF EXISTS idx_proventos_ticker');
-      await db.execute('DROP INDEX IF EXISTS idx_renda_fixa_vencimento');
-      await db.execute('DROP INDEX IF EXISTS idx_renda_fixa_status');
-      await _criarIndices(db);
-    }
-
-    if (oldVersion < 19) {
-      final tableInfo = await db.rawQuery('PRAGMA table_info(renda_fixa)');
-      final colunas = tableInfo.map((c) => c['name'] as String).toList();
-      if (!colunas.contains('tipo_renda')) {
-        await db.execute('ALTER TABLE renda_fixa ADD COLUMN tipo_renda TEXT');
-      }
-      if (!colunas.contains('indexador')) {
-        await db.execute('ALTER TABLE renda_fixa ADD COLUMN indexador TEXT');
-      }
-      if (!colunas.contains('liquidez')) {
-        await db.execute(
-            'ALTER TABLE renda_fixa ADD COLUMN liquidez TEXT DEFAULT "Diária"');
-      }
-      if (!colunas.contains('is_lci')) {
-        await db.execute(
-            'ALTER TABLE renda_fixa ADD COLUMN is_lci INTEGER DEFAULT 0');
-      }
-    }
-
-    if (oldVersion < 20) {
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS contas_fixas(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          nome TEXT NOT NULL,
-          valor_total REAL NOT NULL,
-          total_parcelas INTEGER NOT NULL,
-          data_inicio TEXT NOT NULL,
-          categoria TEXT,
-          observacao TEXT,
-          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-      ''');
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS parcelas(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          conta_id INTEGER NOT NULL,
-          numero INTEGER NOT NULL,
-          data_vencimento TEXT NOT NULL,
-          status INTEGER NOT NULL,
-          data_pagamento TEXT,
-          valor_pago REAL,
-          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (conta_id) REFERENCES contas_fixas(id) ON DELETE CASCADE
-        )
-      ''');
-    }
-
-    if (oldVersion < 21) {
-      await _criarIndices(db);
-    }
-
-    if (oldVersion < 22) {
-      LoggerService.info('🔧 Criando novas tabelas de contas do mês...');
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS $tabelaContas(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          nome TEXT NOT NULL,
-          valor REAL NOT NULL,
-          dia_vencimento INTEGER NOT NULL,
-          tipo TEXT NOT NULL,
-          categoria TEXT,
-          ativa INTEGER DEFAULT 1,
-          parcelas_total INTEGER,
-          parcelas_pagas INTEGER DEFAULT 0,
-          data_inicio TEXT,
-          data_fim TEXT,
-          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-      ''');
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS $tabelaPagamentos(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          conta_id INTEGER NOT NULL,
-          ano_mes INTEGER NOT NULL,
-          valor REAL NOT NULL,
-          data_pagamento TEXT,
-          status INTEGER NOT NULL,
-          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (conta_id) REFERENCES $tabelaContas(id) ON DELETE CASCADE
-        )
-      ''');
-      await _criarIndices(db);
-    }
-
-    if (oldVersion < 23) {
-      try {
-        await db.execute('''
-          CREATE TABLE IF NOT EXISTS integridade_logs(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tipo TEXT NOT NULL,
-            mensagem TEXT NOT NULL,
-            detalhes TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-          )
-        ''');
-        LoggerService.success('✅ Tabela integridade_logs criada');
-      } catch (e) {
-        LoggerService.error('❌ Erro ao criar integridade_logs', e);
-      }
-    }
-
-    if (oldVersion < 24) {
-      LoggerService.info(
-          '🔧 Adicionando campos de sincronização (versão 24)...');
-      final tabelas = [
-        tabelaLancamentos,
-        tabelaMetas,
-        tabelaDepositosMeta,
-        tabelaInvestimentos,
-        tabelaProventos,
-        tabelaRendaFixa,
-        tabelaContas,
-        tabelaPagamentos,
-      ];
-      for (var tabela in tabelas) {
-        try {
-          final tableInfo = await db.rawQuery('PRAGMA table_info($tabela)');
-          final colunas = tableInfo.map((c) => c['name'] as String).toList();
-          if (!colunas.contains('remote_id')) {
-            await db.execute('ALTER TABLE $tabela ADD COLUMN remote_id TEXT');
-            LoggerService.info('  ✅ Adicionado remote_id em $tabela');
-          }
-          if (!colunas.contains('user_id')) {
-            await db.execute('ALTER TABLE $tabela ADD COLUMN user_id TEXT');
-            LoggerService.info('  ✅ Adicionado user_id em $tabela');
-          }
-          if (!colunas.contains('sync_status')) {
-            await db.execute(
-                'ALTER TABLE $tabela ADD COLUMN sync_status TEXT DEFAULT "pending"');
-            LoggerService.info('  ✅ Adicionado sync_status em $tabela');
-          } else {
-            await db.execute(
-                'UPDATE $tabela SET sync_status = "pending" WHERE sync_status IS NULL OR sync_status = "synced"');
-          }
-        } catch (e) {
-          LoggerService.warning('⚠️ Erro ao migrar tabela $tabela: $e');
-        }
-      }
-      try {
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_lancamentos_sync_status ON $tabelaLancamentos(sync_status)');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_metas_sync_status ON $tabelaMetas(sync_status)');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_investimentos_sync_status ON $tabelaInvestimentos(sync_status)');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_proventos_sync_status ON $tabelaProventos(sync_status)');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_renda_fixa_sync_status ON $tabelaRendaFixa(sync_status)');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_contas_sync_status ON $tabelaContas(sync_status)');
-        LoggerService.success('✅ Índices de sincronização criados');
-      } catch (e) {
-        LoggerService.warning('⚠️ Erro ao criar índices: $e');
-      }
-      LoggerService.success('✅ Migração para versão 24 concluída!');
-    }
-
-    if (oldVersion < 25) {
-      LoggerService.info('🔧 Adicionando coluna lancamento_id (versão 25)...');
-      try {
-        final tableInfo =
-            await db.rawQuery('PRAGMA table_info($tabelaPagamentos)');
+        final tableInfo = await db.rawQuery('PRAGMA table_info(renda_fixa)');
         final colunas = tableInfo.map((c) => c['name'] as String).toList();
 
-        if (!colunas.contains('lancamento_id')) {
+        if (!colunas.contains('criado_em')) {
+          await db.execute('ALTER TABLE renda_fixa ADD COLUMN criado_em TEXT');
+          LoggerService.info('✅ Coluna criado_em adicionada');
+        }
+        if (!colunas.contains('atualizado_em')) {
+          await db
+              .execute('ALTER TABLE renda_fixa ADD COLUMN atualizado_em TEXT');
+          LoggerService.info('✅ Coluna atualizado_em adicionada');
+        }
+        if (!colunas.contains('dias')) {
+          await db.execute('ALTER TABLE renda_fixa ADD COLUMN dias INTEGER');
+          LoggerService.info('✅ Coluna dias adicionada');
+        }
+        if (!colunas.contains('rendimento_bruto')) {
           await db.execute(
-              'ALTER TABLE $tabelaPagamentos ADD COLUMN lancamento_id INTEGER');
-          LoggerService.success(
-              '✅ Coluna lancamento_id adicionada em $tabelaPagamentos');
-        } else {
-          LoggerService.info('ℹ️ Coluna lancamento_id já existe');
+              'ALTER TABLE renda_fixa ADD COLUMN rendimento_bruto REAL');
+          LoggerService.info('✅ Coluna rendimento_bruto adicionada');
+        }
+        if (!colunas.contains('iof')) {
+          await db.execute('ALTER TABLE renda_fixa ADD COLUMN iof REAL');
+          LoggerService.info('✅ Coluna iof adicionada');
+        }
+        if (!colunas.contains('ir')) {
+          await db.execute('ALTER TABLE renda_fixa ADD COLUMN ir REAL');
+          LoggerService.info('✅ Coluna ir adicionada');
+        }
+        if (!colunas.contains('rendimento_liquido')) {
+          await db.execute(
+              'ALTER TABLE renda_fixa ADD COLUMN rendimento_liquido REAL');
+          LoggerService.info('✅ Coluna rendimento_liquido adicionada');
+        }
+        if (!colunas.contains('valor_final')) {
+          await db
+              .execute('ALTER TABLE renda_fixa ADD COLUMN valor_final REAL');
+          LoggerService.info('✅ Coluna valor_final adicionada');
+        }
+        if (!colunas.contains('indexador')) {
+          await db.execute('ALTER TABLE renda_fixa ADD COLUMN indexador TEXT');
+          LoggerService.info('✅ Coluna indexador adicionada');
+        }
+        if (!colunas.contains('liquidez')) {
+          await db.execute(
+              'ALTER TABLE renda_fixa ADD COLUMN liquidez TEXT DEFAULT "Diária"');
+          LoggerService.info('✅ Coluna liquidez adicionada');
+        }
+        if (!colunas.contains('is_lci')) {
+          await db.execute(
+              'ALTER TABLE renda_fixa ADD COLUMN is_lci INTEGER DEFAULT 0');
+          LoggerService.info('✅ Coluna is_lci adicionada');
         }
       } catch (e) {
-        LoggerService.error('❌ Erro ao adicionar lancamento_id', e);
-      }
-
-      try {
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_pagamentos_lancamento_id ON $tabelaPagamentos(lancamento_id)');
-        LoggerService.success('✅ Índice idx_pagamentos_lancamento_id criado');
-      } catch (e) {
-        LoggerService.warning('⚠️ Erro ao criar índice para lancamento_id: $e');
-      }
-    }
-
-    if (oldVersion < 26) {
-      LoggerService.info(
-          '🔧 Criando índices compostos para performance (versão 26)...');
-      await _criarIndicesCompostos(db);
-      LoggerService.success('✅ Índices compostos criados na migração v26');
-    }
-
-    // 🔥 MIGRAÇÃO VERSÃO 27 - TABELA TRANSAÇÕES
-    if (oldVersion < 27) {
-      LoggerService.info('🔧 Criando tabela transacoes (versão 27)...');
-      try {
-        await db.execute('''
-          CREATE TABLE IF NOT EXISTS $tabelaTransacoes(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ticker TEXT NOT NULL,
-            tipo_transacao TEXT NOT NULL,
-            quantidade REAL NOT NULL,
-            preco_unitario REAL NOT NULL,
-            taxa REAL DEFAULT 0,
-            data TEXT NOT NULL,
-            user_id TEXT,
-            sync_status TEXT DEFAULT 'pending',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-          )
-        ''');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_transacoes_user_id ON $tabelaTransacoes(user_id)');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_transacoes_data ON $tabelaTransacoes(data DESC)');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_transacoes_ticker ON $tabelaTransacoes(ticker)');
-        LoggerService.success('✅ Tabela transacoes criada na migração v27');
-      } catch (e) {
-        LoggerService.error('❌ Erro ao criar tabela transacoes: $e');
+        LoggerService.warning('⚠️ Erro ao atualizar tabela renda_fixa: $e');
       }
     }
 
@@ -1105,7 +888,8 @@ class DBHelper {
     );
 
     if (existing.isNotEmpty) {
-      print('⚠️ Conta "${conta['nome']}" já existe! Retornando ID existente.');
+      LoggerService.info(
+          '⚠️ Conta "${conta['nome']}" já existe! Retornando ID existente.');
       return existing.first['id'] as int;
     }
 
@@ -1128,7 +912,7 @@ class DBHelper {
     );
 
     if (existing.isNotEmpty) {
-      print(
+      LoggerService.info(
           '⚠️ Conta $contaId já tem ${existing.length} pagamentos, pulando geração');
       return;
     }
@@ -1182,7 +966,6 @@ class DBHelper {
     }
   }
 
-  // MÉTODO OTIMIZADO - getPagamentosDoMes
   Future<List<Map<String, dynamic>>> getPagamentosDoMes(int ano, int mes,
       {bool useCache = true}) async {
     PerformanceService.start('db_query_pagamentos_mes');
@@ -1235,7 +1018,6 @@ class DBHelper {
     return resultados;
   }
 
-  // MÉTODO OTIMIZADO - pagarConta
   Future<bool> pagarConta(int pagamentoId, {DateTime? dataPagamento}) async {
     PerformanceService.start('db_pagar_conta');
     final db = await database;
@@ -1300,7 +1082,6 @@ class DBHelper {
     return result;
   }
 
-  // MÉTODO OTIMIZADO - getResumoContasDoMes
   Future<Map<String, dynamic>> getResumoContasDoMes(int ano, int mes) async {
     PerformanceService.start('db_resumo_contas_mes');
 
@@ -1356,7 +1137,6 @@ class DBHelper {
     return result;
   }
 
-  // NOVO MÉTODO - Resumo mensal otimizado (para dashboard)
   Future<Map<String, dynamic>> getResumoMensalOtimizado(
       int ano, int mes) async {
     PerformanceService.start('db_resumo_mensal_otimizado');
@@ -1843,7 +1623,9 @@ class DBHelper {
         'mensagem': mensagem,
         'detalhes': detalhes,
       });
-    } catch (e) {}
+    } catch (e) {
+      LoggerService.error('Erro ao logar integridade', e);
+    }
   }
 
   Future<Map<String, dynamic>> repararIntegridade() async {
@@ -1876,13 +1658,11 @@ class DBHelper {
     return reparos;
   }
 
-  // NOVO MÉTODO - Limpar cache manualmente
   void limparCacheCompleto() {
     _queryCache.clear();
     LoggerService.info('🗑️ Cache completamente limpo');
   }
 
-  // NOVO MÉTODO - Otimizar banco de dados
   Future<void> otimizarBanco() async {
     final db = await database;
     await db.execute('PRAGMA optimize');
@@ -1890,7 +1670,6 @@ class DBHelper {
     LoggerService.success('✅ Banco de dados otimizado');
   }
 
-  // NOVO MÉTODO - Estatísticas do banco
   Future<Map<String, dynamic>> getEstatisticasBanco() async {
     final db = await database;
 

@@ -9,8 +9,8 @@ class Formatador {
   // Datas
   static final DateFormat _ddMMyyyy = DateFormat('dd/MM/yyyy');
   static final DateFormat _ddMM = DateFormat('dd/MM');
-  static final DateFormat _MMMMyyyy = DateFormat('MMMM yyyy', 'pt_BR');
-  static final DateFormat _MMMM = DateFormat('MMMM', 'pt_BR');
+  static final DateFormat mmmmYyyy = DateFormat('MMMM yyyy', 'pt_BR');
+  static final DateFormat mmmm = DateFormat('MMMM', 'pt_BR');
   static final DateFormat _yyyyMMdd = DateFormat('yyyy-MM-dd');
 
   // ========== MOEDA ==========
@@ -41,11 +41,11 @@ class Formatador {
   }
 
   static String mesAno(DateTime data) {
-    return _MMMMyyyy.format(data).toUpperCase();
+    return mmmmYyyy.format(data).toUpperCase();
   }
 
   static String mes(DateTime data) {
-    return _MMMM.format(data);
+    return mmmm.format(data);
   }
 
   static String paraBanco(DateTime data) {
@@ -80,3 +80,4 @@ class Formatador {
     return valor.toStringAsFixed(casas);
   }
 }
+

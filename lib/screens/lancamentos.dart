@@ -1,3 +1,4 @@
+import '../services/logger_service.dart';
 // lib/screens/lancamentos_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -5,8 +6,8 @@ import '../database/db_helper.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_categories.dart';
 import '../utils/formatters.dart';
-import '../widgets/app_modals.dart';
 import '../widgets/animated_counter.dart';
+import '../widgets/app_modals.dart';
 
 class LancamentosScreen extends StatefulWidget {
   const LancamentosScreen({super.key});
@@ -84,7 +85,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     try {
       _lancamentos = await _dbHelper.getAllLancamentos();
     } catch (e) {
-      debugPrint('❌ Erro ao carregar lançamentos: $e');
+      LoggerService.info('❌ Erro ao carregar lançamentos: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -229,92 +230,75 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 🔥 SELETOR E BOTÃO ALINHADOS À DIREITA
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            // Seletor de mês
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppColors.surface(context),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface(context),
+                            borderRadius: BorderRadius.circular(20),
+                            border:
+                                Border.all(color: AppColors.border(context)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.chevron_left, size: 18),
+                                onPressed: () => _navegarMes(-1),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${_meses[_mesSelecionado.month - 1]} ${_mesSelecionado.year}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textPrimary(context),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.chevron_right, size: 18),
+                                onPressed: () => _navegarMes(1),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(
+                          height: 36,
+                          child: ElevatedButton(
+                            onPressed: _adicionarLancamento,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                    color: AppColors.border(context)),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.chevron_left,
-                                        size: 18),
-                                    onPressed: () => _navegarMes(-1),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '${_meses[_mesSelecionado.month - 1]} ${_mesSelecionado.year}',
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.add, size: 16),
+                                SizedBox(width: 6),
+                                Text('ADICIONAR',
                                     style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.textPrimary(context),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    icon: const Icon(Icons.chevron_right,
-                                        size: 18),
-                                    onPressed: () => _navegarMes(1),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                  ),
-                                ],
-                              ),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold)),
+                              ],
                             ),
-                            const SizedBox(height: 8),
-                            // Botão Adicionar
-                            SizedBox(
-                              height: 40,
-                              child: ElevatedButton(
-                                onPressed: _adicionarLancamento,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.add, size: 16),
-                                    SizedBox(width: 6),
-                                    Text('ADICIONAR',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-
-                  const SizedBox(height: 8),
-
-                  // 🔥 FILTROS (alinhados à direita)
+                  const SizedBox(height: 16),
                   Padding(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
@@ -394,10 +378,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 8),
-
-                  // 🔥 LISTA DE LANÇAMENTOS
                   Expanded(
                     child: _lancamentosFiltrados.isEmpty
                         ? Center(
@@ -470,7 +451,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: cor.withOpacity(0.1),
+                color: cor.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icone, color: cor, size: 20),
@@ -497,7 +478,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: categoriaCor.withOpacity(0.1),
+                          color: categoriaCor.withValues(alpha:0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -533,15 +514,15 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: AppColors.info.withOpacity(0.1),
+                            color: AppColors.info.withValues(alpha:0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Row(
+                          child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(Icons.schedule,
                                   size: 8, color: AppColors.info),
-                              const SizedBox(width: 4),
+                              SizedBox(width: 4),
                               Text(
                                 'Automático',
                                 style: TextStyle(
@@ -576,10 +557,10 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
+                          color: AppColors.primary.withValues(alpha:0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Icon(Icons.edit,
+                        child: const Icon(Icons.edit,
                             size: 16, color: AppColors.primary),
                       ),
                     ),
@@ -590,10 +571,10 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: AppColors.error.withOpacity(0.1),
+                          color: AppColors.error.withValues(alpha:0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Icon(Icons.delete_outline,
+                        child: const Icon(Icons.delete_outline,
                             size: 16, color: AppColors.error),
                       ),
                     ),
@@ -607,3 +588,4 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     );
   }
 }
+

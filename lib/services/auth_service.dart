@@ -1,3 +1,4 @@
+import '../services/logger_service.dart';
 // lib/services/auth_service.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -16,17 +17,17 @@ class AuthService {
   // Login com email/senha
   Future<User?> login(String email, String senha) async {
     try {
-      debugPrint('🔐 Tentando login: $email');
+      LoggerService.info('🔐 Tentando login: $email');
 
       final response = await _supabase.auth.signInWithPassword(
         email: email.trim(),
         password: senha,
       );
 
-      debugPrint('✅ Login bem-sucedido: ${response.user?.email}');
+      LoggerService.info('✅ Login bem-sucedido: ${response.user?.email}');
       return response.user;
     } catch (e) {
-      debugPrint('❌ Erro no login: $e');
+      LoggerService.info('❌ Erro no login: $e');
       return null;
     }
   }
@@ -34,7 +35,7 @@ class AuthService {
   // Cadastro com email/senha
   Future<User?> cadastrar(String email, String senha, String nome) async {
     try {
-      debugPrint('📝 Tentando cadastrar: $email');
+      LoggerService.info('📝 Tentando cadastrar: $email');
 
       final response = await _supabase.auth.signUp(
         email: email.trim(),
@@ -43,14 +44,14 @@ class AuthService {
       );
 
       if (response.user == null) {
-        debugPrint('⚠️ Nenhum usuário retornado');
+        LoggerService.info('⚠️ Nenhum usuário retornado');
         return null;
       }
 
-      debugPrint('✅ Cadastro bem-sucedido: ${response.user?.email}');
+      LoggerService.info('✅ Cadastro bem-sucedido: ${response.user?.email}');
       return response.user;
     } catch (e) {
-      debugPrint('❌ Erro no cadastro: $e');
+      LoggerService.info('❌ Erro no cadastro: $e');
       return null;
     }
   }
@@ -58,11 +59,11 @@ class AuthService {
   // 🔥 RECUPERAR SENHA - Envia email com link
   Future<void> resetPassword(String email) async {
     try {
-      debugPrint('📧 Enviando recuperação de senha para: $email');
+      LoggerService.info('📧 Enviando recuperação de senha para: $email');
       await _supabase.auth.resetPasswordForEmail(email);
-      debugPrint('✅ Email de recuperação enviado!');
+      LoggerService.info('✅ Email de recuperação enviado!');
     } catch (e) {
-      debugPrint('❌ Erro ao enviar recuperação: $e');
+      LoggerService.info('❌ Erro ao enviar recuperação: $e');
       rethrow;
     }
   }
@@ -70,13 +71,13 @@ class AuthService {
   // 🔥 NOVO: Atualizar senha (usado após recuperação)
   Future<void> updatePassword(String novaSenha) async {
     try {
-      debugPrint('🔑 Atualizando senha...');
+      LoggerService.info('🔑 Atualizando senha...');
       await _supabase.auth.updateUser(
         UserAttributes(password: novaSenha),
       );
-      debugPrint('✅ Senha atualizada com sucesso!');
+      LoggerService.info('✅ Senha atualizada com sucesso!');
     } catch (e) {
-      debugPrint('❌ Erro ao atualizar senha: $e');
+      LoggerService.info('❌ Erro ao atualizar senha: $e');
       rethrow;
     }
   }
@@ -84,15 +85,15 @@ class AuthService {
   // 🔥 NOVO: Verificar OTP (código de 6 dígitos)
   Future<void> verifyOtp(String code, String email) async {
     try {
-      debugPrint('🔐 Verificando OTP para: $email');
+      LoggerService.info('🔐 Verificando OTP para: $email');
       await _supabase.auth.verifyOTP(
         type: OtpType.recovery,
         token: code,
         email: email,
       );
-      debugPrint('✅ OTP verificado com sucesso!');
+      LoggerService.info('✅ OTP verificado com sucesso!');
     } catch (e) {
-      debugPrint('❌ Erro ao verificar OTP: $e');
+      LoggerService.info('❌ Erro ao verificar OTP: $e');
       rethrow;
     }
   }
@@ -100,11 +101,11 @@ class AuthService {
   // Login com Google
   Future<User?> loginComGoogle() async {
     try {
-      debugPrint('🔐 Tentando login com Google');
+      LoggerService.info('🔐 Tentando login com Google');
 
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
-        debugPrint('⚠️ Login com Google cancelado');
+        LoggerService.info('⚠️ Login com Google cancelado');
         return null;
       }
 
@@ -116,10 +117,10 @@ class AuthService {
         idToken: googleAuth.idToken!,
       );
 
-      debugPrint('✅ Login Google bem-sucedido: ${response.user?.email}');
+      LoggerService.info('✅ Login Google bem-sucedido: ${response.user?.email}');
       return response.user;
     } catch (e) {
-      debugPrint('❌ Erro no login com Google: $e');
+      LoggerService.info('❌ Erro no login com Google: $e');
       return null;
     }
   }
@@ -129,9 +130,10 @@ class AuthService {
     try {
       await _googleSignIn.signOut();
       await _supabase.auth.signOut();
-      debugPrint('✅ Logout realizado');
+      LoggerService.info('✅ Logout realizado');
     } catch (e) {
-      debugPrint('❌ Erro no logout: $e');
+      LoggerService.info('❌ Erro no logout: $e');
     }
   }
 }
+

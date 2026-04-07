@@ -1,13 +1,14 @@
+import '../services/logger_service.dart';
 // lib/screens/investimentos.dart
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:provider/provider.dart';
-import '../services/supabase_service.dart';
+import '../database/db_helper.dart';
 import '../models/investimento_model.dart';
+import '../models/renda_fixa_model.dart';
+import '../services/renda_fixa_diaria.dart';
 import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
-import '../widgets/stock_logo.dart';
-import '../widgets/detalhes_investimento_modal.dart';
+import '../widgets/app_modals.dart';
 import 'transacoes_screen.dart';
 
 class InvestimentosScreen extends StatefulWidget {
@@ -18,7 +19,7 @@ class InvestimentosScreen extends StatefulWidget {
 }
 
 class _InvestimentosScreenState extends State<InvestimentosScreen> {
-  late final SupabaseService _supabaseService;
+  final DBHelper _dbHelper = DBHelper();
 
   List<Investimento> _investimentos = [];
   List<Investimento> _investimentosFiltrados = [];
@@ -35,11 +36,14 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
   double _percentualGanho = 0;
   int _totalAtivos = 0;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _supabaseService = Provider.of<SupabaseService>(context, listen: false);
-  }
+  double _totalRendaFixa = 0;
+
+  final Map<String, Color> _coresPorTipo = {
+    'Ações': Colors.blue,
+    'FIIs': Colors.green,
+    'Cripto': Colors.orange,
+    'Renda Fixa': Colors.purple,
+  };
 
   @override
   void initState() {
@@ -52,11 +56,60 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      _investimentos = await _supabaseService.getInvestimentos();
+      final dados = await _dbHelper.getAllInvestimentos();
+      _investimentos =
+          dados.map((json) => Investimento.fromJson(json)).toList();
+
+      final rendaFixa = await _dbHelper.getAllRendaFixa();
+      _totalRendaFixa = 0;
+      final hoje = DateTime.now();
+
+      for (var item in rendaFixa) {
+        final inv = RendaFixaModel.fromJson(item);
+        final valorHoje = RendaFixaDiaria.calcularValorEm(inv, hoje);
+        _totalRendaFixa += valorHoje;
+      }
+
+      if (_totalRendaFixa > 0) {
+        bool existeRendaFixa =
+            _investimentos.any((inv) => inv.tipo.toUpperCase() == 'RENDA_FIXA');
+
+        if (!existeRendaFixa) {
+          _investimentos.add(Investimento(
+            ticker: 'RENDA FIXA',
+            tipo: 'RENDA_FIXA',
+            quantidade: 1,
+            precoMedio: _totalRendaFixa,
+            precoAtual: _totalRendaFixa,
+          ));
+        } else {
+          final index = _investimentos
+              .indexWhere((inv) => inv.tipo.toUpperCase() == 'RENDA_FIXA');
+          if (index != -1) {
+            _investimentos[index] = Investimento(
+              id: _investimentos[index].id,
+              ticker: 'RENDA FIXA',
+              tipo: 'RENDA_FIXA',
+              quantidade: 1,
+              precoMedio: _totalRendaFixa,
+              precoAtual: _totalRendaFixa,
+            );
+          }
+        }
+      }
+
       _aplicarFiltro();
       _calcularTotais();
     } catch (e) {
-      debugPrint('Erro ao carregar investimentos: $e');
+      LoggerService.info('❌ Erro ao carregar investimentos: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao carregar: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -67,25 +120,34 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
     double totalAtual = 0;
 
     for (var inv in _investimentos) {
-      totalInvestido += inv.valorInvestido;
-      totalAtual += inv.valorAtual;
+      if (inv.ticker != 'RENDA FIXA') {
+        totalInvestido += inv.valorInvestido;
+        totalAtual += inv.valorAtual;
+      }
     }
+
+    totalAtual += _totalRendaFixa;
 
     _valorInvestido = totalInvestido;
     _patrimonioTotal = totalAtual;
     _ganhoPerda = _patrimonioTotal - _valorInvestido;
     _percentualGanho =
         _valorInvestido > 0 ? (_ganhoPerda / _valorInvestido) * 100 : 0;
-    _totalAtivos = _investimentos.length;
+    _totalAtivos =
+        _investimentos.where((inv) => inv.ticker != 'RENDA FIXA').length;
   }
 
   Future<void> _carregarUltimasTransacoes() async {
     setState(() => _carregandoTransacoes = true);
     try {
-      _ultimasTransacoes =
-          await _supabaseService.getUltimasTransacoes(limit: 5);
+      final db = await _dbHelper.database;
+      _ultimasTransacoes = await db.query(
+        'transacoes',
+        orderBy: 'data DESC',
+        limit: 5,
+      );
     } catch (e) {
-      debugPrint('Erro ao carregar transações: $e');
+      LoggerService.info('❌ Erro ao carregar transações: $e');
       _ultimasTransacoes = [];
     } finally {
       setState(() => _carregandoTransacoes = false);
@@ -110,6 +172,11 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
               .where((inv) => inv.tipo.toUpperCase() == 'CRIPTO')
               .toList();
           break;
+        case 'Renda Fixa':
+          _investimentosFiltrados = _investimentos
+              .where((inv) => inv.tipo.toUpperCase() == 'RENDA_FIXA')
+              .toList();
+          break;
         default:
           _investimentosFiltrados = List.from(_investimentos);
       }
@@ -117,12 +184,27 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
   }
 
   List<Map<String, dynamic>> get _dadosDistribuicao {
-    final Map<String, double> valores = {};
+    final Map<String, double> valores = {
+      'Ações': 0,
+      'FIIs': 0,
+      'Cripto': 0,
+      'Renda Fixa': 0,
+    };
+
     for (var inv in _investimentos) {
-      final tipo = TipoInvestimento.getNomeAmigavel(inv.tipo);
-      valores[tipo] = (valores[tipo] ?? 0) + inv.valorAtual;
+      final tipo = inv.tipo.toUpperCase();
+      if (tipo == 'ACAO') {
+        valores['Ações'] = (valores['Ações'] ?? 0) + inv.valorAtual;
+      } else if (tipo == 'FII') {
+        valores['FIIs'] = (valores['FIIs'] ?? 0) + inv.valorAtual;
+      } else if (tipo == 'CRIPTO') {
+        valores['Cripto'] = (valores['Cripto'] ?? 0) + inv.valorAtual;
+      } else if (tipo == 'RENDA_FIXA') {
+        valores['Renda Fixa'] = (valores['Renda Fixa'] ?? 0) + inv.valorAtual;
+      }
     }
-    return valores.entries.map((entry) {
+
+    return valores.entries.where((entry) => entry.value > 0).map((entry) {
       return {
         'categoria': entry.key,
         'valor': entry.value,
@@ -133,26 +215,60 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
   }
 
   List<Investimento> get _top5Ativos {
-    final sorted = List<Investimento>.from(_investimentos);
-    sorted.sort((a, b) => b.valorAtual.compareTo(a.valorAtual));
-    return sorted.take(5).toList();
+    final Map<String, Investimento> agrupados = {};
+
+    for (var inv in _investimentos) {
+      if (inv.ticker == 'RENDA FIXA') continue;
+
+      if (agrupados.containsKey(inv.ticker)) {
+        final existente = agrupados[inv.ticker]!;
+        final novaQuantidade = existente.quantidade + inv.quantidade;
+        final novoPrecoMedio = ((existente.precoMedio * existente.quantidade) +
+                (inv.precoMedio * inv.quantidade)) /
+            novaQuantidade;
+
+        agrupados[inv.ticker] = Investimento(
+          id: existente.id,
+          ticker: inv.ticker,
+          tipo: inv.tipo,
+          quantidade: novaQuantidade,
+          precoMedio: novoPrecoMedio,
+          precoAtual: inv.precoAtual ?? existente.precoAtual,
+          dataCompra: existente.dataCompra,
+          corretora: existente.corretora,
+          setor: existente.setor,
+          dividendYield: existente.dividendYield,
+        );
+      } else {
+        agrupados[inv.ticker] = inv;
+      }
+    }
+
+    final lista = agrupados.values.toList();
+    lista.sort((a, b) => b.valorAtual.compareTo(a.valorAtual));
+    return lista.take(5).toList();
   }
 
   Future<void> _adicionarInvestimento(Investimento investimento) async {
     try {
-      await _supabaseService.addInvestimento(investimento);
+      await _dbHelper.insertInvestimento(investimento.toJson());
       await _carregarDados();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('✅ ${investimento.ticker} adicionado!'),
-              backgroundColor: AppColors.success),
+            content: Text('✅ ${investimento.ticker} adicionado!'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text('Erro: $e'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
@@ -160,9 +276,6 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final distribuicao = _dadosDistribuicao;
-    final top5 = _top5Ativos;
-
     return Scaffold(
       backgroundColor: AppColors.background(context),
       body: _isLoading
@@ -237,7 +350,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
         decoration: BoxDecoration(
           color: AppColors.surface(context),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cor.withOpacity(0.2), width: 1),
+          border: Border.all(color: cor.withValues(alpha:0.2), width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,7 +358,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
             Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                    color: cor.withOpacity(0.1),
+                    color: cor.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(10)),
                 child: Icon(icone, size: 14, color: cor)),
             const SizedBox(height: 8),
@@ -328,7 +441,13 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
   }
 
   Widget _buildFiltros() {
-    final List<String> filtros = ['Todos', 'Ações', 'FIIs', 'Cripto'];
+    final List<String> filtros = [
+      'Todos',
+      'Ações',
+      'FIIs',
+      'Cripto',
+      'Renda Fixa'
+    ];
     return SizedBox(
       height: 36,
       child: ListView.separated(
@@ -391,10 +510,9 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
       child: Column(
         children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(
-                flex: 5, child: _buildDistribuicaoCard(_dadosDistribuicao)),
+            Expanded(flex: 5, child: _buildDistribuicaoCard()),
             const SizedBox(width: 12),
-            Expanded(flex: 4, child: _buildTop5Card(_top5Ativos)),
+            Expanded(flex: 4, child: _buildTop5Card()),
           ]),
           const SizedBox(height: 16),
           _buildUltimasTransacoesCard(),
@@ -404,21 +522,33 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
     );
   }
 
-  Widget _buildDistribuicaoCard(List<Map<String, dynamic>> distribuicao) {
-    final cores = [
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.purple,
-      Colors.pink
-    ];
+  Widget _buildDistribuicaoCard() {
+    final distribuicao = _dadosDistribuicao;
+
+    if (distribuicao.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface(context),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.border(context).withValues(alpha:0.5)),
+        ),
+        child: Center(
+          child: Text(
+            'Nenhum investimento cadastrado',
+            style: TextStyle(color: AppColors.textSecondary(context)),
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
           color: AppColors.surface(context),
           borderRadius: BorderRadius.circular(20),
           border:
-              Border.all(color: AppColors.border(context).withOpacity(0.5))),
+              Border.all(color: AppColors.border(context).withValues(alpha:0.5))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -432,96 +562,121 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                 child:
                     const Icon(Icons.pie_chart, size: 18, color: Colors.white)),
             const SizedBox(width: 12),
-            Text('Distribuição',
+            const Text('Distribuição por Tipo',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           ]),
           const SizedBox(height: 16),
-          if (distribuicao.isNotEmpty)
-            Row(
-              children: [
-                Expanded(
-                  flex: 4,
-                  child: SizedBox(
-                    height: 130,
-                    child: PieChart(PieChartData(
-                      sectionsSpace: 2,
-                      centerSpaceRadius: 30,
-                      sections: distribuicao.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final item = entry.value;
-                        final percentual = item['percentual'] as double;
-                        return PieChartSectionData(
-                          value: item['valor'] as double,
-                          color: cores[index % cores.length],
-                          title: percentual > 8
-                              ? '${percentual.toStringAsFixed(0)}%'
-                              : '',
-                          titleStyle: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white),
-                          radius: 55,
-                        );
-                      }).toList(),
-                    )),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 5,
-                  child: Column(
-                    children: distribuicao.asMap().entries.map((entry) {
-                      final index = entry.key;
+          Row(
+            children: [
+              Expanded(
+                flex: 4,
+                child: SizedBox(
+                  height: 130,
+                  child: PieChart(PieChartData(
+                    sectionsSpace: 2,
+                    centerSpaceRadius: 30,
+                    sections: distribuicao.asMap().entries.map((entry) {
                       final item = entry.value;
-                      final valor = item['valor'] as double;
-                      final cor = cores[index % cores.length];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                                flex: 2,
-                                child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(item['categoria'],
-                                          style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600)),
-                                      const SizedBox(height: 4),
-                                      Container(
-                                          height: 2, width: 30, color: cor),
-                                    ])),
-                            Expanded(
-                                flex: 1,
-                                child: Text(Formatador.moeda(valor),
-                                    textAlign: TextAlign.right,
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: cor))),
-                          ],
-                        ),
+                      final percentual = item['percentual'] as double;
+                      final categoria = item['categoria'] as String;
+                      return PieChartSectionData(
+                        value: item['valor'] as double,
+                        color: _coresPorTipo[categoria] ?? Colors.grey,
+                        title: percentual > 8
+                            ? '${percentual.toStringAsFixed(0)}%'
+                            : '',
+                        titleStyle: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                        radius: 55,
                       );
                     }).toList(),
-                  ),
+                  )),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 5,
+                child: Column(
+                  children: distribuicao.map((item) {
+                    final categoria = item['categoria'] as String;
+                    final valor = item['valor'] as double;
+                    final percentual = item['percentual'] as double;
+                    final cor = _coresPorTipo[categoria] ?? Colors.grey;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        children: [
+                          Expanded(
+                              flex: 2,
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(categoria,
+                                        style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 4),
+                                    Container(height: 2, width: 30, color: cor),
+                                  ])),
+                          Expanded(
+                              flex: 1,
+                              child: Text('${percentual.toStringAsFixed(1)}%',
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color:
+                                          AppColors.textSecondary(context)))),
+                          const SizedBox(width: 8),
+                          Expanded(
+                              flex: 1,
+                              child: Text(Formatador.moeda(valor),
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: cor))),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildTop5Card(List<Investimento> top5) {
+  Widget _buildTop5Card() {
+    final top5 = _top5Ativos;
+
+    if (top5.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface(context),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.border(context).withValues(alpha:0.5)),
+        ),
+        child: Center(
+          child: Text(
+            'Nenhum investimento',
+            style: TextStyle(color: AppColors.textSecondary(context)),
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
           color: AppColors.surface(context),
           borderRadius: BorderRadius.circular(20),
           border:
-              Border.all(color: AppColors.border(context).withOpacity(0.5))),
+              Border.all(color: AppColors.border(context).withValues(alpha:0.5))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -535,7 +690,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                 child: const Icon(Icons.emoji_events,
                     size: 18, color: Colors.white)),
             const SizedBox(width: 12),
-            Text('Top 5',
+            const Text('Top 5 Ativos',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           ]),
           const SizedBox(height: 16),
@@ -544,6 +699,12 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
             final inv = entry.value;
             final isPositive = inv.variacaoPercentual >= 0;
             final cor = isPositive ? AppColors.success : AppColors.error;
+
+            final quantidade = inv.quantidade;
+            final precoMedio = inv.precoMedio;
+            final valorInvestido = inv.valorInvestido;
+            final valorAtual = inv.valorAtual;
+
             return Column(
               children: [
                 Padding(
@@ -572,7 +733,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                                         : LinearGradient(colors: [
                                             AppColors.muted(context),
                                             AppColors.muted(context)
-                                                .withOpacity(0.7)
+                                                .withValues(alpha:0.7)
                                           ]),
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -588,10 +749,20 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(inv.ticker,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.bold)),
                               Text(TipoInvestimento.getNomeAmigavel(inv.tipo),
+                                  style: TextStyle(
+                                      fontSize: 9,
+                                      color: AppColors.textSecondary(context))),
+                              const SizedBox(height: 2),
+                              Text(
+                                  '${quantidade.toStringAsFixed(0)} cotas · PM ${Formatador.moeda(precoMedio)}',
+                                  style: TextStyle(
+                                      fontSize: 9,
+                                      color: AppColors.textSecondary(context))),
+                              Text('Inv: ${Formatador.moeda(valorInvestido)}',
                                   style: TextStyle(
                                       fontSize: 9,
                                       color: AppColors.textSecondary(context))),
@@ -600,7 +771,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                       Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(Formatador.moeda(inv.valorAtual),
+                            Text(Formatador.moeda(valorAtual),
                                 style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
@@ -609,7 +780,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                  color: cor.withOpacity(0.1),
+                                  color: cor.withValues(alpha:0.1),
                                   borderRadius: BorderRadius.circular(10)),
                               child: Row(children: [
                                 Icon(
@@ -647,7 +818,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
           color: AppColors.surface(context),
           borderRadius: BorderRadius.circular(20),
           border:
-              Border.all(color: AppColors.border(context).withOpacity(0.5))),
+              Border.all(color: AppColors.border(context).withValues(alpha:0.5))),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -690,18 +861,6 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                 const SizedBox(height: 8),
                 Text('Nenhuma movimentação ainda',
                     style: TextStyle(color: AppColors.textSecondary(context))),
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const TransacoesScreen())),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Registrar Compra/Venda'),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white),
-                ),
               ])
             else
               ..._ultimasTransacoes.take(3).map((t) => _buildTransacaoCard(t)),
@@ -729,14 +888,14 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
         decoration: BoxDecoration(
             border: Border(
                 bottom: BorderSide(
-                    color: AppColors.border(context).withOpacity(0.5)))),
+                    color: AppColors.border(context).withValues(alpha:0.5)))),
         child: Row(
           children: [
             Container(
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                    color: cor.withOpacity(0.1),
+                    color: cor.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(10)),
                 child: Icon(isCompra ? Icons.trending_up : Icons.trending_down,
                     color: cor, size: 18)),
@@ -747,7 +906,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                     children: [
                   Text(t['ticker'],
                       style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   Text(
                       '${quantidade.toStringAsFixed(2)} cotas × ${Formatador.moeda(preco)}',
                       style: TextStyle(
@@ -769,7 +928,38 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
   }
 
   Widget _buildListaAtivos() {
-    if (_investimentosFiltrados.isEmpty) {
+    final Map<String, Investimento> ativosAgrupados = {};
+
+    for (var inv in _investimentosFiltrados) {
+      if (inv.ticker == 'RENDA FIXA') continue;
+
+      if (ativosAgrupados.containsKey(inv.ticker)) {
+        final existente = ativosAgrupados[inv.ticker]!;
+        final novaQuantidade = existente.quantidade + inv.quantidade;
+        final novoPrecoMedio = ((existente.precoMedio * existente.quantidade) +
+                (inv.precoMedio * inv.quantidade)) /
+            novaQuantidade;
+
+        ativosAgrupados[inv.ticker] = Investimento(
+          id: existente.id,
+          ticker: inv.ticker,
+          tipo: inv.tipo,
+          quantidade: novaQuantidade,
+          precoMedio: novoPrecoMedio,
+          precoAtual: inv.precoAtual ?? existente.precoAtual,
+          dataCompra: existente.dataCompra,
+          corretora: existente.corretora,
+          setor: existente.setor,
+          dividendYield: existente.dividendYield,
+        );
+      } else {
+        ativosAgrupados[inv.ticker] = inv;
+      }
+    }
+
+    final listaAtivos = ativosAgrupados.values.toList();
+
+    if (listaAtivos.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -790,12 +980,18 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
         ),
       );
     }
+
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: _investimentosFiltrados.length,
+      itemCount: listaAtivos.length,
       itemBuilder: (context, index) {
-        final inv = _investimentosFiltrados[index];
+        final inv = listaAtivos[index];
         final isPositive = inv.variacaoPercentual >= 0;
+        final quantidade = inv.quantidade;
+        final precoMedio = inv.precoMedio;
+        final valorInvestido = inv.valorInvestido;
+        final valorAtual = inv.valorAtual;
+
         return GestureDetector(
           onTap: () => _showDetalhes(inv),
           child: Container(
@@ -806,7 +1002,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                   color: (isPositive ? AppColors.success : AppColors.error)
-                      .withOpacity(0.3)),
+                      .withValues(alpha:0.3)),
             ),
             child: Row(
               children: [
@@ -814,7 +1010,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                      color: TipoInvestimento.getCor(inv.tipo).withOpacity(0.1),
+                      color: TipoInvestimento.getCor(inv.tipo).withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(10)),
                   child: Center(
                       child: Text(
@@ -831,16 +1027,25 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                       Text(inv.ticker,
-                          style: TextStyle(
+                          style: const TextStyle(
                               fontSize: 14, fontWeight: FontWeight.bold)),
+                      Text(TipoInvestimento.getNomeAmigavel(inv.tipo),
+                          style: TextStyle(
+                              fontSize: 9,
+                              color: AppColors.textSecondary(context))),
+                      const SizedBox(height: 2),
                       Text(
-                          '${inv.quantidade.toStringAsFixed(0)} cotas · PM ${Formatador.moeda(inv.precoMedio)}',
+                          '${quantidade.toStringAsFixed(0)} cotas · PM ${Formatador.moeda(precoMedio)}',
+                          style: TextStyle(
+                              fontSize: 9,
+                              color: AppColors.textSecondary(context))),
+                      Text('Inv: ${Formatador.moeda(valorInvestido)}',
                           style: TextStyle(
                               fontSize: 9,
                               color: AppColors.textSecondary(context))),
                     ])),
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text(Formatador.moeda(inv.valorAtual),
+                  Text(Formatador.moeda(valorAtual),
                       style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -853,7 +1058,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                     decoration: BoxDecoration(
                         color:
                             (isPositive ? AppColors.success : AppColors.error)
-                                .withOpacity(0.1),
+                                .withValues(alpha:0.1),
                         borderRadius: BorderRadius.circular(8)),
                     child: Row(children: [
                       Icon(
@@ -892,7 +1097,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-                color: TipoInvestimento.getCor(inv.tipo).withOpacity(0.1),
+                color: TipoInvestimento.getCor(inv.tipo).withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(10)),
             child: Center(
                 child: Text(
@@ -910,9 +1115,9 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                   children: [
                 Text(inv.ticker,
                     style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 Text(TipoInvestimento.getNomeAmigavel(inv.tipo),
-                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
               ])),
         ]),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -961,89 +1166,52 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
     );
   }
 
-  void _mostrarModalAdicionar() {
-    final formKey = GlobalKey<FormState>();
-    final tickerController = TextEditingController();
-    final quantidadeController = TextEditingController();
-    final precoMedioController = TextEditingController();
-    final precoAtualController = TextEditingController();
-    String tipoSelecionado = 'ACAO';
-    final List<String> tipos = ['ACAO', 'FII', 'CRIPTO'];
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateModal) {
-          return AlertDialog(
-            title: const Text('Novo Investimento'),
-            content: Form(
-              key: formKey,
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                TextFormField(
-                    controller: tickerController,
-                    decoration: const InputDecoration(
-                        labelText: 'Ticker', hintText: 'PETR4, VISC11'),
-                    textCapitalization: TextCapitalization.characters,
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Digite o ticker' : null),
-                const SizedBox(height: 12),
-                DropdownButtonFormField(
-                    value: tipoSelecionado,
-                    items: tipos
-                        .map((t) => DropdownMenuItem(
-                            value: t,
-                            child: Text(TipoInvestimento.getNomeAmigavel(t))))
-                        .toList(),
-                    onChanged: (v) => setStateModal(() => tipoSelecionado = v!),
-                    decoration: const InputDecoration(labelText: 'Tipo')),
-                const SizedBox(height: 12),
-                TextFormField(
-                    controller: quantidadeController,
-                    decoration: const InputDecoration(labelText: 'Quantidade'),
-                    keyboardType: TextInputType.number,
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Digite a quantidade' : null),
-                const SizedBox(height: 12),
-                TextFormField(
-                    controller: precoMedioController,
-                    decoration: const InputDecoration(labelText: 'Preço Médio'),
-                    keyboardType: TextInputType.number,
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Digite o preço médio' : null),
-                const SizedBox(height: 12),
-                TextFormField(
-                    controller: precoAtualController,
-                    decoration: const InputDecoration(
-                        labelText: 'Preço Atual (opcional)'),
-                    keyboardType: TextInputType.number),
-              ]),
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancelar')),
-              ElevatedButton(
-                onPressed: () async {
-                  if (formKey.currentState!.validate()) {
-                    Navigator.pop(context);
-                    final novoInvestimento = Investimento(
-                      ticker: tickerController.text.toUpperCase(),
-                      tipo: tipoSelecionado,
-                      quantidade: double.parse(quantidadeController.text),
-                      precoMedio: double.parse(precoMedioController.text),
-                      precoAtual: precoAtualController.text.isNotEmpty
-                          ? double.parse(precoAtualController.text)
-                          : null,
-                    );
-                    await _adicionarInvestimento(novoInvestimento);
-                  }
-                },
-                child: const Text('Adicionar'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
+  void _mostrarModalAdicionar() async {
+    final resultado =
+        await AppModals.mostrarModalInvestimento(context: context);
+    if (resultado != null) {
+      final novoInvestimento = Investimento(
+        ticker: resultado['ticker'],
+        tipo: resultado['tipo'],
+        quantidade: resultado['quantidade'],
+        precoMedio: resultado['preco_medio'],
+        precoAtual: resultado['preco_atual'],
+      );
+      await _adicionarInvestimento(novoInvestimento);
+    }
   }
 }
+
+// 🔥 CLASSE AUXILIAR PARA INVESTIMENTO (ADICIONADA NO FINAL)
+class TipoInvestimento {
+  static String getNomeAmigavel(String tipo) {
+    switch (tipo) {
+      case 'ACAO':
+        return 'Ações';
+      case 'FII':
+        return 'FIIs';
+      case 'CRIPTO':
+        return 'Cripto';
+      case 'RENDA_FIXA':
+        return 'Renda Fixa';
+      default:
+        return tipo;
+    }
+  }
+
+  static Color getCor(String tipo) {
+    switch (tipo) {
+      case 'ACAO':
+        return Colors.blue;
+      case 'FII':
+        return Colors.green;
+      case 'CRIPTO':
+        return Colors.orange;
+      case 'RENDA_FIXA':
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
+  }
+}
+

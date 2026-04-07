@@ -13,7 +13,6 @@ import 'screens/lancamentos.dart';
 import 'services/auth_service.dart';
 import 'services/theme_service.dart';
 import 'services/loading_service.dart';
-import 'services/supabase_service.dart';
 import 'screens/investimentos.dart';
 import 'screens/metas_screen.dart';
 import 'screens/dashboard.dart';
@@ -45,7 +44,6 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeService()..loadTheme()),
         ChangeNotifierProvider(create: (_) => LoadingService()),
-        Provider<SupabaseService>(create: (_) => SupabaseService()),
       ],
       child: Consumer<ThemeService>(
         builder: (context, themeService, child) {
@@ -107,7 +105,7 @@ class MyApp extends StatelessWidget {
       cardTheme: CardThemeData(
         color: Colors.white,
         elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.1),
+        shadowColor: Colors.black.withValues(alpha:0.1),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -146,7 +144,7 @@ class MyApp extends StatelessWidget {
       cardTheme: CardThemeData(
         color: const Color(0xFF1E1E1E),
         elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.3),
+        shadowColor: Colors.black.withValues(alpha:0.3),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -164,3 +162,4 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+

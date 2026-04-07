@@ -1,3 +1,4 @@
+import '../services/logger_service.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sqflite/sqflite.dart';
@@ -15,18 +16,18 @@ class SyncManager {
 
   Future<void> syncAll() async {
     if (_isSyncing) {
-      debugPrint('⚠️ Sincronização já em andamento');
+      LoggerService.info('⚠️ Sincronização já em andamento');
       return;
     }
 
     final user = supabase.auth.currentUser;
     if (user == null) {
-      debugPrint('⚠️ Usuário não logado, ignorando sincronização');
+      LoggerService.info('⚠️ Usuário não logado, ignorando sincronização');
       return;
     }
 
     _isSyncing = true;
-    debugPrint('🔄 Iniciando sincronização...');
+    LoggerService.info('🔄 Iniciando sincronização...');
 
     try {
       await syncPendingLancamentos();
@@ -41,9 +42,9 @@ class SyncManager {
       await fetchRemoteProventos();
       await fetchRemoteRendaFixa();
 
-      debugPrint('✅ Sincronização completa!');
+      LoggerService.info('✅ Sincronização completa!');
     } catch (e) {
-      debugPrint('❌ Erro na sincronização: $e');
+      LoggerService.info('❌ Erro na sincronização: $e');
     } finally {
       _isSyncing = false;
     }
@@ -56,7 +57,7 @@ class SyncManager {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    debugPrint('🔍 Buscando lançamentos pendentes para user: ${user.id}');
+    LoggerService.info('🔍 Buscando lançamentos pendentes para user: ${user.id}');
 
     final pending = await db.query(
       DBHelper.tabelaLancamentos,
@@ -65,14 +66,14 @@ class SyncManager {
     );
 
     if (pending.isEmpty) {
-      debugPrint('📤 Nenhum lançamento pendente encontrado');
+      LoggerService.info('📤 Nenhum lançamento pendente encontrado');
       return;
     }
 
-    debugPrint('📤 Enviando ${pending.length} lançamentos pendentes...');
+    LoggerService.info('📤 Enviando ${pending.length} lançamentos pendentes...');
 
     for (var localData in pending) {
-      debugPrint(
+      LoggerService.info(
           '  📝 Processando: ${localData['descricao']} (ID: ${localData['id']})');
 
       try {
@@ -88,13 +89,13 @@ class SyncManager {
 
         if (tipoOriginal == 'gasto') {
           tipoCorreto = 'despesa';
-          debugPrint(
+          LoggerService.info(
               '  🔄 Convertendo tipo "$tipoOriginal" para "$tipoCorreto"');
         } else if (tipoOriginal == 'receita') {
           tipoCorreto = 'receita';
         } else {
           tipoCorreto = 'despesa'; // fallback seguro
-          debugPrint(
+          LoggerService.info(
               '  ⚠️ Tipo desconhecido "$tipoOriginal", usando "despesa"');
         }
 
@@ -108,7 +109,7 @@ class SyncManager {
           'observacao': localData['observacao'] ?? '',
         };
 
-        debugPrint('  📤 Enviando: $remoteData');
+        LoggerService.info('  📤 Enviando: $remoteData');
 
         final remoteId = localData['remote_id'] as String?;
 
@@ -128,7 +129,7 @@ class SyncManager {
             where: 'id = ?',
             whereArgs: [localData['id']],
           );
-          debugPrint('  ✅ Lançamento atualizado: ${localData['descricao']}');
+          LoggerService.info('  ✅ Lançamento atualizado: ${localData['descricao']}');
         } else {
           // Inserir novo registro
           final response = await supabase
@@ -147,11 +148,11 @@ class SyncManager {
             where: 'id = ?',
             whereArgs: [localData['id']],
           );
-          debugPrint(
+          LoggerService.info(
               '  ✅ Lançamento inserido: ${localData['descricao']} (remote_id: ${response['id']})');
         }
       } catch (e) {
-        debugPrint('  ❌ Erro ao sincronizar lançamento: $e');
+        LoggerService.info('  ❌ Erro ao sincronizar lançamento: $e');
         await db.update(
           DBHelper.tabelaLancamentos,
           {
@@ -170,7 +171,7 @@ class SyncManager {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    debugPrint('📥 Buscando lançamentos do servidor...');
+    LoggerService.info('📥 Buscando lançamentos do servidor...');
 
     try {
       final remoteLancamentos = await supabase
@@ -179,7 +180,7 @@ class SyncManager {
           .eq('user_id', user.id)
           .order('criado_em', ascending: false);
 
-      debugPrint(
+      LoggerService.info(
           '  📥 Encontrados ${remoteLancamentos.length} lançamentos remotos');
 
       for (var remote in remoteLancamentos) {
@@ -203,11 +204,11 @@ class SyncManager {
             'created_at': remote['criado_em'],
             'updated_at': remote['atualizado_em'],
           });
-          debugPrint('  📥 Novo lançamento importado: ${remote['descricao']}');
+          LoggerService.info('  📥 Novo lançamento importado: ${remote['descricao']}');
         }
       }
     } catch (e) {
-      debugPrint('  ❌ Erro ao buscar lançamentos: $e');
+      LoggerService.info('  ❌ Erro ao buscar lançamentos: $e');
     }
   }
 
@@ -225,7 +226,7 @@ class SyncManager {
     );
 
     if (pending.isEmpty) return;
-    debugPrint('📤 Enviando ${pending.length} investimentos pendentes...');
+    LoggerService.info('📤 Enviando ${pending.length} investimentos pendentes...');
 
     for (var localData in pending) {
       try {
@@ -268,7 +269,7 @@ class SyncManager {
           );
         }
       } catch (e) {
-        debugPrint('  ❌ Erro ao sincronizar investimento: $e');
+        LoggerService.info('  ❌ Erro ao sincronizar investimento: $e');
       }
     }
   }
@@ -278,7 +279,7 @@ class SyncManager {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    debugPrint('📥 Buscando investimentos do servidor...');
+    LoggerService.info('📥 Buscando investimentos do servidor...');
 
     try {
       final remoteInvestimentos =
@@ -303,11 +304,11 @@ class SyncManager {
             'data_compra': remote['data_compra'],
             'sync_status': 'synced',
           });
-          debugPrint('  📥 Novo investimento: ${remote['ticker']}');
+          LoggerService.info('  📥 Novo investimento: ${remote['ticker']}');
         }
       }
     } catch (e) {
-      debugPrint('  ❌ Erro ao buscar investimentos: $e');
+      LoggerService.info('  ❌ Erro ao buscar investimentos: $e');
     }
   }
 
@@ -325,7 +326,7 @@ class SyncManager {
     );
 
     if (pending.isEmpty) return;
-    debugPrint('📤 Enviando ${pending.length} metas pendentes...');
+    LoggerService.info('📤 Enviando ${pending.length} metas pendentes...');
 
     for (var localData in pending) {
       try {
@@ -362,7 +363,7 @@ class SyncManager {
           );
         }
       } catch (e) {
-        debugPrint('  ❌ Erro ao sincronizar meta: $e');
+        LoggerService.info('  ❌ Erro ao sincronizar meta: $e');
       }
     }
   }
@@ -372,7 +373,7 @@ class SyncManager {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    debugPrint('📥 Buscando metas do servidor...');
+    LoggerService.info('📥 Buscando metas do servidor...');
 
     try {
       final remoteMetas =
@@ -398,11 +399,11 @@ class SyncManager {
             'concluida': remote['concluida'] ? 1 : 0,
             'sync_status': 'synced',
           });
-          debugPrint('  📥 Nova meta: ${remote['titulo']}');
+          LoggerService.info('  📥 Nova meta: ${remote['titulo']}');
         }
       }
     } catch (e) {
-      debugPrint('  ❌ Erro ao buscar metas: $e');
+      LoggerService.info('  ❌ Erro ao buscar metas: $e');
     }
   }
 
@@ -420,7 +421,7 @@ class SyncManager {
     );
 
     if (pending.isEmpty) return;
-    debugPrint('📤 Enviando ${pending.length} proventos pendentes...');
+    LoggerService.info('📤 Enviando ${pending.length} proventos pendentes...');
 
     for (var localData in pending) {
       try {
@@ -464,7 +465,7 @@ class SyncManager {
           );
         }
       } catch (e) {
-        debugPrint('  ❌ Erro ao sincronizar provento: $e');
+        LoggerService.info('  ❌ Erro ao sincronizar provento: $e');
       }
     }
   }
@@ -474,7 +475,7 @@ class SyncManager {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    debugPrint('📥 Buscando proventos do servidor...');
+    LoggerService.info('📥 Buscando proventos do servidor...');
 
     try {
       final remoteProventos =
@@ -500,11 +501,11 @@ class SyncManager {
             'total_recebido': remote['total_recebido'],
             'sync_status': 'synced',
           });
-          debugPrint('  📥 Novo provento: ${remote['ticker']}');
+          LoggerService.info('  📥 Novo provento: ${remote['ticker']}');
         }
       }
     } catch (e) {
-      debugPrint('  ❌ Erro ao buscar proventos: $e');
+      LoggerService.info('  ❌ Erro ao buscar proventos: $e');
     }
   }
 
@@ -522,7 +523,7 @@ class SyncManager {
     );
 
     if (pending.isEmpty) return;
-    debugPrint(
+    LoggerService.info(
         '📤 Enviando ${pending.length} investimentos de renda fixa pendentes...');
 
     for (var localData in pending) {
@@ -568,7 +569,7 @@ class SyncManager {
           );
         }
       } catch (e) {
-        debugPrint('  ❌ Erro ao sincronizar renda fixa: $e');
+        LoggerService.info('  ❌ Erro ao sincronizar renda fixa: $e');
       }
     }
   }
@@ -578,7 +579,7 @@ class SyncManager {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    debugPrint('📥 Buscando investimentos de renda fixa do servidor...');
+    LoggerService.info('📥 Buscando investimentos de renda fixa do servidor...');
 
     try {
       final remoteRendaFixa =
@@ -604,11 +605,11 @@ class SyncManager {
             'status': remote['status'],
             'sync_status': 'synced',
           });
-          debugPrint('  📥 Nova renda fixa: ${remote['nome']}');
+          LoggerService.info('  📥 Nova renda fixa: ${remote['nome']}');
         }
       }
     } catch (e) {
-      debugPrint('  ❌ Erro ao buscar renda fixa: $e');
+      LoggerService.info('  ❌ Erro ao buscar renda fixa: $e');
     }
   }
 
@@ -634,9 +635,9 @@ class SyncManager {
     if (remoteId.isNotEmpty && user != null) {
       try {
         await supabase.from(table).delete().eq('id', remoteId);
-        debugPrint('🗑️ Deletado no servidor: $table/$remoteId');
+        LoggerService.info('🗑️ Deletado no servidor: $table/$remoteId');
       } catch (e) {
-        debugPrint('❌ Erro ao deletar no servidor: $e');
+        LoggerService.info('❌ Erro ao deletar no servidor: $e');
       }
     }
 
@@ -645,7 +646,7 @@ class SyncManager {
       where: 'id = ?',
       whereArgs: [localId],
     );
-    debugPrint('🗑️ Deletado localmente: $table/$localId');
+    LoggerService.info('🗑️ Deletado localmente: $table/$localId');
   }
 
   // ========== MÉTODO PARA FORÇAR ENVIO DE TODOS OS DADOS ==========
@@ -654,12 +655,12 @@ class SyncManager {
     final db = await dbHelper.database;
     final user = supabase.auth.currentUser;
     if (user == null) {
-      debugPrint('⚠️ Usuário não logado!');
+      LoggerService.info('⚠️ Usuário não logado!');
       return;
     }
 
-    debugPrint('📤 FORÇANDO ENVIO DE TODOS OS DADOS PARA O SUPABASE...');
-    debugPrint('🔍 User ID: ${user.id}');
+    LoggerService.info('📤 FORÇANDO ENVIO DE TODOS OS DADOS PARA O SUPABASE...');
+    LoggerService.info('🔍 User ID: ${user.id}');
 
     // ========== LANÇAMENTOS ==========
     final lancamentos = await db.query(
@@ -667,7 +668,7 @@ class SyncManager {
       where: 'user_id = ?',
       whereArgs: [user.id],
     );
-    debugPrint('📊 LANÇAMENTOS: ${lancamentos.length} encontrados');
+    LoggerService.info('📊 LANÇAMENTOS: ${lancamentos.length} encontrados');
 
     for (var local in lancamentos) {
       try {
@@ -705,7 +706,7 @@ class SyncManager {
               .from('lancamentos')
               .update(remoteData)
               .eq('id', remoteId);
-          debugPrint('  ✅ Atualizado: ${local['descricao']}');
+          LoggerService.info('  ✅ Atualizado: ${local['descricao']}');
         } else {
           final response = await supabase
               .from('lancamentos')
@@ -719,14 +720,15 @@ class SyncManager {
             where: 'id = ?',
             whereArgs: [local['id']],
           );
-          debugPrint(
+          LoggerService.info(
               '  ✅ Inserido: ${local['descricao']} (remote_id: ${response['id']})');
         }
       } catch (e) {
-        debugPrint('  ❌ Erro: ${local['descricao']} - $e');
+        LoggerService.info('  ❌ Erro: ${local['descricao']} - $e');
       }
     }
 
-    debugPrint('✅ FORÇAMENTO DE ENVIO CONCLUÍDO!');
+    LoggerService.info('✅ FORÇAMENTO DE ENVIO CONCLUÍDO!');
   }
 }
+

@@ -1,3 +1,4 @@
+import '../services/logger_service.dart';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'sync_manager.dart';
@@ -23,26 +24,26 @@ class SyncService {
           results.any((result) => result != ConnectivityResult.none);
 
       if (isConnected) {
-        debugPrint('🌐 Conexão detectada, iniciando sincronização...');
+        LoggerService.info('🌐 Conexão detectada, iniciando sincronização...');
         _syncManager.syncAll();
       }
     });
 
-    debugPrint('✅ SyncService inicializado');
+    LoggerService.info('✅ SyncService inicializado');
 
     // Sincroniza imediatamente ao iniciar
     syncNow();
   }
 
   Future<void> syncNow() async {
-    debugPrint('🔄 Sincronização manual solicitada');
+    LoggerService.info('🔄 Sincronização manual solicitada');
 
     // 🔥 REMOVIDA A VERIFICAÇÃO DE CONEXÃO - SINCRONIZA SEMPRE
     // Isso vai tentar sincronizar independente do status de internet
     try {
       await _syncManager.syncAll();
     } catch (e) {
-      debugPrint('❌ Erro na sincronização: $e');
+      LoggerService.info('❌ Erro na sincronização: $e');
     }
   }
 
@@ -54,3 +55,4 @@ class SyncService {
     await _syncManager.deleteAndSync(table, localId, remoteId);
   }
 }
+

@@ -1,3 +1,4 @@
+import '../services/logger_service.dart';
 // lib/repositories/meta_repository.dart
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -27,7 +28,7 @@ class MetaRepository with LoadingMixin {
           .eq('user_id', userId);
       return response;
     } catch (e) {
-      debugPrint('❌ Erro ao buscar progresso metas: $e');
+      LoggerService.info('❌ Erro ao buscar progresso metas: $e');
       return _getProgressoMetasLocal();
     }
   }
@@ -68,7 +69,7 @@ class MetaRepository with LoadingMixin {
           .eq('status', status);
       return response;
     } catch (e) {
-      debugPrint('❌ Erro ao buscar metas por status: $e');
+      LoggerService.info('❌ Erro ao buscar metas por status: $e');
       final todas = await _getProgressoMetasLocal();
       return todas.where((meta) => meta['status'] == status).toList();
     }
@@ -101,7 +102,7 @@ class MetaRepository with LoadingMixin {
         'progressoGeral': progressoGeral,
       };
     } catch (e) {
-      debugPrint('❌ Erro ao buscar resumo metas: $e');
+      LoggerService.info('❌ Erro ao buscar resumo metas: $e');
       return await getEstatisticasMetas();
     }
   }
@@ -490,7 +491,7 @@ class MetaRepository with LoadingMixin {
 
       return true;
     } catch (e) {
-      debugPrint('❌ Erro ao adicionar depósito: $e');
+      LoggerService.info('❌ Erro ao adicionar depósito: $e');
       return false;
     }
   }
@@ -500,8 +501,9 @@ class MetaRepository with LoadingMixin {
       await deleteDeposito(depositoId);
       return true;
     } catch (e) {
-      debugPrint('❌ Erro ao remover depósito: $e');
+      LoggerService.info('❌ Erro ao remover depósito: $e');
       return false;
     }
   }
 }
+

@@ -64,3 +64,4 @@ class Movimentacao {
   bool get isCompra => tipo.toUpperCase() == 'COMPRA';
   bool get isVenda => tipo.toUpperCase() == 'VENDA';
 }
+

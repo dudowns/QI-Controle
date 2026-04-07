@@ -119,7 +119,7 @@ class _NotificacoesModalState extends State<NotificacoesModal> {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.1),
+                                color: Colors.red.withValues(alpha:0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child:
@@ -241,13 +241,13 @@ class _NotificacoesModalState extends State<NotificacoesModal> {
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: lida
-                              ? AppColors.surface(context).withOpacity(0.5)
+                              ? AppColors.surface(context).withValues(alpha:0.5)
                               : AppColors.surface(context),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: lida
                                 ? AppColors.border(context)
-                                : AppColors.primary.withOpacity(0.3),
+                                : AppColors.primary.withValues(alpha:0.3),
                           ),
                         ),
                         child: Row(
@@ -259,8 +259,8 @@ class _NotificacoesModalState extends State<NotificacoesModal> {
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 color: ticker.contains('11')
-                                    ? Colors.green.withOpacity(0.1)
-                                    : AppColors.primary.withOpacity(0.1),
+                                    ? Colors.green.withValues(alpha:0.1)
+                                    : AppColors.primary.withValues(alpha:0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Icon(
@@ -305,7 +305,7 @@ class _NotificacoesModalState extends State<NotificacoesModal> {
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: AppColors.textSecondary(context)
-                                          .withOpacity(0.7),
+                                          .withValues(alpha:0.7),
                                     ),
                                   ),
                                 ],
@@ -333,3 +333,4 @@ class _NotificacoesModalState extends State<NotificacoesModal> {
     );
   }
 }
+

@@ -46,7 +46,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
           children: [
             Positioned.fill(
               child: Container(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withValues(alpha: 0.3),
               ),
             ),
             Positioned(
@@ -64,7 +64,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 20,
                         offset: const Offset(0, 4),
                       ),
@@ -221,7 +221,6 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
 
   Widget _buildNotificacaoItem(Map<String, dynamic> notif) {
     final bool lida = notif['lida'] ?? false;
-    final String ticker = notif['ticker'] ?? '';
     final String titulo = notif['titulo'] ?? 'Notificação';
     final String mensagem = notif['mensagem'] ?? '';
     final DateTime data = notif['data'] ?? DateTime.now();
@@ -272,12 +271,12 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
           decoration: BoxDecoration(
             color: lida
                 ? AppColors.surface(context)
-                : AppColors.primary.withOpacity(0.05),
+                : AppColors.primary.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: lida
                   ? AppColors.border(context)
-                  : AppColors.primary.withOpacity(0.3),
+                  : AppColors.primary.withValues(alpha: 0.3),
             ),
           ),
           child: Row(
@@ -287,7 +286,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: cor.withOpacity(0.1),
+                  color: cor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icone, color: cor, size: 20),

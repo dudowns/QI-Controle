@@ -1,3 +1,4 @@
+import '../services/logger_service.dart';
 import 'package:flutter/foundation.dart';
 
 // 🔥 CLASSE PARA ARMAZENAR MÉTRICAS DE CADA OPERAÇÃO
@@ -58,7 +59,7 @@ class PerformanceService {
     // Se já existe um stopwatch rodando para esta operação, não cria outro
     if (_stopwatches.containsKey(operacao)) {
       if (kDebugMode) {
-        debugPrint('⚠️ Aviso: Operação "$operacao" já está sendo medida!');
+        LoggerService.info('⚠️ Aviso: Operação "$operacao" já está sendo medida!');
       }
       return;
     }
@@ -71,7 +72,7 @@ class PerformanceService {
     final stopwatch = _stopwatches[operacao];
     if (stopwatch == null) {
       if (kDebugMode) {
-        debugPrint('⚠️ Aviso: Operação "$operacao" não foi iniciada!');
+        LoggerService.info('⚠️ Aviso: Operação "$operacao" não foi iniciada!');
       }
       return;
     }
@@ -87,11 +88,11 @@ class PerformanceService {
       final logMsg = '⏱️ $operacao: ${elapsedMs}ms';
 
       if (elapsedMs >= _slowOperationThresholdMs) {
-        debugPrint('🐌 OPERAÇÃO LENTA! $logMsg'); // Caracol para lentidão
+        LoggerService.info('🐌 OPERAÇÃO LENTA! $logMsg'); // Caracol para lentidão
       } else if (elapsedMs >= 500) {
-        debugPrint('⚠️ $logMsg'); // Aviso para médias
+        LoggerService.info('⚠️ $logMsg'); // Aviso para médias
       } else {
-        debugPrint('✅ $logMsg'); // OK para rápidas
+        LoggerService.info('✅ $logMsg'); // OK para rápidas
       }
     }
 
@@ -211,7 +212,7 @@ class PerformanceService {
     _stopwatches.clear();
     _metrics.clear();
     if (kDebugMode) {
-      debugPrint('🗑️ PerformanceService: todas as métricas foram limpas');
+      LoggerService.info('🗑️ PerformanceService: todas as métricas foram limpas');
     }
   }
 
@@ -219,7 +220,7 @@ class PerformanceService {
     _metrics.remove(operacao);
     _stopwatches.remove(operacao);
     if (kDebugMode) {
-      debugPrint('🗑️ Métricas removidas para: $operacao');
+      LoggerService.info('🗑️ Métricas removidas para: $operacao');
     }
   }
 
@@ -237,17 +238,17 @@ class PerformanceService {
     if (!kDebugMode) return;
 
     final relatorio = getRelatorioCompleto();
-    print('\n📊 ========== RELATÓRIO DE PERFORMANCE ==========');
-    print('Total de operações medidas: ${relatorio['totalOperacoes']}');
-    print('Total de chamadas: ${relatorio['resumo']['totalChamadas']}');
-    print(
+    LoggerService.info('\n📊 ========== RELATÓRIO DE PERFORMANCE ==========');
+    LoggerService.info('Total de operações medidas: ${relatorio['totalOperacoes']}');
+    LoggerService.info('Total de chamadas: ${relatorio['resumo']['totalChamadas']}');
+    LoggerService.info(
         'Tempo total: ${relatorio['resumo']['tempoTotalMs']}ms (${(relatorio['resumo']['tempoTotalMs'] / 1000).toStringAsFixed(2)}s)');
-    print(
+    LoggerService.info(
         'Operação mais rápida: ${relatorio['resumo']['operacaoMaisRapida']} - ${relatorio['resumo']['tempoMaisRapidoMs']}ms');
-    print(
+    LoggerService.info(
         'Operação mais lenta: ${relatorio['resumo']['operacaoMaisLenta']} - ${relatorio['resumo']['tempoMaisLentoMs']}ms');
 
-    print('\n📋 Detalhamento por operação:');
+    LoggerService.info('\n📋 Detalhamento por operação:');
     final operacoes = relatorio['operacoes'] as Map<String, dynamic>;
     final sorted = operacoes.entries.toList()
       ..sort((a, b) => (b.value['tempoTotalMs'] as int)
@@ -255,15 +256,15 @@ class PerformanceService {
 
     for (var entry in sorted) {
       final op = entry.value;
-      print('\n  🔹 ${entry.key}');
-      print('     Chamadas: ${op['totalChamadas']}');
-      print('     Total: ${op['tempoTotalMs']}ms');
-      print('     Média: ${op['tempoMedioMs'].toStringAsFixed(2)}ms');
-      print(
+      LoggerService.info('\n  🔹 ${entry.key}');
+      LoggerService.info('     Chamadas: ${op['totalChamadas']}');
+      LoggerService.info('     Total: ${op['tempoTotalMs']}ms');
+      LoggerService.info('     Média: ${op['tempoMedioMs'].toStringAsFixed(2)}ms');
+      LoggerService.info(
           '     Min: ${op['tempoMinimoMs']}ms | Max: ${op['tempoMaximoMs']}ms');
     }
 
-    print('============================================\n');
+    LoggerService.info('============================================\n');
   }
 
   // ========== MÉTODOS PARA MONITORAMENTO EM TEMPO REAL ==========
@@ -298,3 +299,4 @@ class PerformanceService {
     return 0;
   }
 }
+

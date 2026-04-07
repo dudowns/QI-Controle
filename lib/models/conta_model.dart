@@ -112,3 +112,4 @@ class Conta {
     return '${parcelasPagas ?? 0}/${parcelasTotal ?? 0}';
   }
 }
+

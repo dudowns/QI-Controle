@@ -149,11 +149,11 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
                     border: Border.all(
                       color: lida
                           ? Colors.grey[300]!
-                          : const Color(0xFF6A1B9A).withOpacity(0.3),
+                          : const Color(0xFF6A1B9A).withValues(alpha:0.3),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.02),
+                        color: Colors.black.withValues(alpha:0.02),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -166,8 +166,8 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
                       height: 48,
                       decoration: BoxDecoration(
                         color: ticker.contains('11')
-                            ? Colors.green.withOpacity(0.1)
-                            : const Color(0xFF6A1B9A).withOpacity(0.1),
+                            ? Colors.green.withValues(alpha:0.1)
+                            : const Color(0xFF6A1B9A).withValues(alpha:0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -231,3 +231,4 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
     );
   }
 }
+

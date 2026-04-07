@@ -1,3 +1,4 @@
+import '../services/logger_service.dart';
 // lib/services/supabase_queries.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
@@ -26,7 +27,7 @@ class SupabaseQueries {
 
       return result;
     } catch (e) {
-      debugPrint('Erro getResumoMensalView: $e');
+      LoggerService.info('Erro getResumoMensalView: $e');
       return null;
     }
   }
@@ -44,7 +45,7 @@ class SupabaseQueries {
 
       return result;
     } catch (e) {
-      debugPrint('Erro getResumoCarteira: $e');
+      LoggerService.info('Erro getResumoCarteira: $e');
       return [];
     }
   }
@@ -63,7 +64,7 @@ class SupabaseQueries {
 
       return result;
     } catch (e) {
-      debugPrint('Erro getProximosProventos: $e');
+      LoggerService.info('Erro getProximosProventos: $e');
       return [];
     }
   }
@@ -93,7 +94,7 @@ class SupabaseQueries {
       }
       return {};
     } catch (e) {
-      debugPrint('Erro getRentabilidadeCarteira: $e');
+      LoggerService.info('Erro getRentabilidadeCarteira: $e');
       return {};
     }
   }
@@ -122,7 +123,7 @@ class SupabaseQueries {
       }
       return [];
     } catch (e) {
-      debugPrint('Erro getSaldoPeriodo: $e');
+      LoggerService.info('Erro getSaldoPeriodo: $e');
       return [];
     }
   }
@@ -151,7 +152,7 @@ class SupabaseQueries {
       }
       return [];
     } catch (e) {
-      debugPrint('Erro getTotalProventos: $e');
+      LoggerService.info('Erro getTotalProventos: $e');
       return [];
     }
   }
@@ -173,7 +174,7 @@ class SupabaseQueries {
       }
       return [];
     } catch (e) {
-      debugPrint('Erro getEvolucaoPatrimonio: $e');
+      LoggerService.info('Erro getEvolucaoPatrimonio: $e');
       return [];
     }
   }
@@ -200,7 +201,7 @@ class SupabaseQueries {
       }
       return [];
     } catch (e) {
-      debugPrint('Erro getEvolucaoMensal: $e');
+      LoggerService.info('Erro getEvolucaoMensal: $e');
       return [];
     }
   }
@@ -229,7 +230,7 @@ class SupabaseQueries {
       }
       return {};
     } catch (e) {
-      debugPrint('Erro getResumoMes: $e');
+      LoggerService.info('Erro getResumoMes: $e');
       return {};
     }
   }
@@ -262,8 +263,9 @@ class SupabaseQueries {
       }
       return [];
     } catch (e) {
-      debugPrint('Erro getGastosCategoriaPeriodo: $e');
+      LoggerService.info('Erro getGastosCategoriaPeriodo: $e');
       return [];
     }
   }
 }
+

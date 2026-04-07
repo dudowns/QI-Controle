@@ -32,3 +32,4 @@ class SupabaseDatabaseService {
     return response.isNotEmpty ? response.first : {};
   }
 }
+

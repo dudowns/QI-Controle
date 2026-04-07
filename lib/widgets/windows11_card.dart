@@ -37,7 +37,7 @@ class Windows11Card extends StatelessWidget {
             border: hasBorder ? Border.all(color: Colors.grey.shade200) : null,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05 * elevation),
+                color: Colors.black.withValues(alpha:0.05 * elevation),
                 blurRadius: 8 * elevation,
                 offset: Offset(0, 2 * elevation),
               ),
@@ -82,7 +82,7 @@ class Windows11GradientCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(borderRadius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha:0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -92,3 +92,4 @@ class Windows11GradientCard extends StatelessWidget {
     );
   }
 }
+

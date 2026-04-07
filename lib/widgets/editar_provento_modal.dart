@@ -169,7 +169,7 @@ class _EditarProventoModalState extends State<EditarProventoModal> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.delete, color: Colors.red),
@@ -268,7 +268,7 @@ class _EditarProventoModalState extends State<EditarProventoModal> {
               const Spacer(),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha:0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: IconButton(
@@ -582,3 +582,4 @@ class _EditarProventoModalState extends State<EditarProventoModal> {
     );
   }
 }
+

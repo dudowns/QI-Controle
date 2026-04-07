@@ -142,3 +142,4 @@ class AppColors {
         : const Color(0xFF1E1E1E);
   }
 }
+

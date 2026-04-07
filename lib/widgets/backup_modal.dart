@@ -106,7 +106,7 @@ class _BackupModalState extends State<BackupModal> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
+                color: Colors.orange.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.restore, color: Colors.orange),
@@ -133,16 +133,16 @@ class _BackupModalState extends State<BackupModal> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.05),
+                color: Colors.orange.withValues(alpha:0.05),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                border: Border.all(color: Colors.orange.withValues(alpha:0.3)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
+                      color: Colors.orange.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.backup, color: Colors.orange),
@@ -187,9 +187,9 @@ class _BackupModalState extends State<BackupModal> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.05),
+                color: Colors.red.withValues(alpha:0.05),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.withOpacity(0.2)),
+                border: Border.all(color: Colors.red.withValues(alpha:0.2)),
               ),
               child: const Row(
                 children: [
@@ -296,7 +296,7 @@ class _BackupModalState extends State<BackupModal> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.delete, color: Colors.red),
@@ -319,7 +319,7 @@ class _BackupModalState extends State<BackupModal> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.muted(context).withOpacity(0.1),
+                color: AppColors.muted(context).withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -481,7 +481,7 @@ class _BackupModalState extends State<BackupModal> {
                                         color: isMaisRecente
                                             ? null
                                             : AppColors.muted(context)
-                                                .withOpacity(0.1),
+                                                .withValues(alpha:0.1),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Icon(
@@ -560,7 +560,7 @@ class _BackupModalState extends State<BackupModal> {
                                         Container(
                                           decoration: BoxDecoration(
                                             color:
-                                                Colors.green.withOpacity(0.1),
+                                                Colors.green.withValues(alpha:0.1),
                                             borderRadius:
                                                 BorderRadius.circular(8),
                                           ),
@@ -576,7 +576,7 @@ class _BackupModalState extends State<BackupModal> {
                                         // Excluir
                                         Container(
                                           decoration: BoxDecoration(
-                                            color: Colors.red.withOpacity(0.1),
+                                            color: Colors.red.withValues(alpha:0.1),
                                             borderRadius:
                                                 BorderRadius.circular(8),
                                           ),
@@ -604,3 +604,4 @@ class _BackupModalState extends State<BackupModal> {
     );
   }
 }
+

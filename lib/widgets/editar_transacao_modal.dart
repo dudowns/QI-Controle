@@ -150,7 +150,7 @@ class _EditarTransacaoModalState extends State<EditarTransacaoModal> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.delete, color: Colors.red),
@@ -249,7 +249,7 @@ class _EditarTransacaoModalState extends State<EditarTransacaoModal> {
               const Spacer(),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha:0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: IconButton(
@@ -284,7 +284,7 @@ class _EditarTransacaoModalState extends State<EditarTransacaoModal> {
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: AppColors.muted(context).withOpacity(0.1),
+                      color: AppColors.muted(context).withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Row(
@@ -564,7 +564,7 @@ class _EditarTransacaoModalState extends State<EditarTransacaoModal> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
+          color: isSelected ? color.withValues(alpha:0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(30),
           border: Border.all(
             color: isSelected ? color : Colors.transparent,
@@ -590,3 +590,4 @@ class _EditarTransacaoModalState extends State<EditarTransacaoModal> {
     );
   }
 }
+

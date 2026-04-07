@@ -1,7 +1,7 @@
+import '../services/logger_service.dart';
 // lib/screens/transacoes_screen.dart
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../services/supabase_service.dart';
+import '../database/db_helper.dart';
 import '../models/transacao_model.dart';
 import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
@@ -21,16 +21,10 @@ class TransacoesScreen extends StatefulWidget {
 }
 
 class _TransacoesScreenState extends State<TransacoesScreen> {
-  late final SupabaseService _supabaseService;
+  final DBHelper _dbHelper = DBHelper();
 
   List<Transacao> _transacoes = [];
   bool _loading = true;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _supabaseService = Provider.of<SupabaseService>(context, listen: false);
-  }
 
   @override
   void initState() {
@@ -41,14 +35,25 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
   Future<void> _carregarTransacoes() async {
     setState(() => _loading = true);
     try {
+      final db = await _dbHelper.database;
+      final query = db.query(
+        'transacoes',
+        orderBy: 'data DESC',
+      );
+
       if (widget.ticker != null) {
-        _transacoes =
-            await _supabaseService.getTransacoesByTicker(widget.ticker!);
+        final transacoes = await query;
+        _transacoes = transacoes
+            .where((t) => t['ticker'] == widget.ticker)
+            .map((json) => Transacao.fromMap(json))
+            .toList();
       } else {
-        _transacoes = await _supabaseService.getTransacoes();
+        final transacoes = await query;
+        _transacoes =
+            transacoes.map((json) => Transacao.fromMap(json)).toList();
       }
     } catch (e) {
-      debugPrint('Erro ao carregar transações: $e');
+      LoggerService.info('Erro ao carregar transações: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -62,8 +67,7 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
     }
   }
 
-  /// Navega de volta para a tela de investimentos
-  void _voltarParaInvestimentos() {
+  void _voltar() {
     Navigator.pop(context);
   }
 
@@ -72,11 +76,10 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        // 🔥 BOTÃO DE VOLTAR ESTILIZADO
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, size: 18),
-          onPressed: _voltarParaInvestimentos,
-          tooltip: 'Voltar para Investimentos',
+          onPressed: _voltar,
+          tooltip: 'Voltar',
         ),
         title: Text(
           widget.ticker != null
@@ -130,6 +133,16 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
                           color: AppColors.textSecondary(context),
                         ),
                       ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: _voltar,
+                        icon: const Icon(Icons.arrow_back),
+                        label: const Text('Voltar para Investimentos'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
                     ],
                   ),
                 )
@@ -144,7 +157,6 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
                     final taxa = t.taxa ?? 0;
                     final valorTotal = quantidade * preco + taxa;
 
-                    // 🔥 CARD SEM BOTÕES DE EDITAR/EXCLUIR
                     return _buildTransacaoCard(
                       transacao: t,
                       isCompra: isCompra,
@@ -158,7 +170,6 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
     );
   }
 
-  /// Constrói o card da transação (sem botões de ação)
   Widget _buildTransacaoCard({
     required Transacao transacao,
     required bool isCompra,
@@ -181,7 +192,7 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: cor.withOpacity(0.3),
+            color: cor.withValues(alpha:0.3),
             width: 1,
           ),
         ),
@@ -191,7 +202,7 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: cor.withOpacity(0.1),
+              color: cor.withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -271,10 +282,9 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
               ],
             ),
           ),
-          // 🔥 SEM onTap para não abrir modal de edição
-          // 🔥 SEM botões de editar/excluir
         ),
       ),
     );
   }
 }
+

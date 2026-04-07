@@ -43,13 +43,13 @@ class ModernCard extends StatelessWidget {
             boxShadow: hasShadow
                 ? [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.03),
+                      color: Colors.black.withValues(alpha:0.03),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                       spreadRadius: 1,
                     ),
                     BoxShadow(
-                      color: const Color(0xFF9C27B0).withOpacity(
+                      color: const Color(0xFF9C27B0).withValues(alpha:
                           0.02), // ✅ CORRIGIDO: usando primary direto
                       blurRadius: 20,
                       offset: const Offset(0, -2),
@@ -63,3 +63,4 @@ class ModernCard extends StatelessWidget {
     );
   }
 }
+

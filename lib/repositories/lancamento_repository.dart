@@ -362,3 +362,4 @@ class LancamentoRepository with LoadingMixin {
     return AppCategories.receitas;
   }
 }
+

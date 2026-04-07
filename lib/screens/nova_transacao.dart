@@ -308,3 +308,4 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
     );
   }
 }
+

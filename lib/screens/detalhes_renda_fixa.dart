@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/renda_fixa_model.dart';
 import '../services/renda_fixa_diaria.dart';
 import '../utils/currency_formatter.dart';
@@ -19,8 +18,6 @@ class DetalhesRendaFixaScreen extends StatefulWidget {
 }
 
 class _DetalhesRendaFixaScreenState extends State<DetalhesRendaFixaScreen> {
-  final SupabaseClient _supabase = Supabase.instance.client;
-
   late List<Map<String, dynamic>> _evolucao;
   late double _valorHoje;
   late double _rendimentoHoje;
@@ -120,8 +117,8 @@ class _DetalhesRendaFixaScreenState extends State<DetalhesRendaFixaScreen> {
                             horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                             color: _rendimentoHoje >= 0
-                                ? Colors.green.withOpacity(0.2)
-                                : Colors.red.withOpacity(0.2),
+                                ? Colors.green.withValues(alpha: 0.2)
+                                : Colors.red.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(20)),
                         child: Row(
                           children: [
@@ -146,7 +143,7 @@ class _DetalhesRendaFixaScreenState extends State<DetalhesRendaFixaScreen> {
                       const SizedBox(width: 12),
                       Text('desde a aplicação',
                           style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
+                              color: Colors.white.withValues(alpha: 0.7),
                               fontSize: 12)),
                     ],
                   ),
@@ -161,7 +158,8 @@ class _DetalhesRendaFixaScreenState extends State<DetalhesRendaFixaScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.black.withOpacity(0.02), blurRadius: 8)
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 8)
                   ]),
               child: Column(
                 children: [
@@ -213,7 +211,8 @@ class _DetalhesRendaFixaScreenState extends State<DetalhesRendaFixaScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                          color: Colors.black.withOpacity(0.02), blurRadius: 8)
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 8)
                     ]),
                 child: LineChart(
                   LineChartData(
@@ -257,7 +256,8 @@ class _DetalhesRendaFixaScreenState extends State<DetalhesRendaFixaScreen> {
                         barWidth: 3,
                         dotData: const FlDotData(show: false),
                         belowBarData: BarAreaData(
-                            show: true, color: primaryPurple.withOpacity(0.1)),
+                            show: true,
+                            color: primaryPurple.withValues(alpha: 0.1)),
                       ),
                     ],
                   ),
@@ -351,7 +351,8 @@ class _DetalhesRendaFixaScreenState extends State<DetalhesRendaFixaScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4)
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02), blurRadius: 4)
           ]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -359,7 +360,7 @@ class _DetalhesRendaFixaScreenState extends State<DetalhesRendaFixaScreen> {
           Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                  color: cor.withOpacity(0.1),
+                  color: cor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6)),
               child: Icon(icon, color: cor, size: 14)),
           const Spacer(),

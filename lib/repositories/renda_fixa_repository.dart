@@ -1,3 +1,4 @@
+import '../services/logger_service.dart';
 // lib/repositories/renda_fixa_repository.dart
 import 'package:flutter/foundation.dart';
 import '../database/db_helper.dart';
@@ -58,7 +59,7 @@ class RendaFixaRepository with LoadingMixin {
           try {
             return RendaFixaModel.fromJson(json);
           } catch (e) {
-            debugPrint('❌ Erro ao converter renda fixa: $e');
+            LoggerService.info('❌ Erro ao converter renda fixa: $e');
             return null;
           }
         })
@@ -251,3 +252,4 @@ class RendaFixaRepository with LoadingMixin {
     return todos.where((inv) => inv.dataVencimento.isBefore(hoje)).toList();
   }
 }
+

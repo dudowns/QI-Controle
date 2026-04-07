@@ -127,8 +127,8 @@ class _BackupScreenState extends State<BackupScreen> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: isMaisRecente
-                        ? AppColors.primary.withOpacity(0.1)
-                        : AppColors.muted(context).withOpacity(0.1),
+                        ? AppColors.primary.withValues(alpha:0.1)
+                        : AppColors.muted(context).withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -183,7 +183,7 @@ class _BackupScreenState extends State<BackupScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
+                color: Colors.orange.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.restore, color: Colors.orange),
@@ -210,16 +210,16 @@ class _BackupScreenState extends State<BackupScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.05),
+                color: Colors.orange.withValues(alpha:0.05),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                border: Border.all(color: Colors.orange.withValues(alpha:0.3)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
+                      color: Colors.orange.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.backup, color: Colors.orange),
@@ -264,9 +264,9 @@ class _BackupScreenState extends State<BackupScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.05),
+                color: Colors.red.withValues(alpha:0.05),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.withOpacity(0.2)),
+                border: Border.all(color: Colors.red.withValues(alpha:0.2)),
               ),
               child: const Row(
                 children: [
@@ -375,7 +375,7 @@ class _BackupScreenState extends State<BackupScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.delete, color: Colors.red),
@@ -398,7 +398,7 @@ class _BackupScreenState extends State<BackupScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.muted(context).withOpacity(0.1),
+                color: AppColors.muted(context).withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -522,7 +522,7 @@ class _BackupScreenState extends State<BackupScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary.withOpacity(0.1),
+                                    color: AppColors.primary.withValues(alpha:0.1),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: const Icon(
@@ -616,7 +616,7 @@ class _BackupScreenState extends State<BackupScreen> {
                                   height: 120,
                                   decoration: BoxDecoration(
                                     color: AppColors.muted(context)
-                                        .withOpacity(0.1),
+                                        .withValues(alpha:0.1),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(
@@ -676,7 +676,7 @@ class _BackupScreenState extends State<BackupScreen> {
                                             color: isMaisRecente
                                                 ? null
                                                 : AppColors.muted(context)
-                                                    .withOpacity(0.1),
+                                                    .withValues(alpha:0.1),
                                             borderRadius:
                                                 BorderRadius.circular(12),
                                           ),
@@ -727,7 +727,7 @@ class _BackupScreenState extends State<BackupScreen> {
                                                       ),
                                                       decoration: BoxDecoration(
                                                         color: AppColors.primary
-                                                            .withOpacity(0.1),
+                                                            .withValues(alpha:0.1),
                                                         borderRadius:
                                                             BorderRadius
                                                                 .circular(12),
@@ -788,7 +788,7 @@ class _BackupScreenState extends State<BackupScreen> {
                                         // Botão EXCLUIR
                                         Container(
                                           decoration: BoxDecoration(
-                                            color: Colors.red.withOpacity(0.1),
+                                            color: Colors.red.withValues(alpha:0.1),
                                             borderRadius:
                                                 BorderRadius.circular(8),
                                           ),
@@ -817,3 +817,4 @@ class _BackupScreenState extends State<BackupScreen> {
     );
   }
 }
+

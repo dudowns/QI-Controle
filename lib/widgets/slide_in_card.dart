@@ -77,3 +77,4 @@ class _SlideInCardState extends State<SlideInCard>
     );
   }
 }
+

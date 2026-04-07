@@ -143,3 +143,4 @@ class Lancamento {
         data.isBefore(DateTime.now().add(const Duration(days: 365)));
   }
 }
+

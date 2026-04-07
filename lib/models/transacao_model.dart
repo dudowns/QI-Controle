@@ -59,3 +59,4 @@ class Transacao {
   factory Transacao.fromJson(Map<String, dynamic> json) =>
       Transacao.fromMap(json);
 }
+

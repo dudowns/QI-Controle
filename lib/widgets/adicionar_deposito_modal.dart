@@ -202,10 +202,10 @@ class _AdicionarDepositoModalState extends State<AdicionarDepositoModal> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(12),
                     border:
-                        Border.all(color: AppColors.primary.withOpacity(0.3)),
+                        Border.all(color: AppColors.primary.withValues(alpha:0.3)),
                   ),
                   child: Column(
                     children: [
@@ -357,3 +357,4 @@ class _AdicionarDepositoModalState extends State<AdicionarDepositoModal> {
     );
   }
 }
+

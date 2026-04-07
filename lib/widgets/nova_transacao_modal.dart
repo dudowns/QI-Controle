@@ -179,7 +179,7 @@ class _NovaTransacaoModalState extends State<NovaTransacaoModal> {
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: AppColors.muted(context).withOpacity(0.1),
+                      color: AppColors.muted(context).withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Row(
@@ -458,7 +458,7 @@ class _NovaTransacaoModalState extends State<NovaTransacaoModal> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
+          color: isSelected ? color.withValues(alpha:0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(30),
           border: Border.all(
             color: isSelected ? color : Colors.transparent,
@@ -484,3 +484,4 @@ class _NovaTransacaoModalState extends State<NovaTransacaoModal> {
     );
   }
 }
+

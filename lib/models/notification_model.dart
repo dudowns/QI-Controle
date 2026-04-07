@@ -62,3 +62,4 @@ extension AppNotificationExtension on AppNotification {
         valor: valor,
       );
 }
+

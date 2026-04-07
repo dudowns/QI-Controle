@@ -88,7 +88,7 @@ class _GraficoAtivoScreenState extends State<GraficoAtivoScreen> {
                     foregroundColor:
                         isSelected ? const Color(0xFF6A1B9A) : Colors.grey,
                     backgroundColor: isSelected
-                        ? const Color(0xFF6A1B9A).withOpacity(0.1)
+                        ? const Color(0xFF6A1B9A).withValues(alpha:0.1)
                         : Colors.transparent,
                   ),
                   child: Text(periodo),
@@ -159,8 +159,8 @@ class _GraficoAtivoScreenState extends State<GraficoAtivoScreen> {
                                   ),
                                   decoration: BoxDecoration(
                                     color: _variacaoTotal >= 0
-                                        ? Colors.green.withOpacity(0.2)
-                                        : Colors.red.withOpacity(0.2),
+                                        ? Colors.green.withValues(alpha:0.2)
+                                        : Colors.red.withValues(alpha:0.2),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Row(
@@ -191,7 +191,7 @@ class _GraficoAtivoScreenState extends State<GraficoAtivoScreen> {
                                 Text(
                                   'desde a compra',
                                   style: TextStyle(
-                                    color: Colors.white.withOpacity(0.7),
+                                    color: Colors.white.withValues(alpha:0.7),
                                     fontSize: 12,
                                   ),
                                 ),
@@ -223,7 +223,7 @@ class _GraficoAtivoScreenState extends State<GraficoAtivoScreen> {
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
+                              color: Colors.black.withValues(alpha:0.02),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -303,7 +303,7 @@ class _GraficoAtivoScreenState extends State<GraficoAtivoScreen> {
                                 belowBarData: BarAreaData(
                                   show: true,
                                   color:
-                                      const Color(0xFF6A1B9A).withOpacity(0.1),
+                                      const Color(0xFF6A1B9A).withValues(alpha:0.1),
                                 ),
                               ),
                               if (_precoMedio > 0)
@@ -332,7 +332,7 @@ class _GraficoAtivoScreenState extends State<GraficoAtivoScreen> {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
+                              color: Colors.black.withValues(alpha:0.02),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -454,3 +454,4 @@ class _GraficoAtivoScreenState extends State<GraficoAtivoScreen> {
     return 100;
   }
 }
+

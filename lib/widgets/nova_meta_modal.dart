@@ -245,7 +245,7 @@ class _NovaMetaModalState extends State<NovaMetaModal> {
                             margin: const EdgeInsets.only(right: 12),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? (opcao['color'] as Color).withOpacity(0.2)
+                                  ? (opcao['color'] as Color).withValues(alpha:0.2)
                                   : AppColors.muted(context),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
@@ -496,3 +496,4 @@ class _NovaMetaModalState extends State<NovaMetaModal> {
     }
   }
 }
+

@@ -38,7 +38,7 @@ class GradientButton extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: (gradientStart ?? AppColors.primary)
-                .withOpacity(0.3), // 🔥 CORRIGIDO!
+                .withValues(alpha:0.3), // 🔥 CORRIGIDO!
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -84,3 +84,4 @@ class GradientButton extends StatelessWidget {
     );
   }
 }
+

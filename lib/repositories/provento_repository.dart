@@ -207,7 +207,7 @@ class ProventoRepository with LoadingMixin {
             ticker: p.ticker,
             dataPagamento: p.dataPagamento,
             valor: p.valorPorCota,
-            id: p.id!,
+            id: int.parse(p.id!),
           );
         } catch (e) {
           debugPrint('⚠️ Erro ao agendar notificação para ${p.ticker}: $e');

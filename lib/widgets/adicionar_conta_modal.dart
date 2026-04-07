@@ -23,7 +23,7 @@ class AdicionarContaModal extends StatefulWidget {
     return showDialog(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (context) => Dialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -50,7 +50,6 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
   bool _isLoading = false;
 
   final List<int> _dias = List.generate(31, (i) => i + 1);
-  final List<String> _tipos = ['mensal', 'parcelada'];
   List<String> get _categorias => _repository.getCategorias();
 
   @override
@@ -148,7 +147,7 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.2),
+              color: Colors.black.withValues(alpha: 0.2),
               blurRadius: 20,
               offset: const Offset(0, 10))
         ],
@@ -180,7 +179,7 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
                               ? 'Editar conta'
                               : 'Adicionar nova conta',
                           style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
+                              color: Colors.white.withValues(alpha: 0.7),
                               fontSize: 13)),
                     ],
                   ),
@@ -190,7 +189,7 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         shape: BoxShape.circle),
                     child:
                         const Icon(Icons.close, color: Colors.white, size: 18),
@@ -417,7 +416,7 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primary.withOpacity(0.1)
+              ? AppColors.primary.withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(

@@ -28,7 +28,7 @@ class NovoInvestimentoDialog extends StatefulWidget {
     return showDialog(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha:0.5),
       builder: (context) => Dialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -326,7 +326,7 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.2),
+              color: Colors.black.withValues(alpha:0.2),
               blurRadius: 20,
               offset: const Offset(0, 10))
         ],
@@ -358,7 +358,7 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
                               ? 'Editar investimento'
                               : 'Adicionar novo investimento',
                           style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
+                              color: Colors.white.withValues(alpha:0.7),
                               fontSize: 13)),
                     ],
                   ),
@@ -368,7 +368,7 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha:0.2),
                         shape: BoxShape.circle),
                     child:
                         const Icon(Icons.close, color: Colors.white, size: 18),
@@ -590,10 +590,10 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.05),
+                          color: AppColors.primary.withValues(alpha:0.05),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: AppColors.primary.withOpacity(0.2)),
+                              color: AppColors.primary.withValues(alpha:0.2)),
                         ),
                         child: Column(
                           children: [
@@ -679,3 +679,4 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
     );
   }
 }
+

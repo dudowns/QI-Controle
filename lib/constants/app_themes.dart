@@ -36,7 +36,7 @@ class AppThemes {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: const Color(0xFFDEE2E6).withOpacity(0.5)),
+        side: BorderSide(color: const Color(0xFFDEE2E6).withValues(alpha:0.5)),
       ),
       color: Colors.white,
     ),
@@ -175,7 +175,7 @@ class AppThemes {
 
     // Divisores
     dividerTheme: DividerThemeData(
-      color: const Color(0xFFDEE2E6).withOpacity(0.5),
+      color: const Color(0xFFDEE2E6).withValues(alpha:0.5),
       thickness: 1,
       space: 24,
     ),
@@ -243,7 +243,7 @@ class AppThemes {
       }),
       trackColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return AppColors.primary.withOpacity(0.5);
+          return AppColors.primary.withValues(alpha:0.5);
         }
         return const Color(0xFFDEE2E6);
       }),
@@ -418,3 +418,4 @@ class AppThemes {
     ),
   );
 }
+

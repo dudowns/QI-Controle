@@ -58,11 +58,11 @@ class _SplashScreenState extends State<SplashScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha:0.2),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.white.withOpacity(0.3),
+                        color: Colors.white.withValues(alpha:0.3),
                         blurRadius: 30,
                         spreadRadius: 5,
                       ),
@@ -112,3 +112,4 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 }
+

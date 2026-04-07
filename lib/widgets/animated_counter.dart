@@ -77,3 +77,4 @@ class _AnimatedCounterState extends State<AnimatedCounter>
     super.dispose();
   }
 }
+

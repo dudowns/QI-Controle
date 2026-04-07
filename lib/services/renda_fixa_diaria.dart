@@ -153,3 +153,4 @@ class RendaFixaDiaria {
     return rendimento * aliquota;
   }
 }
+

@@ -1,3 +1,4 @@
+import '../services/logger_service.dart';
 // lib/repositories/conta_repository.dart
 import '../database/db_helper.dart';
 import '../models/conta_model.dart';
@@ -183,9 +184,9 @@ class ContaRepository with LoadingMixin {
             where: 'id = ?',
             whereArgs: [lancamentoId],
           );
-          print('🗑️ Lançamento deletado: ID $lancamentoId');
+          LoggerService.info('🗑️ Lançamento deletado: ID $lancamentoId');
         } else {
-          print('⚠️ Nenhum lancamento_id encontrado para este pagamento');
+          LoggerService.info('⚠️ Nenhum lancamento_id encontrado para este pagamento');
         }
 
         // Marcar a conta como pendente
@@ -206,7 +207,7 @@ class ContaRepository with LoadingMixin {
 
         return Result.success(true);
       } catch (e) {
-        print('❌ Erro ao desfazer pagamento: $e');
+        LoggerService.info('❌ Erro ao desfazer pagamento: $e');
         return Result.failure('❌ Erro ao desfazer pagamento: $e');
       }
     });
@@ -361,3 +362,4 @@ class ContaRepository with LoadingMixin {
     ];
   }
 }
+

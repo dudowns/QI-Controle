@@ -1,3 +1,4 @@
+import '../services/logger_service.dart';
 // lib/repositories/dashboard_repository.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
@@ -16,7 +17,7 @@ class DashboardRepository {
         'p_data': data.toIso8601String().split('T')[0],
       });
 
-      debugPrint('📊 Resumo do mês: $response');
+      LoggerService.info('📊 Resumo do mês: $response');
 
       if (response == null) {
         return {
@@ -40,7 +41,7 @@ class DashboardRepository {
         'totalLancamentos': _toInt(dados['total_lancamentos']),
       };
     } catch (e) {
-      debugPrint('❌ Erro getResumoMes: $e');
+      LoggerService.info('❌ Erro getResumoMes: $e');
       return {
         'receitas': 0.0,
         'despesas': 0.0,
@@ -75,7 +76,7 @@ class DashboardRepository {
         };
       }).toList();
     } catch (e) {
-      debugPrint('❌ Erro getGastosPorCategoria: $e');
+      LoggerService.info('❌ Erro getGastosPorCategoria: $e');
       return [];
     }
   }
@@ -102,7 +103,7 @@ class DashboardRepository {
         };
       }).toList();
     } catch (e) {
-      debugPrint('❌ Erro getEvolucaoMensal: $e');
+      LoggerService.info('❌ Erro getEvolucaoMensal: $e');
       return [];
     }
   }
@@ -137,10 +138,11 @@ class DashboardRepository {
           .eq('user_id', userId)
           .order('data', ascending: false);
 
-      return response ?? [];
+      return response ;
     } catch (e) {
-      debugPrint('❌ Erro getAllLancamentos: $e');
+      LoggerService.info('❌ Erro getAllLancamentos: $e');
       return [];
     }
   }
 }
+

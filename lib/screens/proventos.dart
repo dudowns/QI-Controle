@@ -1,9 +1,13 @@
+import '../services/logger_service.dart';
 // lib/screens/proventos.dart
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../database/db_helper.dart';
+import '../models/provento_model.dart';
+import '../models/investimento_model.dart';
 import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
+import '../widgets/app_modals.dart';
 
 class ProventosScreen extends StatefulWidget {
   const ProventosScreen({super.key});
@@ -13,9 +17,9 @@ class ProventosScreen extends StatefulWidget {
 }
 
 class _ProventosScreenState extends State<ProventosScreen> {
-  final SupabaseClient _supabase = Supabase.instance.client;
+  final DBHelper _dbHelper = DBHelper();
 
-  List<Map<String, dynamic>> _proventos = [];
+  List<Provento> _proventos = [];
   List<String> _tickersDisponiveis = [];
   bool _carregando = true;
   String _filtroPeriodo = '12M';
@@ -27,12 +31,6 @@ class _ProventosScreenState extends State<ProventosScreen> {
   double _mediaMensal = 0;
   double _projetadoProximoMes = 0;
 
-  String get _userId {
-    final user = _supabase.auth.currentUser;
-    if (user == null) throw Exception('Usuário não logado');
-    return user.id;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -43,21 +41,17 @@ class _ProventosScreenState extends State<ProventosScreen> {
   Future<void> _carregarDados() async {
     setState(() => _carregando = true);
     try {
-      final response = await _supabase
-          .from('proventos')
-          .select()
-          .eq('user_id', _userId)
-          .order('data_pagamento', ascending: false);
-
-      _proventos = List<Map<String, dynamic>>.from(response);
+      final dados = await _dbHelper.getAllProventos();
+      _proventos = dados.map((json) => Provento.fromJson(json)).toList();
       _calcularEstatisticas();
     } catch (e) {
-      debugPrint('❌ Erro ao carregar proventos: $e');
+      LoggerService.info('❌ Erro ao carregar proventos: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Erro ao carregar: $e'),
-              backgroundColor: AppColors.error),
+            content: Text('Erro ao carregar: $e'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {
@@ -67,20 +61,12 @@ class _ProventosScreenState extends State<ProventosScreen> {
 
   Future<void> _carregarTickers() async {
     try {
-      final response = await _supabase
-          .from('investimentos')
-          .select('ticker')
-          .eq('user_id', _userId);
-
+      final dados = await _dbHelper.getAllInvestimentos();
       _tickersDisponiveis =
-          response.map((inv) => inv['ticker'] as String).toSet().toList();
-
-      if (_tickersDisponiveis.isEmpty) {
-        _tickersDisponiveis = ['PETR4', 'VALE3', 'ITUB4', 'BBDC4', 'ABEV3'];
-      }
+          dados.map((inv) => inv['ticker'] as String).toSet().toList();
     } catch (e) {
-      debugPrint('❌ Erro ao carregar tickers: $e');
-      _tickersDisponiveis = ['PETR4', 'VALE3', 'ITUB4', 'BBDC4', 'ABEV3'];
+      LoggerService.info('❌ Erro ao carregar tickers: $e');
+      _tickersDisponiveis = [];
     }
   }
 
@@ -110,16 +96,15 @@ class _ProventosScreenState extends State<ProventosScreen> {
     }
 
     for (var p in _proventos) {
-      final dataPagamento = DateTime.parse(p['data_pagamento']);
-      if (dataPagamento.isAfter(dataLimite) || _filtroPeriodo == 'TODOS') {
-        final total = (p['total_recebido'] as num).toDouble();
-        _totalPeriodo += total;
+      if (p.dataPagamento.isAfter(dataLimite) || _filtroPeriodo == 'TODOS') {
+        _totalPeriodo += p.totalRecebido;
 
-        final chaveMes = _formatarMes(dataPagamento);
-        _proventosPorMes[chaveMes] = (_proventosPorMes[chaveMes] ?? 0) + total;
+        final chaveMes = _formatarMes(p.dataPagamento);
+        _proventosPorMes[chaveMes] =
+            (_proventosPorMes[chaveMes] ?? 0) + p.totalRecebido;
 
-        _proventosPorAtivo[p['ticker']] =
-            (_proventosPorAtivo[p['ticker']] ?? 0) + total;
+        _proventosPorAtivo[p.ticker] =
+            (_proventosPorAtivo[p.ticker] ?? 0) + p.totalRecebido;
       }
     }
 
@@ -131,9 +116,8 @@ class _ProventosScreenState extends State<ProventosScreen> {
     int count = 0;
 
     for (var p in _proventos) {
-      final dataPagamento = DateTime.parse(p['data_pagamento']);
-      if (dataPagamento.isAfter(tresMesesAtras)) {
-        somaUltimos3 += (p['total_recebido'] as num).toDouble();
+      if (p.dataPagamento.isAfter(tresMesesAtras)) {
+        somaUltimos3 += p.totalRecebido;
         count++;
       }
     }
@@ -210,431 +194,126 @@ class _ProventosScreenState extends State<ProventosScreen> {
   }
 
   Future<void> _adicionarProvento() async {
-    String? tickerSelecionado =
-        _tickersDisponiveis.isNotEmpty ? _tickersDisponiveis.first : null;
-    final valorCtrl = TextEditingController();
-    final quantidadeCtrl = TextEditingController();
-    DateTime dataPagamento = DateTime.now();
-    String tipoProvento = 'Dividendo';
-
     if (_tickersDisponiveis.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Primeiro adicione um investimento'),
-            backgroundColor: Colors.orange),
+          content: Text('Primeiro adicione um investimento'),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
 
-    showModalBottomSheet(
+    final resultado = await AppModals.mostrarModalProvento(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateModal) {
-          return Container(
-            height: MediaQuery.of(context).size.height * 0.7,
-            decoration: BoxDecoration(
-              color: AppColors.surface(context),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(20)),
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      const Text('Adicionar Provento',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
-                        DropdownButtonFormField<String>(
-                          value: tickerSelecionado,
-                          decoration: const InputDecoration(
-                              labelText: 'Ativo', border: OutlineInputBorder()),
-                          items: _tickersDisponiveis.map((ticker) {
-                            return DropdownMenuItem(
-                                value: ticker, child: Text(ticker));
-                          }).toList(),
-                          onChanged: (value) =>
-                              setStateModal(() => tickerSelecionado = value),
-                        ),
-                        const SizedBox(height: 16),
-                        DropdownButtonFormField<String>(
-                          value: tipoProvento,
-                          decoration: const InputDecoration(
-                              labelText: 'Tipo', border: OutlineInputBorder()),
-                          items: const [
-                            DropdownMenuItem(
-                                value: 'Dividendo', child: Text('Dividendo')),
-                            DropdownMenuItem(value: 'JCP', child: Text('JCP')),
-                            DropdownMenuItem(
-                                value: 'Rendimento', child: Text('Rendimento')),
-                          ],
-                          onChanged: (value) =>
-                              setStateModal(() => tipoProvento = value!),
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: valorCtrl,
-                          decoration: const InputDecoration(
-                              labelText: 'Valor por cota (R\$)',
-                              hintText: '0,00',
-                              border: OutlineInputBorder()),
-                          keyboardType: TextInputType.number,
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: quantidadeCtrl,
-                          decoration: const InputDecoration(
-                              labelText: 'Quantidade',
-                              hintText: '1',
-                              border: OutlineInputBorder()),
-                          keyboardType: TextInputType.number,
-                        ),
-                        const SizedBox(height: 16),
-                        InkWell(
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: dataPagamento,
-                              firstDate: DateTime(2020),
-                              lastDate:
-                                  DateTime.now().add(const Duration(days: 365)),
-                            );
-                            if (picked != null)
-                              setStateModal(() => dataPagamento = picked);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 16),
-                            decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8)),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.calendar_today),
-                                const SizedBox(width: 12),
-                                Text(Formatador.data(dataPagamento)),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: () async {
-                              if (tickerSelecionado == null ||
-                                  valorCtrl.text.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content:
-                                          Text('Preencha todos os campos!')),
-                                );
-                                return;
-                              }
-                              Navigator.pop(context);
-                              final valor = double.parse(
-                                  valorCtrl.text.replaceAll(',', '.'));
-                              final quantidade = quantidadeCtrl.text.isNotEmpty
-                                  ? double.parse(quantidadeCtrl.text)
-                                  : 1;
-                              final total = valor * quantidade;
-                              try {
-                                await _supabase.from('proventos').insert({
-                                  'ticker': tickerSelecionado,
-                                  'tipo_provento': tipoProvento,
-                                  'valor_por_cota': valor,
-                                  'quantidade': quantidade,
-                                  'data_pagamento':
-                                      dataPagamento.toIso8601String(),
-                                  'total_recebido': total,
-                                  'user_id': _userId,
-                                });
-                                await _carregarDados();
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                        content: Text('✅ Provento adicionado!'),
-                                        backgroundColor: AppColors.success),
-                                  );
-                                }
-                              } catch (e) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                        content: Text('Erro: $e'),
-                                        backgroundColor: AppColors.error),
-                                  );
-                                }
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary),
-                            child: const Text('SALVAR',
-                                style: TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+      tickersDisponiveis: _tickersDisponiveis,
     );
+
+    if (resultado != null) {
+      final novoProvento = Provento(
+        ticker: resultado['ticker'],
+        tipo: _getTipoProvento(resultado['tipo_provento']),
+        valorPorCota: resultado['valor_por_cota'],
+        quantidade: resultado['quantidade'],
+        dataPagamento: DateTime.parse(resultado['data_pagamento']),
+        dataCom: resultado['data_com'] != null
+            ? DateTime.parse(resultado['data_com'])
+            : null,
+      );
+      await _dbHelper.insertProvento(novoProvento.toJson());
+      await _carregarDados();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Provento adicionado!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
-  Future<void> _editarProvento(Map<String, dynamic> provento) async {
-    final valorCtrl = TextEditingController(
-        text: provento['valor_por_cota'].toString().replaceAll('.', ','));
-    final quantidadeCtrl =
-        TextEditingController(text: provento['quantidade'].toString());
-    DateTime dataPagamento = DateTime.parse(provento['data_pagamento']);
-    String tipoProvento = provento['tipo_provento'] ?? 'Dividendo';
-    final id = provento['id'];
+  TipoProvento _getTipoProvento(String tipo) {
+    switch (tipo) {
+      case 'Dividendo':
+        return TipoProvento.dividendo;
+      case 'JCP':
+        return TipoProvento.jcp;
+      case 'Rendimento':
+        return TipoProvento.rendaFixa;
+      default:
+        return TipoProvento.outros;
+    }
+  }
 
-    showModalBottomSheet(
+  Future<void> _editarProvento(Provento provento) async {
+    final resultado = await AppModals.mostrarModalProvento(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateModal) {
-          return Container(
-            height: MediaQuery.of(context).size.height * 0.7,
-            decoration: BoxDecoration(
-              color: AppColors.surface(context),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(20)),
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      const Text('Editar Provento',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
-                        DropdownButtonFormField<String>(
-                          value: tipoProvento,
-                          decoration: const InputDecoration(
-                              labelText: 'Tipo', border: OutlineInputBorder()),
-                          items: const [
-                            DropdownMenuItem(
-                                value: 'Dividendo', child: Text('Dividendo')),
-                            DropdownMenuItem(value: 'JCP', child: Text('JCP')),
-                            DropdownMenuItem(
-                                value: 'Rendimento', child: Text('Rendimento')),
-                          ],
-                          onChanged: (value) =>
-                              setStateModal(() => tipoProvento = value!),
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: valorCtrl,
-                          decoration: const InputDecoration(
-                              labelText: 'Valor por cota (R\$)',
-                              border: OutlineInputBorder()),
-                          keyboardType: TextInputType.number,
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: quantidadeCtrl,
-                          decoration: const InputDecoration(
-                              labelText: 'Quantidade',
-                              border: OutlineInputBorder()),
-                          keyboardType: TextInputType.number,
-                        ),
-                        const SizedBox(height: 16),
-                        InkWell(
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: dataPagamento,
-                              firstDate: DateTime(2020),
-                              lastDate:
-                                  DateTime.now().add(const Duration(days: 365)),
-                            );
-                            if (picked != null)
-                              setStateModal(() => dataPagamento = picked);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 16),
-                            decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8)),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.calendar_today),
-                                const SizedBox(width: 12),
-                                Text(Formatador.data(dataPagamento)),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () async {
-                                  final confirm = await showDialog<bool>(
-                                    context: context,
-                                    builder: (context) => AlertDialog(
-                                      title: const Text('Excluir'),
-                                      content: Text(
-                                          'Excluir provento de ${provento['ticker']}?'),
-                                      actions: [
-                                        TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, false),
-                                            child: const Text('Cancelar')),
-                                        TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, true),
-                                            child: const Text('Excluir',
-                                                style: TextStyle(
-                                                    color: Colors.red))),
-                                      ],
-                                    ),
-                                  );
-                                  if (confirm == true) {
-                                    Navigator.pop(context);
-                                    try {
-                                      await _supabase
-                                          .from('proventos')
-                                          .delete()
-                                          .eq('id', id);
-                                      await _carregarDados();
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                              content: Text(
-                                                  '🗑️ Provento excluído!'),
-                                              backgroundColor: Colors.orange),
-                                        );
-                                      }
-                                    } catch (e) {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                              content: Text('Erro: $e'),
-                                              backgroundColor: AppColors.error),
-                                        );
-                                      }
-                                    }
-                                  }
-                                },
-                                style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.red),
-                                child: const Text('EXCLUIR'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () async {
-                                  Navigator.pop(context);
-                                  final valor = double.parse(
-                                      valorCtrl.text.replaceAll(',', '.'));
-                                  final quantidade =
-                                      double.parse(quantidadeCtrl.text);
-                                  final total = valor * quantidade;
-                                  try {
-                                    await _supabase.from('proventos').update({
-                                      'tipo_provento': tipoProvento,
-                                      'valor_por_cota': valor,
-                                      'quantidade': quantidade,
-                                      'data_pagamento':
-                                          dataPagamento.toIso8601String(),
-                                      'total_recebido': total,
-                                    }).eq('id', id);
-                                    await _carregarDados();
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                            content:
-                                                Text('✅ Provento atualizado!'),
-                                            backgroundColor: AppColors.success),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                            content: Text('Erro: $e'),
-                                            backgroundColor: AppColors.error),
-                                      );
-                                    }
-                                  }
-                                },
-                                style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary),
-                                child: const Text('ATUALIZAR',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+      provento: provento.toJson(),
+      tickersDisponiveis: _tickersDisponiveis,
+    );
+
+    if (resultado != null) {
+      final proventoAtualizado = Provento(
+        id: provento.id,
+        ticker: resultado['ticker'],
+        tipo: _getTipoProvento(resultado['tipo_provento']),
+        valorPorCota: resultado['valor_por_cota'],
+        quantidade: resultado['quantidade'],
+        dataPagamento: DateTime.parse(resultado['data_pagamento']),
+        dataCom: resultado['data_com'] != null
+            ? DateTime.parse(resultado['data_com'])
+            : null,
+      );
+      await _dbHelper.updateProvento(proventoAtualizado.toJson());
+      await _carregarDados();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✏️ Provento atualizado!'),
+            backgroundColor: Colors.blue,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _excluirProvento(int id, String ticker) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir Provento'),
+        content: Text('Deseja excluir provento de $ticker?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
+
+    if (confirm == true) {
+      await _dbHelper.deleteProvento(id);
+      await _carregarDados();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🗑️ Provento excluído!'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -647,6 +326,7 @@ class _ProventosScreenState extends State<ProventosScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                // Seletor de período
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -674,7 +354,7 @@ class _ProventosScreenState extends State<ProventosScreen> {
                                     });
                                   },
                                   selectedColor:
-                                      AppColors.primary.withOpacity(0.1),
+                                      AppColors.primary.withValues(alpha:0.1),
                                   checkmarkColor: AppColors.primary,
                                   labelStyle: TextStyle(
                                     fontSize: 11,
@@ -694,6 +374,7 @@ class _ProventosScreenState extends State<ProventosScreen> {
                     ],
                   ),
                 ),
+                // Cards de resumo
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
@@ -716,6 +397,7 @@ class _ProventosScreenState extends State<ProventosScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                // Lista de proventos
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
@@ -745,53 +427,6 @@ class _ProventosScreenState extends State<ProventosScreen> {
                                     centerSpaceRadius: 40,
                                     sections: sections,
                                   )),
-                                ),
-                                const SizedBox(height: 16),
-                                Wrap(
-                                  spacing: 16,
-                                  runSpacing: 8,
-                                  children:
-                                      _proventosPorAtivo.entries.map((entry) {
-                                    final percentual =
-                                        (entry.value / _totalPeriodo) * 100;
-                                    return Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.surface(context)
-                                            .withOpacity(0.5),
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(
-                                            color: AppColors.border(context)),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(
-                                              width: 8,
-                                              height: 8,
-                                              decoration: const BoxDecoration(
-                                                  color: AppColors.primary,
-                                                  shape: BoxShape.circle)),
-                                          const SizedBox(width: 4),
-                                          Text(entry.key,
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: AppColors.textPrimary(
-                                                      context))),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                              '${percentual.toStringAsFixed(1)}%',
-                                              style: TextStyle(
-                                                  fontSize: 10,
-                                                  color:
-                                                      AppColors.textSecondary(
-                                                          context))),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
                                 ),
                               ],
                             ),
@@ -829,8 +464,8 @@ class _ProventosScreenState extends State<ProventosScreen> {
             ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
         onPressed: _adicionarProvento,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
@@ -852,7 +487,7 @@ class _ProventosScreenState extends State<ProventosScreen> {
             const SizedBox(width: 4),
             Text(label,
                 style: TextStyle(
-                    fontSize: 10, color: AppColors.textSecondary(context)))
+                    fontSize: 10, color: AppColors.textSecondary(context))),
           ]),
           const SizedBox(height: 8),
           Text(Formatador.moedaCompacta(valor),
@@ -863,11 +498,9 @@ class _ProventosScreenState extends State<ProventosScreen> {
     );
   }
 
-  Widget _buildProventoCard(Map<String, dynamic> p) {
-    final dataPagamento = DateTime.parse(p['data_pagamento']);
-    final hoje = DateTime.now();
-    final isFuturo = dataPagamento.isAfter(hoje);
-    final diasParaPagamento = dataPagamento.difference(hoje).inDays;
+  Widget _buildProventoCard(Provento p) {
+    final isFuturo = p.dataPagamento.isAfter(DateTime.now());
+    final diasParaPagamento = p.dataPagamento.difference(DateTime.now()).inDays;
 
     Color statusColor;
     String statusText;
@@ -885,107 +518,118 @@ class _ProventosScreenState extends State<ProventosScreen> {
       statusText = '✅ Recebido';
     }
 
-    return GestureDetector(
-      onTap: () => _editarProvento(p),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface(context),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border(context)),
-        ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12)),
-                    child: Icon(Icons.monetization_on, color: statusColor)),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Text(p['ticker'],
-                            style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary(context))),
-                        const SizedBox(width: 8),
-                        Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                                color: statusColor.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12)),
-                            child: Text(statusText,
-                                style: TextStyle(
-                                    fontSize: 10,
-                                    color: statusColor,
-                                    fontWeight: FontWeight.bold))),
-                      ]),
-                      const SizedBox(height: 4),
-                      Text(p['tipo_provento'] ?? 'Dividendo',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary(context))),
-                    ],
-                  ),
+    return Dismissible(
+      key: Key(p.id ?? DateTime.now().millisecondsSinceEpoch.toString()),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        color: Colors.red,
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      confirmDismiss: (direction) async {
+        return await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Excluir'),
+            content: Text('Excluir provento de ${p.ticker}?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child:
+                    const Text('Excluir', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        );
+      },
+      onDismissed: (direction) => _excluirProvento(int.parse(p.id!), p.ticker),
+      child: InkWell(
+        onTap: () => _editarProvento(p),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface(context),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border(context)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha:0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                child: Icon(Icons.monetization_on, color: statusColor),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(Formatador.moeda(p['total_recebido']),
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: statusColor)),
+                    Row(children: [
+                      Text(p.ticker,
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary(context))),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha:0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(statusText,
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: statusColor,
+                                fontWeight: FontWeight.bold)),
+                      ),
+                    ]),
                     const SizedBox(height: 4),
-                    Text(
-                        '${(p['quantidade'] as num).toDouble().toStringAsFixed(0)} cotas',
+                    Text(p.tipo.nome,
                         style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 12,
                             color: AppColors.textSecondary(context))),
                   ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(children: [
-                  Icon(Icons.calendar_today,
-                      size: 12, color: AppColors.textSecondary(context)),
-                  const SizedBox(width: 4),
-                  Text('Pagamento: ${Formatador.data(dataPagamento)}',
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(Formatador.moeda(p.totalRecebido),
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: statusColor)),
+                  const SizedBox(height: 4),
+                  Text(
+                      '${p.quantidade.toStringAsFixed(0)} cotas × ${Formatador.moeda(p.valorPorCota)}',
                       style: TextStyle(
                           fontSize: 11,
-                          color: AppColors.textSecondary(context)))
-                ]),
-                if (p['data_com'] != null)
-                  Row(children: [
-                    Icon(Icons.event,
-                        size: 12, color: AppColors.textSecondary(context)),
-                    const SizedBox(width: 4),
-                    Text(
-                        'COM: ${Formatador.data(DateTime.parse(p['data_com']))}',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary(context)))
-                  ]),
-                Icon(Icons.edit, size: 18, color: AppColors.primary),
-              ],
-            ),
-          ],
+                          color: AppColors.textSecondary(context))),
+                  const SizedBox(height: 4),
+                  Text('Pagamento: ${Formatador.data(p.dataPagamento)}',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary(context))),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+

@@ -58,13 +58,13 @@ class StockLogo extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [
             cor,
-            cor.withOpacity(0.7),
+            cor.withValues(alpha:0.7),
           ],
         ),
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: cor.withOpacity(0.3),
+            color: cor.withValues(alpha:0.3),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -83,3 +83,4 @@ class StockLogo extends StatelessWidget {
     );
   }
 }
+
