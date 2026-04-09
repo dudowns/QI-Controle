@@ -1,10 +1,11 @@
-import '../services/logger_service.dart';
 // lib/screens/contas_do_mes_screen.dart
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../repositories/conta_repository.dart';
 import '../widgets/adicionar_conta_modal.dart';
 import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
+import '../services/logger_service.dart';
 
 class ContasDoMesScreen extends StatefulWidget {
   const ContasDoMesScreen({super.key});
@@ -23,6 +24,21 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
 
   final Map<int, Map<String, dynamic>> _parcelasCache = {};
 
+  final List<String> _meses = [
+    'Jan',
+    'Fev',
+    'Mar',
+    'Abr',
+    'Mai',
+    'Jun',
+    'Jul',
+    'Ago',
+    'Set',
+    'Out',
+    'Nov',
+    'Dez'
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -30,17 +46,24 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
   }
 
   Future<void> _carregarDados() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
+      LoggerService.info(
+          '📊 Carregando contas para ${_mesSelecionado.year}/${_mesSelecionado.month}');
+
       _pagamentos = await _repository.getPagamentosDoMes(
           _mesSelecionado.year, _mesSelecionado.month);
+
+      LoggerService.info('📊 Pagamentos encontrados: ${_pagamentos.length}');
+
       _resumo = await _repository.getResumoContasDoMes(
           _mesSelecionado.year, _mesSelecionado.month);
       await _carregarParcelasInfo();
     } catch (e) {
-      LoggerService.info('Erro ao carregar: $e');
+      LoggerService.error('Erro ao carregar: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -118,7 +141,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha:0.1),
+                color: AppColors.success.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.payment, color: AppColors.success),
@@ -145,16 +168,17 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha:0.05),
+                color: AppColors.success.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.success.withValues(alpha:0.3)),
+                border:
+                    Border.all(color: AppColors.success.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha:0.1),
+                      color: AppColors.success.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.receipt, color: AppColors.success),
@@ -191,9 +215,10 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.info.withValues(alpha:0.05),
+                color: AppColors.info.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.info.withValues(alpha:0.2)),
+                border:
+                    Border.all(color: AppColors.info.withValues(alpha: 0.2)),
               ),
               child: const Row(
                 children: [
@@ -244,52 +269,12 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
       onSuccess: (sucesso) {
         if (sucesso) {
           _carregarDados();
-
-          final snackBar = SnackBar(
-            content: Text('✅ $contaNome paga e registrada nos Lançamentos!'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: 'DESFAZER',
-              textColor: Colors.white,
-              onPressed: () async {
-                final desfazerResult =
-                    await _repository.desfazerPagamento(pagamentoId);
-
-                desfazerResult.when(
-                  onSuccess: (_) {
-                    _carregarDados();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('↩️ Pagamento desfeito!'),
-                        backgroundColor: AppColors.warning,
-                        behavior: SnackBarBehavior.floating,
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                  onError: (erro) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(erro),
-                        backgroundColor: AppColors.error,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          );
-
-          ScaffoldMessenger.of(context).showSnackBar(snackBar);
-        } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ Erro ao pagar conta'),
-              backgroundColor: AppColors.error,
+            SnackBar(
+              content: Text('✅ $contaNome paga e registrada nos Lançamentos!'),
+              backgroundColor: AppColors.success,
               behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
             ),
           );
         }
@@ -319,7 +304,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.warning.withValues(alpha:0.1),
+                color: AppColors.warning.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.undo, color: AppColors.warning),
@@ -346,16 +331,17 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.warning.withValues(alpha:0.05),
+                color: AppColors.warning.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.warning.withValues(alpha:0.3)),
+                border:
+                    Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.warning.withValues(alpha:0.1),
+                      color: AppColors.warning.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.receipt, color: AppColors.warning),
@@ -392,9 +378,10 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.info.withValues(alpha:0.05),
+                color: AppColors.info.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.info.withValues(alpha:0.2)),
+                border:
+                    Border.all(color: AppColors.info.withValues(alpha: 0.2)),
               ),
               child: const Row(
                 children: [
@@ -453,14 +440,6 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
               duration: const Duration(seconds: 2),
             ),
           );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ Erro ao desfazer pagamento'),
-              backgroundColor: AppColors.error,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
         }
       },
       onError: (erro) {
@@ -476,13 +455,51 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
   }
 
   void _editarConta(Map<String, dynamic> pagamento) async {
-    final conta = await _repository.getContaById(pagamento['conta_id']);
-    if (conta != null && mounted) {
-      AdicionarContaModal.show(
+    try {
+      final contaIdRaw = pagamento['conta_id'];
+      LoggerService.info('✏️ Editando conta - ID: $contaIdRaw');
+
+      int contaId;
+      if (contaIdRaw is int) {
+        contaId = contaIdRaw;
+      } else if (contaIdRaw is String) {
+        contaId = int.parse(contaIdRaw);
+      } else {
+        contaId = int.tryParse(contaIdRaw.toString()) ?? 0;
+      }
+
+      if (contaId == 0) {
+        LoggerService.error('❌ ID inválido');
+        return;
+      }
+
+      final conta = await _repository.getContaById(contaId);
+
+      if (conta == null) {
+        LoggerService.error('❌ Conta não encontrada');
+        return;
+      }
+
+      if (!mounted) return;
+
+      final contaMap = conta.toJson();
+
+      await AdicionarContaModal.show(
         context: context,
-        conta: conta.toJson(),
+        conta: contaMap,
         onSalvo: () => _carregarDados(),
       );
+    } catch (e) {
+      LoggerService.error('❌ Erro ao editar: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao editar: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -496,7 +513,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha:0.1),
+                color: AppColors.error.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.delete, color: AppColors.error),
@@ -566,154 +583,157 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final meses = [
-      'Jan',
-      'Fev',
-      'Mar',
-      'Abr',
-      'Mai',
-      'Jun',
-      'Jul',
-      'Ago',
-      'Set',
-      'Out',
-      'Nov',
-      'Dez'
-    ];
     final totalPendente = (_resumo['totalPendente'] ?? 0).toDouble();
     final totalPago = (_resumo['totalPago'] ?? 0).toDouble();
     final total = totalPendente + totalPago;
 
-    return Scaffold(
-      backgroundColor: AppColors.background(context),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop) {
+          Navigator.pushReplacementNamed(context, '/dashboard');
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background(context),
+        appBar: AppBar(
+          title: null,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          foregroundColor: AppColors.textPrimary(context),
+          centerTitle: false,
+          actions: [
+            IconButton(
+              icon: Icon(Icons.refresh, color: AppColors.textPrimary(context)),
+              onPressed: _carregarDados,
+              tooltip: 'Atualizar',
+            ),
+          ],
+        ),
+        body: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(
+                  color: AppColors.primary,
+                ),
+              )
+            : RefreshIndicator(
+                onRefresh: _carregarDados,
                 color: AppColors.primary,
-              ),
-            )
-          : SafeArea(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppColors.surface(context),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                    color: AppColors.border(context)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Seletor de mês
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface(context),
+                              borderRadius: BorderRadius.circular(20),
+                              border:
+                                  Border.all(color: AppColors.border(context)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon:
+                                      const Icon(Icons.chevron_left, size: 18),
+                                  onPressed: () => _navegarMes(-1),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${_meses[_mesSelecionado.month - 1]} ${_mesSelecionado.year}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textPrimary(context),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon:
+                                      const Icon(Icons.chevron_right, size: 18),
+                                  onPressed: () => _navegarMes(1),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Botão Adicionar
+                          SizedBox(
+                            height: 36,
+                            child: ElevatedButton(
+                              onPressed: () => AdicionarContaModal.show(
+                                  context: context,
+                                  onSalvo: () => _carregarDados()),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20)),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                              child: const Row(
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.chevron_left,
-                                        size: 18),
-                                    onPressed: () => _navegarMes(-1),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                    style: IconButton.styleFrom(
-                                      foregroundColor:
-                                          AppColors.textSecondary(context),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '${meses[_mesSelecionado.month - 1]} ${_mesSelecionado.year}',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.textPrimary(context),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    icon: const Icon(Icons.chevron_right,
-                                        size: 18),
-                                    onPressed: () => _navegarMes(1),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                    style: IconButton.styleFrom(
-                                      foregroundColor:
-                                          AppColors.textSecondary(context),
-                                    ),
-                                  ),
+                                  Icon(Icons.add, size: 16),
+                                  SizedBox(width: 6),
+                                  Text('ADICIONAR',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold)),
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              height: 36,
-                              child: ElevatedButton(
-                                onPressed: () => AdicionarContaModal.show(
-                                    context: context,
-                                    onSalvo: () => _carregarDados()),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20)),
-                                ),
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.add, size: 16),
-                                    SizedBox(width: 6),
-                                    Text('ADICIONAR',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          _buildResumoCard(
+                              'A Pagar', totalPendente, AppColors.error),
+                          const SizedBox(width: 12),
+                          _buildResumoCard(
+                              'Pago', totalPago, AppColors.success),
+                          const SizedBox(width: 12),
+                          _buildResumoCard('Total', total, AppColors.primary),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: _pagamentos.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.receipt,
+                                      size: 64,
+                                      color: AppColors.muted(context)),
+                                  const SizedBox(height: 16),
+                                  Text('Nenhuma conta para este mês',
+                                      style: TextStyle(
+                                          color: AppColors.textSecondary(
+                                              context))),
+                                  const SizedBox(height: 8),
+                                  Text('Clique em ADICIONAR para começar',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textSecondary(
+                                              context))),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        _buildResumoCard(
-                            'A Pagar', totalPendente, AppColors.error),
-                        const SizedBox(width: 12),
-                        _buildResumoCard('Pago', totalPago, AppColors.success),
-                        const SizedBox(width: 12),
-                        _buildResumoCard('Total', total, AppColors.primary),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: _pagamentos.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.receipt,
-                                    size: 64, color: AppColors.muted(context)),
-                                const SizedBox(height: 16),
-                                Text('Nenhuma conta para este mês',
-                                    style: TextStyle(
-                                        color:
-                                            AppColors.textSecondary(context))),
-                              ],
-                            ),
-                          )
-                        : RefreshIndicator(
-                            onRefresh: _carregarDados,
-                            child: ListView.builder(
+                            )
+                          : ListView.builder(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 4),
                               itemCount: _pagamentos.length,
@@ -747,7 +767,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                         width: 40,
                                         height: 40,
                                         decoration: BoxDecoration(
-                                          color: cor.withValues(alpha:0.1),
+                                          color: cor.withValues(alpha: 0.1),
                                           borderRadius:
                                               BorderRadius.circular(10),
                                         ),
@@ -791,7 +811,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                       vertical: 2),
                                                   decoration: BoxDecoration(
                                                     color: categoriaCor
-                                                        .withValues(alpha:0.1),
+                                                        .withValues(alpha: 0.1),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             8),
@@ -816,11 +836,11 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                                 'categoria'] ??
                                                             'Outros',
                                                         style: TextStyle(
-                                                            fontSize: 9,
-                                                            color: categoriaCor,
-                                                            fontWeight:
-                                                                FontWeight
-                                                                    .w500),
+                                                          fontSize: 9,
+                                                          color: categoriaCor,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
                                                       ),
                                                     ],
                                                   ),
@@ -834,7 +854,8 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                     color:
                                                         AppColors.textSecondary(
                                                                 context)
-                                                            .withValues(alpha:0.1),
+                                                            .withValues(
+                                                                alpha: 0.1),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             8),
@@ -864,7 +885,8 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                         vertical: 2),
                                                     decoration: BoxDecoration(
                                                       color: AppColors.primary
-                                                          .withValues(alpha:0.1),
+                                                          .withValues(
+                                                              alpha: 0.1),
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               8),
@@ -872,11 +894,12 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                     child: Text(
                                                       'Parcela ${parcelasInfo['atual']}/${parcelasInfo['total']}',
                                                       style: const TextStyle(
-                                                          fontSize: 9,
-                                                          color:
-                                                              AppColors.primary,
-                                                          fontWeight:
-                                                              FontWeight.w500),
+                                                        fontSize: 9,
+                                                        color:
+                                                            AppColors.primary,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
                                                     ),
                                                   ),
                                                   if (parcelasInfo[
@@ -889,7 +912,8 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                           vertical: 2),
                                                       decoration: BoxDecoration(
                                                         color: AppColors.warning
-                                                            .withValues(alpha:0.1),
+                                                            .withValues(
+                                                                alpha: 0.1),
                                                         borderRadius:
                                                             BorderRadius
                                                                 .circular(8),
@@ -897,12 +921,12 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                       child: Text(
                                                         'Faltam ${parcelasInfo['restantes']}',
                                                         style: const TextStyle(
-                                                            fontSize: 9,
-                                                            color: AppColors
-                                                                .warning,
-                                                            fontWeight:
-                                                                FontWeight
-                                                                    .w500),
+                                                          fontSize: 9,
+                                                          color:
+                                                              AppColors.warning,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
                                                       ),
                                                     ),
                                                 ],
@@ -919,9 +943,10 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                             Formatador.moeda(
                                                 pagamento['valor'] ?? 0),
                                             style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.bold,
-                                                color: cor),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: cor,
+                                            ),
                                           ),
                                           const SizedBox(height: 8),
                                           Row(
@@ -937,7 +962,8 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                         const EdgeInsets.all(5),
                                                     decoration: BoxDecoration(
                                                       color: AppColors.warning
-                                                          .withValues(alpha:0.1),
+                                                          .withValues(
+                                                              alpha: 0.1),
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               6),
@@ -957,7 +983,8 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                         const EdgeInsets.all(5),
                                                     decoration: BoxDecoration(
                                                       color: AppColors.success
-                                                          .withValues(alpha:0.1),
+                                                          .withValues(
+                                                              alpha: 0.1),
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               6),
@@ -977,7 +1004,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                       const EdgeInsets.all(5),
                                                   decoration: BoxDecoration(
                                                     color: AppColors.primary
-                                                        .withValues(alpha:0.1),
+                                                        .withValues(alpha: 0.1),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             6),
@@ -996,7 +1023,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                                       const EdgeInsets.all(5),
                                                   decoration: BoxDecoration(
                                                     color: AppColors.error
-                                                        .withValues(alpha:0.1),
+                                                        .withValues(alpha: 0.1),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             6),
@@ -1016,11 +1043,11 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                                 );
                               },
                             ),
-                          ),
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 
@@ -1049,4 +1076,3 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
     );
   }
 }
-

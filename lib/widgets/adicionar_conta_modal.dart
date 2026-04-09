@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../repositories/conta_repository.dart';
 import '../constants/app_colors.dart';
-import '../constants/app_categories.dart';
-import 'gradient_button.dart';
+import '../services/logger_service.dart';
 
 class AdicionarContaModal extends StatefulWidget {
   final Function? onSalvo;
@@ -26,7 +25,7 @@ class AdicionarContaModal extends StatefulWidget {
       barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (context) => Dialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 0,
         backgroundColor: Colors.transparent,
         child: AdicionarContaModal(conta: conta, onSalvo: onSalvo),
@@ -141,65 +140,25 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
   Widget build(BuildContext context) {
     return Container(
       width: MediaQuery.of(context).size.width - 40,
-      constraints: const BoxConstraints(maxWidth: 500),
+      constraints: const BoxConstraints(maxWidth: 500, maxHeight: 650),
       decoration: BoxDecoration(
-        color: AppColors.surface(context),
-        borderRadius: BorderRadius.circular(24),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 20,
-              offset: const Offset(0, 10))
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
         ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Cabeçalho
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(24), topRight: Radius.circular(24)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Contas',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold)),
-                      Text(
-                          widget.conta != null
-                              ? 'Editar conta'
-                              : 'Adicionar nova conta',
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.7),
-                              fontSize: 13)),
-                    ],
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        shape: BoxShape.circle),
-                    child:
-                        const Icon(Icons.close, color: Colors.white, size: 18),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Formulário
-          Flexible(
+          _buildHeader(
+              widget.conta != null ? 'Editar Conta' : 'Nova Conta', context),
+          const Divider(height: 1, color: Color(0xFFEEEEEE)),
+          Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Form(
@@ -207,197 +166,26 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Nome
-                    const Text('Nome da conta',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _nomeController,
-                      decoration: InputDecoration(
-                          hintText: 'Ex: Netflix, Aluguel',
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12))),
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Digite o nome' : null,
-                    ),
+                    _buildTextField(_nomeController, 'Nome da conta',
+                        hint: 'Ex: Netflix, Aluguel'),
                     const SizedBox(height: 16),
-
-                    // Tipo
-                    const Text('Tipo',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
+                    _buildTipoSelector(),
+                    const SizedBox(height: 16),
                     Row(
                       children: [
-                        Expanded(
-                            child: _buildTipoButton(
-                                'Mensal', 'mensal', Icons.repeat)),
+                        Expanded(child: _buildValorField()),
                         const SizedBox(width: 12),
-                        Expanded(
-                            child: _buildTipoButton('Parcelada', 'parcelada',
-                                Icons.format_list_numbered)),
+                        Expanded(child: _buildDiaSelector()),
                       ],
                     ),
                     const SizedBox(height: 16),
-
-                    // Valor e Dia
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Valor',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600)),
-                              const SizedBox(height: 8),
-                              TextFormField(
-                                controller: _valorController,
-                                keyboardType: TextInputType.number,
-                                decoration: InputDecoration(
-                                    hintText: '0,00',
-                                    border: OutlineInputBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12)),
-                                    prefixText: 'R\$ '),
-                                validator: (v) => v == null || v.isEmpty
-                                    ? 'Digite o valor'
-                                    : null,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Dia',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600)),
-                              const SizedBox(height: 8),
-                              Container(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 12),
-                                decoration: BoxDecoration(
-                                    border:
-                                        Border.all(color: Colors.grey[300]!),
-                                    borderRadius: BorderRadius.circular(12)),
-                                child: DropdownButton<int>(
-                                  value: _diaVencimento,
-                                  isExpanded: true,
-                                  underline: const SizedBox(),
-                                  items: _dias
-                                      .map((d) => DropdownMenuItem(
-                                          value: d, child: Text(d.toString())))
-                                      .toList(),
-                                  onChanged: (v) =>
-                                      setState(() => _diaVencimento = v!),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                    _buildCategoriaSelector(),
                     const SizedBox(height: 16),
-
-                    // Categoria
-                    const Text('Categoria',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey[300]!),
-                          borderRadius: BorderRadius.circular(12)),
-                      child: DropdownButton<String>(
-                        value: _categoria,
-                        isExpanded: true,
-                        underline: const SizedBox(),
-                        items: _categorias
-                            .map((cat) =>
-                                DropdownMenuItem(value: cat, child: Text(cat)))
-                            .toList(),
-                        onChanged: (v) => setState(() => _categoria = v!),
-                      ),
-                    ),
+                    _buildDatePickerField(),
                     const SizedBox(height: 16),
-
-                    // Data início
-                    const Text('Data de início',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    InkWell(
-                      onTap: _selecionarData,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 14),
-                        decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey[300]!),
-                            borderRadius: BorderRadius.circular(12)),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(DateFormat('dd/MM/yyyy').format(_dataInicio),
-                                style: const TextStyle(fontSize: 16)),
-                            Icon(Icons.calendar_today,
-                                color: Colors.grey[600], size: 20),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Parcelas (se parcelada)
-                    if (_tipo == 'parcelada') ...[
-                      const Text('Total de parcelas',
-                          style: TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _parcelasController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                            hintText: 'Ex: 12',
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12))),
-                        validator: (v) => v == null || v.isEmpty
-                            ? 'Digite o número de parcelas'
-                            : null,
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
+                    if (_tipo == 'parcelada') _buildParcelasField(),
                     const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: OutlinedButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14)),
-                            child: const Text('Cancelar'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _isLoading
-                              ? const Center(child: CircularProgressIndicator())
-                              : GradientButton(
-                                  text: widget.conta != null
-                                      ? 'ATUALIZAR'
-                                      : 'SALVAR',
-                                  onPressed: _salvar),
-                        ),
-                      ],
-                    ),
+                    _buildButtons(context),
                   ],
                 ),
               ),
@@ -408,36 +196,318 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
     );
   }
 
+  Widget _buildHeader(String title, BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1A1A1A),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Icon(Icons.close, size: 20, color: Colors.grey[500]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label,
+      {String? hint, bool isNumber = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF333333))),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+          decoration: InputDecoration(
+            hintText: hint ?? label,
+            hintStyle: const TextStyle(color: Color(0xFF999999)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide:
+                  const BorderSide(color: Color(0xFF7B2CBF), width: 1.5),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+          validator: (v) => v == null || v.isEmpty ? 'Digite o $label' : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTipoSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Tipo',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF333333))),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: _buildTipoButton('Mensal', 'mensal', Icons.repeat)),
+            const SizedBox(width: 12),
+            Expanded(
+                child: _buildTipoButton(
+                    'Parcelada', 'parcelada', Icons.format_list_numbered)),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _buildTipoButton(String label, String value, IconData icon) {
     final isSelected = _tipo == value;
     return GestureDetector(
       onTap: () => setState(() => _tipo = value),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primary.withValues(alpha: 0.1)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+              ? const Color(0xFF7B2CBF).withValues(alpha: 0.08)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
-              color: isSelected ? AppColors.primary : Colors.grey[300]!,
-              width: isSelected ? 2 : 1),
+            color: isSelected ? const Color(0xFF7B2CBF) : Colors.grey[300]!,
+            width: isSelected ? 1.5 : 1,
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon,
-                color: isSelected ? AppColors.primary : Colors.grey[600],
-                size: 18),
-            const SizedBox(width: 8),
-            Text(label,
-                style: TextStyle(
-                    color: isSelected ? AppColors.primary : Colors.grey[600],
-                    fontWeight:
-                        isSelected ? FontWeight.bold : FontWeight.normal)),
+                size: 18,
+                color: isSelected ? const Color(0xFF7B2CBF) : Colors.grey[600]),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected ? const Color(0xFF7B2CBF) : Colors.grey[600],
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildValorField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Valor',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF333333))),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _valorController,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            hintText: '0,00',
+            prefixText: 'R\$ ',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+          validator: (v) => v == null || v.isEmpty ? 'Digite o valor' : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDiaSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Dia',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF333333))),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: DropdownButton<int>(
+            value: _diaVencimento,
+            isExpanded: true,
+            underline: const SizedBox(),
+            icon: Icon(Icons.arrow_drop_down, color: Colors.grey[500]),
+            style: const TextStyle(fontSize: 14, color: Color(0xFF333333)),
+            items: _dias
+                .map((d) =>
+                    DropdownMenuItem(value: d, child: Text(d.toString())))
+                .toList(),
+            onChanged: (v) => setState(() => _diaVencimento = v!),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoriaSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Categoria',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF333333))),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: DropdownButton<String>(
+            value: _categoria,
+            isExpanded: true,
+            underline: const SizedBox(),
+            icon: Icon(Icons.arrow_drop_down, color: Colors.grey[500]),
+            style: const TextStyle(fontSize: 14, color: Color(0xFF333333)),
+            items: _categorias
+                .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                .toList(),
+            onChanged: (v) => setState(() => _categoria = v!),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDatePickerField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Data de início',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF333333))),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: _selecionarData,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  DateFormat('dd/MM/yyyy').format(_dataInicio),
+                  style:
+                      const TextStyle(fontSize: 14, color: Color(0xFF333333)),
+                ),
+                Icon(Icons.calendar_today, size: 18, color: Colors.grey[500]),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildParcelasField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Total de parcelas',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF333333))),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _parcelasController,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            hintText: 'Ex: 12',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+          validator: (v) =>
+              v == null || v.isEmpty ? 'Digite o número de parcelas' : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildButtons(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: () => Navigator.pop(context),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              side: BorderSide(color: Colors.grey[400]!),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Cancelar', style: TextStyle(fontSize: 14)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : _salvar,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7B2CBF),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            child: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : Text(widget.conta != null ? 'ATUALIZAR' : 'SALVAR',
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ],
     );
   }
 }

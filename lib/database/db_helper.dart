@@ -77,7 +77,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 28, // 🔥 VERSÃO AUMENTADA PARA FORCAR UPGRADE
+      version: 29,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: (db) async {
@@ -185,7 +185,6 @@ class DBHelper {
       )
     ''');
 
-    // 🔥 TABELA RENDA FIXA COMPLETA (com todas as colunas)
     await db.execute('''
       CREATE TABLE $tabelaRendaFixa(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -207,9 +206,8 @@ class DBHelper {
         liquidez TEXT DEFAULT 'Diária',
         is_lci INTEGER DEFAULT 0,
         status TEXT DEFAULT 'ativo',
+        observacao TEXT,
         sync_status TEXT DEFAULT 'pending',
-        criado_em TEXT,
-        atualizado_em TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
@@ -487,61 +485,16 @@ class DBHelper {
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     LoggerService.info('🔄 Atualizando banco: $oldVersion -> $newVersion');
 
-    // 🔥 GARANTIR QUE A TABELA RENDA FIXA TENHA TODAS AS COLUNAS
-    if (oldVersion < 28) {
+    // Garantir que a tabela renda_fixa tenha a coluna observacao
+    if (oldVersion < 29) {
       try {
         final tableInfo = await db.rawQuery('PRAGMA table_info(renda_fixa)');
         final colunas = tableInfo.map((c) => c['name'] as String).toList();
 
-        if (!colunas.contains('criado_em')) {
-          await db.execute('ALTER TABLE renda_fixa ADD COLUMN criado_em TEXT');
-          LoggerService.info('✅ Coluna criado_em adicionada');
-        }
-        if (!colunas.contains('atualizado_em')) {
-          await db
-              .execute('ALTER TABLE renda_fixa ADD COLUMN atualizado_em TEXT');
-          LoggerService.info('✅ Coluna atualizado_em adicionada');
-        }
-        if (!colunas.contains('dias')) {
-          await db.execute('ALTER TABLE renda_fixa ADD COLUMN dias INTEGER');
-          LoggerService.info('✅ Coluna dias adicionada');
-        }
-        if (!colunas.contains('rendimento_bruto')) {
-          await db.execute(
-              'ALTER TABLE renda_fixa ADD COLUMN rendimento_bruto REAL');
-          LoggerService.info('✅ Coluna rendimento_bruto adicionada');
-        }
-        if (!colunas.contains('iof')) {
-          await db.execute('ALTER TABLE renda_fixa ADD COLUMN iof REAL');
-          LoggerService.info('✅ Coluna iof adicionada');
-        }
-        if (!colunas.contains('ir')) {
-          await db.execute('ALTER TABLE renda_fixa ADD COLUMN ir REAL');
-          LoggerService.info('✅ Coluna ir adicionada');
-        }
-        if (!colunas.contains('rendimento_liquido')) {
-          await db.execute(
-              'ALTER TABLE renda_fixa ADD COLUMN rendimento_liquido REAL');
-          LoggerService.info('✅ Coluna rendimento_liquido adicionada');
-        }
-        if (!colunas.contains('valor_final')) {
-          await db
-              .execute('ALTER TABLE renda_fixa ADD COLUMN valor_final REAL');
-          LoggerService.info('✅ Coluna valor_final adicionada');
-        }
-        if (!colunas.contains('indexador')) {
-          await db.execute('ALTER TABLE renda_fixa ADD COLUMN indexador TEXT');
-          LoggerService.info('✅ Coluna indexador adicionada');
-        }
-        if (!colunas.contains('liquidez')) {
-          await db.execute(
-              'ALTER TABLE renda_fixa ADD COLUMN liquidez TEXT DEFAULT "Diária"');
-          LoggerService.info('✅ Coluna liquidez adicionada');
-        }
-        if (!colunas.contains('is_lci')) {
-          await db.execute(
-              'ALTER TABLE renda_fixa ADD COLUMN is_lci INTEGER DEFAULT 0');
-          LoggerService.info('✅ Coluna is_lci adicionada');
+        if (!colunas.contains('observacao')) {
+          await db.execute('ALTER TABLE renda_fixa ADD COLUMN observacao TEXT');
+          LoggerService.info(
+              '✅ Coluna observacao adicionada na tabela renda_fixa');
         }
       } catch (e) {
         LoggerService.warning('⚠️ Erro ao atualizar tabela renda_fixa: $e');
@@ -599,7 +552,8 @@ class DBHelper {
     }
   }
 
-  Future<int> update(String table, Map<String, dynamic> data, int id) async {
+  Future<int> update(
+      String table, Map<String, dynamic> data, dynamic id) async {
     PerformanceService.start('db_update_$table');
     final db = await database;
     try {
@@ -609,8 +563,8 @@ class DBHelper {
       final result = await db.update(
         table,
         data,
-        where: 'id = ?',
-        whereArgs: [id],
+        where: 'id = ? OR remote_id = ?',
+        whereArgs: [id, id],
       );
       _clearTableCache(table);
       _clearQueryCache();
@@ -856,11 +810,11 @@ class DBHelper {
     );
   }
 
-  Future<Map<String, dynamic>?> getRendaFixaById(int id) async {
+  Future<Map<String, dynamic>?> getRendaFixaById(dynamic id) async {
     final results = await query(
       tabelaRendaFixa,
-      where: 'id = ?',
-      whereArgs: [id],
+      where: 'id = ? OR remote_id = ?',
+      whereArgs: [id, id],
       useCache: true,
     );
     return results.isNotEmpty ? results.first : null;
@@ -872,8 +826,16 @@ class DBHelper {
     return await update(tabelaRendaFixa, renda, id);
   }
 
-  Future<int> deleteRendaFixa(int id) async {
-    return await delete(tabelaRendaFixa, id);
+  Future<int> deleteRendaFixa(dynamic id) async {
+    final db = await database;
+    final result = await db.delete(
+      tabelaRendaFixa,
+      where: 'id = ? OR remote_id = ?',
+      whereArgs: [id, id],
+    );
+    _clearTableCache(tabelaRendaFixa);
+    _clearQueryCache();
+    return result;
   }
 
   // ========== MÉTODOS PARA CONTAS DO MÊS ==========
@@ -881,10 +843,12 @@ class DBHelper {
   Future<int> adicionarConta(Map<String, dynamic> conta) async {
     final db = await database;
 
+    await _adicionarUserId(conta);
+
     final existing = await db.query(
       tabelaContas,
-      where: 'nome = ? AND tipo = ?',
-      whereArgs: [conta['nome'], conta['tipo']],
+      where: 'nome = ? AND tipo = ? AND user_id = ?',
+      whereArgs: [conta['nome'], conta['tipo'], conta['user_id']],
     );
 
     if (existing.isNotEmpty) {
@@ -893,7 +857,39 @@ class DBHelper {
       return existing.first['id'] as int;
     }
 
-    await _adicionarUserId(conta);
+    return await db.transaction((txn) async {
+      final contaId = await txn.insert(tabelaContas, conta);
+      await _gerarPagamentosFuturos(txn, contaId, conta);
+      _clearTableCache(tabelaPagamentos);
+      return contaId;
+    });
+  }
+
+  Future<int> adicionarContaComUserId(Map<String, dynamic> conta) async {
+    final db = await database;
+
+    if (!conta.containsKey('user_id')) {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        conta['user_id'] = user.id;
+      }
+    }
+
+    conta['sync_status'] = 'pending';
+    conta['created_at'] = _agoraBrasil();
+    conta['updated_at'] = _agoraBrasil();
+
+    final existing = await db.query(
+      tabelaContas,
+      where: 'nome = ? AND tipo = ? AND user_id = ?',
+      whereArgs: [conta['nome'], conta['tipo'], conta['user_id']],
+    );
+
+    if (existing.isNotEmpty) {
+      LoggerService.info(
+          '⚠️ Conta "${conta['nome']}" já existe! Retornando ID existente.');
+      return existing.first['id'] as int;
+    }
 
     return await db.transaction((txn) async {
       final contaId = await txn.insert(tabelaContas, conta);
@@ -1624,7 +1620,7 @@ class DBHelper {
         'detalhes': detalhes,
       });
     } catch (e) {
-      LoggerService.error('Erro ao logar integridade', e);
+      // Erro ignorado - apenas log
     }
   }
 

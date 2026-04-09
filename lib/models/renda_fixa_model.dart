@@ -8,7 +8,7 @@ enum Indexador {
 }
 
 class RendaFixaModel {
-  final String? id; // 🔥 Alterado de int? para String? (UUID)
+  final String? id;
   final String nome;
   final String tipoRenda;
   final double valorAplicado;
@@ -25,6 +25,7 @@ class RendaFixaModel {
   final bool liquidezDiaria;
   final bool isIsento;
   final String status;
+  final String? observacao; // 🔥 NOVO CAMPO PARA HISTÓRICO DE APORTES
 
   RendaFixaModel({
     this.id,
@@ -44,15 +45,14 @@ class RendaFixaModel {
     required this.liquidezDiaria,
     required this.isIsento,
     required this.status,
+    this.observacao,
   });
 
   factory RendaFixaModel.fromJson(Map<String, dynamic> json) {
     return RendaFixaModel(
-      // 🔥 Forçamos String para o ID
       id: json['id']?.toString(),
       nome: json['nome']?.toString() ?? '',
       tipoRenda: json['tipo_renda']?.toString() ?? '',
-      // 🔥 Conversão robusta de num para double
       valorAplicado: (json['valor'] as num?)?.toDouble() ?? 0.0,
       taxa: (json['taxa'] as num?)?.toDouble() ?? 0.0,
       dataAplicacao: json['data_aplicacao'] != null
@@ -69,14 +69,14 @@ class RendaFixaModel {
       valorFinal: (json['valor_final'] as num?)?.toDouble(),
       indexador: _getIndexadorFromString(json['indexador'] as String?),
       liquidezDiaria: json['liquidez'] == 'Diária',
-      // 🔥 No Supabase booleano é bool nativo
-      isIsento: json['is_lci'] is bool ? json['is_lci'] : (json['is_lci'] == 1),
+      isIsento: json['is_lci'] == 1,
       status: json['status']?.toString() ?? 'ativo',
+      observacao: json['observacao']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() {
-    final map = {
+    return {
       'nome': nome,
       'tipo_renda': tipoRenda,
       'valor': valorAplicado,
@@ -91,12 +91,10 @@ class RendaFixaModel {
       'valor_final': valorFinal,
       'indexador': _getIndexadorString(indexador),
       'liquidez': liquidezDiaria ? 'Diária' : 'No vencimento',
-      'is_lci': isIsento, // 🔥 Enviamos como bool nativo
+      'is_lci': isIsento ? 1 : 0,
       'status': status,
+      'observacao': observacao,
     };
-
-    if (id != null) map['id'] = id;
-    return map;
   }
 
   static Indexador _getIndexadorFromString(String? value) {
@@ -124,7 +122,7 @@ class RendaFixaModel {
   }
 
   RendaFixaModel copyWith({
-    String? id, // 🔥 Alterado para String?
+    String? id,
     String? nome,
     String? tipoRenda,
     double? valorAplicado,
@@ -141,6 +139,7 @@ class RendaFixaModel {
     bool? liquidezDiaria,
     bool? isIsento,
     String? status,
+    String? observacao,
   }) {
     return RendaFixaModel(
       id: id ?? this.id,
@@ -160,7 +159,7 @@ class RendaFixaModel {
       liquidezDiaria: liquidezDiaria ?? this.liquidezDiaria,
       isIsento: isIsento ?? this.isIsento,
       status: status ?? this.status,
+      observacao: observacao ?? this.observacao,
     );
   }
 }
-

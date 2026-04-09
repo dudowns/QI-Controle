@@ -1,4 +1,3 @@
-import '../services/logger_service.dart';
 // lib/screens/transacoes_screen.dart
 import 'package:flutter/material.dart';
 import '../database/db_helper.dart';
@@ -36,24 +35,21 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
     setState(() => _loading = true);
     try {
       final db = await _dbHelper.database;
-      final query = db.query(
+      final query = await db.query(
         'transacoes',
         orderBy: 'data DESC',
       );
 
       if (widget.ticker != null) {
-        final transacoes = await query;
-        _transacoes = transacoes
+        _transacoes = query
             .where((t) => t['ticker'] == widget.ticker)
             .map((json) => Transacao.fromMap(json))
             .toList();
       } else {
-        final transacoes = await query;
-        _transacoes =
-            transacoes.map((json) => Transacao.fromMap(json)).toList();
+        _transacoes = query.map((json) => Transacao.fromMap(json)).toList();
       }
     } catch (e) {
-      LoggerService.info('Erro ao carregar transações: $e');
+      debugPrint('Erro ao carregar transações: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -68,7 +64,11 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
   }
 
   void _voltar() {
-    Navigator.pop(context);
+    if (mounted && Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else if (mounted) {
+      Navigator.pushReplacementNamed(context, '/investimentos');
+    }
   }
 
   @override
@@ -76,23 +76,25 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 18),
-          onPressed: _voltar,
-          tooltip: 'Voltar',
-        ),
         title: Text(
           widget.ticker != null
               ? 'Movimentações - ${widget.ticker}'
               : 'Histórico de Movimentações',
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        backgroundColor: AppColors.surface(context),
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        foregroundColor: AppColors.textPrimary(context),
         centerTitle: false,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios,
+              size: 18, color: AppColors.textPrimary(context)),
+          onPressed: _voltar,
+          tooltip: 'Voltar',
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh, color: AppColors.textPrimary(context)),
             onPressed: _carregarTransacoes,
             tooltip: 'Atualizar',
           ),
@@ -192,7 +194,7 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: cor.withValues(alpha:0.3),
+            color: cor.withValues(alpha: 0.3),
             width: 1,
           ),
         ),
@@ -202,7 +204,7 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: cor.withValues(alpha:0.1),
+              color: cor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -287,4 +289,3 @@ class _TransacoesScreenState extends State<TransacoesScreen> {
     );
   }
 }
-

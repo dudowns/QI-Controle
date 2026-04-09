@@ -204,7 +204,7 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       final item = _menuItems.firstWhere((m) => m['index'] == _currentIndex);
       return item['label'] as String;
     } catch (e) {
-      return "FinControl";
+      return "QI Controle";
     }
   }
 
@@ -529,7 +529,7 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                   FadeInLeft(
                     duration: const Duration(milliseconds: 600),
                     child: const Text(
-                      'FinControl',
+                      'QI Controle',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -541,7 +541,7 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                   FadeInLeft(
                     duration: const Duration(milliseconds: 700),
                     child: const Text(
-                      'Controle Financeiro',
+                      'Seu gerenciador financeiro pessoal',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.white70,

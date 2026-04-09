@@ -23,121 +23,242 @@ class AdicionarInvestimentoModal {
     final precoAtualController = TextEditingController(
       text: investimento?.precoAtual?.toString() ?? '',
     );
-    final corretoraController =
-        TextEditingController(text: investimento?.corretora ?? '');
+    final corretoraController = TextEditingController(
+      text: investimento?.corretora ?? '',
+    );
 
     final List<String> tipos = ['ACAO', 'FII', 'ETF', 'BDR', 'CRIPTO'];
     String? tipoSelecionado = investimento?.tipo ?? 'ACAO';
 
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isEditing ? 'Editar Investimento' : 'Novo Investimento'),
-        content: Form(
-          key: formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: tickerController,
-                  decoration: const InputDecoration(
-                    labelText: 'Ticker',
-                    hintText: 'Ex: PETR4, VISC11',
-                    border: OutlineInputBorder(),
+      barrierDismissible: true,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: MediaQuery.of(context).size.width - 40,
+          constraints: const BoxConstraints(maxWidth: 500, maxHeight: 550),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHeader(
+                  isEditing ? 'Editar Investimento' : 'Novo Investimento',
+                  context),
+              const Divider(height: 1, color: Color(0xFFEEEEEE)),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildTextField(tickerController, 'Ticker',
+                            hint: 'Ex: PETR4, VISC11'),
+                        const SizedBox(height: 16),
+                        _buildTipoSelector(tipos, tipoSelecionado,
+                            (value) => tipoSelecionado = value),
+                        const SizedBox(height: 16),
+                        _buildTextField(quantidadeController, 'Quantidade',
+                            isNumber: true),
+                        const SizedBox(height: 16),
+                        _buildTextField(precoMedioController, 'Preço Médio',
+                            isNumber: true, prefix: 'R\$ '),
+                        const SizedBox(height: 16),
+                        _buildTextField(
+                            precoAtualController, 'Preço Atual (opcional)',
+                            isNumber: true, prefix: 'R\$ '),
+                        const SizedBox(height: 16),
+                        _buildTextField(
+                            corretoraController, 'Corretora (opcional)',
+                            hint: 'Ex: XP, Clear, Rico'),
+                        const SizedBox(height: 24),
+                        _buildButtons(context, formKey, isEditing, () {
+                          if (formKey.currentState!.validate()) {
+                            final novoInvestimento = Investimento(
+                              id: investimento?.id,
+                              ticker: tickerController.text.toUpperCase(),
+                              tipo: tipoSelecionado!,
+                              quantidade:
+                                  double.parse(quantidadeController.text),
+                              precoMedio:
+                                  double.parse(precoMedioController.text),
+                              precoAtual: precoAtualController.text.isNotEmpty
+                                  ? double.parse(precoAtualController.text)
+                                  : null,
+                              corretora: corretoraController.text.isNotEmpty
+                                  ? corretoraController.text
+                                  : null,
+                            );
+                            Navigator.pop(context);
+                            onSave(novoInvestimento);
+                          }
+                        }),
+                      ],
+                    ),
                   ),
-                  validator: (value) =>
-                      value?.isEmpty == true ? 'Campo obrigatório' : null,
                 ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: tipoSelecionado,
-                  decoration: const InputDecoration(
-                    labelText: 'Tipo',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: tipos.map((tipo) {
-                    return DropdownMenuItem(
-                      value: tipo,
-                      child: Text(TipoInvestimento.getNomeAmigavel(tipo)),
-                    );
-                  }).toList(),
-                  onChanged: (value) => tipoSelecionado = value,
-                  validator: (value) =>
-                      value == null ? 'Selecione o tipo' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: quantidadeController,
-                  decoration: const InputDecoration(
-                    labelText: 'Quantidade',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) =>
-                      value?.isEmpty == true ? 'Campo obrigatório' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: precoMedioController,
-                  decoration: const InputDecoration(
-                    labelText: 'Preço Médio',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) =>
-                      value?.isEmpty == true ? 'Campo obrigatório' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: precoAtualController,
-                  decoration: const InputDecoration(
-                    labelText: 'Preço Atual (opcional)',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: corretoraController,
-                  decoration: const InputDecoration(
-                    labelText: 'Corretora (opcional)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+      ),
+    );
+  }
+
+  static Widget _buildHeader(String title, BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1A1A1A),
+            ),
           ),
-          ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                final novoInvestimento = Investimento(
-                  id: investimento?.id,
-                  ticker: tickerController.text.toUpperCase(),
-                  tipo: tipoSelecionado!,
-                  quantidade: double.parse(quantidadeController.text),
-                  precoMedio: double.parse(precoMedioController.text),
-                  precoAtual: precoAtualController.text.isNotEmpty
-                      ? double.parse(precoAtualController.text)
-                      : null,
-                  corretora: corretoraController.text.isNotEmpty
-                      ? corretoraController.text
-                      : null,
-                );
-                Navigator.pop(context);
-                onSave(novoInvestimento);
-              }
-            },
-            child: Text(isEditing ? 'Salvar' : 'Adicionar'),
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Icon(Icons.close, size: 20, color: Colors.grey[500]),
           ),
         ],
       ),
+    );
+  }
+
+  static Widget _buildTextField(TextEditingController controller, String label,
+      {String? hint, bool isNumber = false, String prefix = ''}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF333333))),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+          decoration: InputDecoration(
+            hintText: hint ?? label,
+            prefixText: prefix.isEmpty ? null : prefix,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide:
+                  const BorderSide(color: Color(0xFF7B2CBF), width: 1.5),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+          validator: (value) {
+            if (value == null || value.isEmpty) return 'Digite o $label';
+            if (isNumber &&
+                double.tryParse(value.replaceAll(',', '.')) == null) {
+              return 'Valor inválido';
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
+  static Widget _buildTipoSelector(
+      List<String> tipos, String? tipoSelecionado, Function(String) onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Tipo',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF333333))),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: DropdownButton<String>(
+            value: tipoSelecionado,
+            isExpanded: true,
+            underline: const SizedBox(),
+            icon: Icon(Icons.arrow_drop_down, color: Colors.grey[500]),
+            style: const TextStyle(fontSize: 14, color: Color(0xFF333333)),
+            items: tipos.map((tipo) {
+              return DropdownMenuItem(
+                value: tipo,
+                child: Text(TipoInvestimento.getNomeAmigavel(tipo)),
+              );
+            }).toList(),
+            onChanged: (value) => onChanged(value!),
+          ),
+        ),
+      ],
+    );
+  }
+
+  static Widget _buildButtons(BuildContext context,
+      GlobalKey<FormState> formKey, bool isEditing, VoidCallback onSave) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: () => Navigator.pop(context),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              side: BorderSide(color: Colors.grey[400]!),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Cancelar', style: TextStyle(fontSize: 14)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: onSave,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7B2CBF),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            child: Text(isEditing ? 'ATUALIZAR' : 'SALVAR',
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ],
     );
   }
 }

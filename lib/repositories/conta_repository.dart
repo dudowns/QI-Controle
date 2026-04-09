@@ -1,10 +1,10 @@
-import '../services/logger_service.dart';
 // lib/repositories/conta_repository.dart
 import '../database/db_helper.dart';
 import '../models/conta_model.dart';
 import '../services/sync_service.dart';
 import '../utils/result.dart';
 import '../utils/loading_mixin.dart';
+import '../services/logger_service.dart';
 
 class ContaRepository with LoadingMixin {
   final DBHelper _dbHelper = DBHelper();
@@ -19,7 +19,7 @@ class ContaRepository with LoadingMixin {
     conta['sync_status'] = 'pending';
     conta['updated_at'] = DateTime.now().toIso8601String();
 
-    final id = await _dbHelper.adicionarConta(conta);
+    final id = await _dbHelper.adicionarContaComUserId(conta);
     _syncService.syncNow();
     return id;
   }
@@ -186,7 +186,8 @@ class ContaRepository with LoadingMixin {
           );
           LoggerService.info('🗑️ Lançamento deletado: ID $lancamentoId');
         } else {
-          LoggerService.info('⚠️ Nenhum lancamento_id encontrado para este pagamento');
+          LoggerService.info(
+              '⚠️ Nenhum lancamento_id encontrado para este pagamento');
         }
 
         // Marcar a conta como pendente
@@ -207,7 +208,7 @@ class ContaRepository with LoadingMixin {
 
         return Result.success(true);
       } catch (e) {
-        LoggerService.info('❌ Erro ao desfazer pagamento: $e');
+        LoggerService.error('❌ Erro ao desfazer pagamento: $e');
         return Result.failure('❌ Erro ao desfazer pagamento: $e');
       }
     });
@@ -256,7 +257,7 @@ class ContaRepository with LoadingMixin {
         conta['sync_status'] = 'pending';
         conta['updated_at'] = DateTime.now().toIso8601String();
 
-        final id = await _dbHelper.adicionarConta(conta);
+        final id = await _dbHelper.adicionarContaComUserId(conta);
         _syncService.syncNow();
         return Result.success(id);
       } catch (e) {
@@ -362,4 +363,3 @@ class ContaRepository with LoadingMixin {
     ];
   }
 }
-

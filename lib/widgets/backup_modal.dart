@@ -5,9 +5,8 @@ import 'package:intl/intl.dart';
 import '../services/backup_service_plus.dart';
 import '../utils/date_helper.dart';
 import '../constants/app_colors.dart';
-import '../constants/app_sizes.dart';
-import '../widgets/gradient_button.dart';
-import '../widgets/modern_card.dart';
+import 'gradient_button.dart';
+import 'modern_card.dart';
 
 class BackupModal extends StatefulWidget {
   final Function? onBackupRealizado;
@@ -21,16 +20,15 @@ class BackupModal extends StatefulWidget {
     required BuildContext context,
     Function? onBackupRealizado,
   }) {
-    return showModalBottomSheet(
+    return showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.8,
-        decoration: BoxDecoration(
-          color: AppColors.surface(context),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
+      barrierDismissible: true,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
         child: BackupModal(onBackupRealizado: onBackupRealizado),
       ),
     );
@@ -73,24 +71,22 @@ class _BackupModalState extends State<BackupModal> {
 
   Future<void> _fazerBackup() async {
     final caminho = await _backupService.salvarBackupEmArquivo();
-    if (caminho != null && context.mounted) {
+    if (caminho != null && mounted) {
       await _carregarBackups();
       widget.onBackupRealizado?.call();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(children: [
               Icon(Icons.check_circle, color: Colors.white),
               SizedBox(width: 12),
-              Expanded(child: Text('✅ Backup realizado com sucesso!')),
-            ],
+              Expanded(child: Text('✅ Backup realizado com sucesso!'))
+            ]),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
           ),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+        );
+      }
     }
   }
 
@@ -100,508 +96,262 @@ class _BackupModalState extends State<BackupModal> {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface(context),
-        title: Row(
-          children: [
-            Container(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha:0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.restore, color: Colors.orange),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Restaurar Backup',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary(context),
-              ),
-            ),
-          ],
-        ),
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.restore, color: Colors.orange)),
+          const SizedBox(width: 12),
+          const Text('Restaurar Backup',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+        ]),
         content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Você está prestes a restaurar:',
-              style: TextStyle(color: AppColors.textSecondary(context)),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha:0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.withValues(alpha:0.3)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha:0.1),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Você está prestes a restaurar:'),
+              const SizedBox(height: 12),
+              Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: Colors.orange.withValues(alpha: 0.3))),
+                  child: Row(children: [
+                    Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8)),
+                        child: const Icon(Icons.backup, color: Colors.orange)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: Text(nome,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold))),
+                    Text(_formatarData(backup),
+                        style: const TextStyle(fontSize: 11))
+                  ])),
+              const SizedBox(height: 20),
+              Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.backup, color: Colors.orange),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          nome,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: AppColors.textPrimary(context),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.calendar_today,
-                                size: 12,
-                                color: AppColors.textSecondary(context)),
-                            const SizedBox(width: 4),
-                            Text(
-                              _formatarData(backup),
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textSecondary(context)),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha:0.05),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.withValues(alpha:0.2)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.warning_amber, color: Colors.red, size: 20),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Todos os dados atuais serão SUBSTITUÍDOS!',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+                      border:
+                          Border.all(color: Colors.red.withValues(alpha: 0.2))),
+                  child: const Row(children: [
+                    Icon(Icons.warning_amber, color: Colors.red),
+                    SizedBox(width: 12),
+                    Expanded(
+                        child: Text('Todos os dados atuais serão SUBSTITUÍDOS!',
+                            style: TextStyle(color: Colors.red)))
+                  ])),
+            ]),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'Cancelar',
-              style: TextStyle(color: AppColors.textSecondary(context)),
-            ),
-          ),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text('RESTAURAR'),
-          ),
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: const Text('RESTAURAR')),
         ],
       ),
     );
 
     if (confirmar != true) return;
-
     setState(() => carregando = true);
-
     try {
-      final sucesso = await _backupService.restaurarBackup(
-        backup.path,
-        limparAntes: true,
-      );
-
+      final sucesso =
+          await _backupService.restaurarBackup(backup.path, limparAntes: true);
       if (sucesso && mounted) {
         await _carregarBackups();
         widget.onBackupRealizado?.call();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(child: Text('✅ Backup restaurado com sucesso!')),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('✅ Backup restaurado com sucesso!'),
+            backgroundColor: Colors.green));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(child: Text('❌ Erro ao restaurar: $e')),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Erro: $e'), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => carregando = false);
     }
   }
 
   Future<void> _excluirBackup(File backup) async {
-    final nome = backup.path.split('\\').last;
-
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface(context),
-        title: Row(
-          children: [
-            Container(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha:0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.delete, color: Colors.red),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Excluir Backup',
-              style: TextStyle(color: AppColors.textPrimary(context)),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Deseja excluir o backup:',
-              style: TextStyle(color: AppColors.textSecondary(context)),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.muted(context).withValues(alpha:0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.backup, color: AppColors.textSecondary(context)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      nome,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textPrimary(context),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.delete, color: Colors.red)),
+          const SizedBox(width: 12),
+          const Text('Excluir Backup',
+              style: TextStyle(fontWeight: FontWeight.bold))
+        ]),
+        content:
+            Text('Deseja excluir o backup: ${backup.path.split('\\').last}?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'Cancelar',
-              style: TextStyle(color: AppColors.textSecondary(context)),
-            ),
-          ),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('EXCLUIR'),
-          ),
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('EXCLUIR')),
         ],
       ),
     );
-
     if (confirmar == true) {
       await backup.delete();
-      if (mounted) {
-        await _carregarBackups();
-        widget.onBackupRealizado?.call();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.delete, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(child: Text('🗑️ Backup excluído')),
-              ],
-            ),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      await _carregarBackups();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('🗑️ Backup excluído'),
+          backgroundColor: Colors.orange));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // 🔝 CABEÇALHO
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'Backup e Restauração',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // 📝 CONTEÚDO
-        Expanded(
-          child: carregando
-              ? const Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      // Botão de backup
-                      Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 16),
-                        child: GradientButton(
-                          text: 'FAZER BACKUP AGORA',
-                          icon: Icons.backup,
-                          onPressed: _fazerBackup,
-                        ),
-                      ),
-
-                      // Lista de backups
-                      if (backups.isEmpty)
-                        Container(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.cloud_off,
-                                size: 48,
-                                color: AppColors.muted(context),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Nenhum backup encontrado',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: AppColors.textSecondary(context),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else
-                        ...backups.map((backup) {
-                          final nome = backup.path.split('\\').last;
-                          final isMaisRecente = backup == backups.first;
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            child: ModernCard(
+    return Container(
+      width: MediaQuery.of(context).size.width - 40,
+      constraints: const BoxConstraints(maxWidth: 500, maxHeight: 550),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 20,
+              offset: const Offset(0, 8))
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildHeader('Backup e Restauração', context),
+          const Divider(height: 1, color: Color(0xFFEEEEEE)),
+          Expanded(
+            child: carregando
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                                onPressed: _fazerBackup,
+                                style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF7B2CBF),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(10))),
+                                child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.backup),
+                                      SizedBox(width: 8),
+                                      Text('FAZER BACKUP AGORA')
+                                    ]))),
+                        const SizedBox(height: 16),
+                        if (backups.isEmpty)
+                          const Center(
+                              child: Padding(
+                                  padding: EdgeInsets.all(32),
+                                  child: Column(children: [
+                                    Icon(Icons.cloud_off,
+                                        size: 48, color: Colors.grey),
+                                    SizedBox(height: 16),
+                                    Text('Nenhum backup encontrado')
+                                  ]))),
+                        ...backups.map((backup) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
                               child: Container(
-                                padding: const EdgeInsets.all(16),
-                                child: Row(
-                                  children: [
-                                    // Ícone
-                                    Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                    border:
+                                        Border.all(color: Colors.grey[300]!),
+                                    borderRadius: BorderRadius.circular(12)),
+                                child: Row(children: [
+                                  Container(
                                       width: 40,
                                       height: 40,
                                       decoration: BoxDecoration(
-                                        gradient: isMaisRecente
-                                            ? const LinearGradient(
-                                                colors: [
-                                                  AppColors.primary,
-                                                  AppColors.secondary
-                                                ],
-                                              )
-                                            : null,
-                                        color: isMaisRecente
-                                            ? null
-                                            : AppColors.muted(context)
-                                                .withValues(alpha:0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Icon(
-                                        isMaisRecente
-                                            ? Icons.star
-                                            : Icons.backup,
-                                        color: isMaisRecente
-                                            ? Colors.white
-                                            : AppColors.primary,
-                                        size: 20,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-
-                                    // Informações
-                                    Expanded(
+                                          color: const Color(0xFF7B2CBF)
+                                              .withValues(alpha: 0.1),
+                                          borderRadius:
+                                              BorderRadius.circular(10)),
+                                      child: const Icon(Icons.backup,
+                                          color: Color(0xFF7B2CBF))),
+                                  const SizedBox(width: 12),
+                                  Expanded(
                                       child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            nome,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 14,
-                                              color: AppColors.textPrimary(
-                                                  context),
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              Icon(Icons.calendar_today,
-                                                  size: 12,
-                                                  color:
-                                                      AppColors.textSecondary(
-                                                          context)),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                _formatarData(backup),
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color:
-                                                      AppColors.textSecondary(
-                                                          context),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Icon(Icons.data_usage,
-                                                  size: 12,
-                                                  color:
-                                                      AppColors.textSecondary(
-                                                          context)),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                _formatarTamanho(backup),
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color:
-                                                      AppColors.textSecondary(
-                                                          context),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                    // Ações
-                                    Row(
-                                      children: [
-                                        // Restaurar
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            color:
-                                                Colors.green.withValues(alpha:0.1),
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                          ),
-                                          child: IconButton(
-                                            icon: const Icon(Icons.restore,
-                                                color: Colors.green, size: 20),
-                                            onPressed: () =>
-                                                _restaurarBackup(backup),
-                                            tooltip: 'Restaurar',
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        // Excluir
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.red.withValues(alpha:0.1),
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                          ),
-                                          child: IconButton(
-                                            icon: const Icon(Icons.delete,
-                                                color: Colors.red, size: 20),
-                                            onPressed: () =>
-                                                _excluirBackup(backup),
-                                            tooltip: 'Excluir',
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                        Text(backup.path.split('\\').last,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold)),
+                                        Text(_formatarData(backup),
+                                            style: const TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.grey))
+                                      ])),
+                                  Row(children: [
+                                    IconButton(
+                                        onPressed: () =>
+                                            _restaurarBackup(backup),
+                                        icon: const Icon(Icons.restore,
+                                            color: Colors.green)),
+                                    IconButton(
+                                        onPressed: () => _excluirBackup(backup),
+                                        icon: const Icon(Icons.delete,
+                                            color: Colors.red)),
+                                  ]),
+                                ]),
                               ),
-                            ),
-                          );
-                        }).toList(),
-                    ],
+                            )),
+                      ],
+                    ),
                   ),
-                ),
-        ),
-      ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(String title, BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A))),
+          GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Icon(Icons.close, size: 20, color: Colors.grey[500])),
+        ],
+      ),
     );
   }
 }
-

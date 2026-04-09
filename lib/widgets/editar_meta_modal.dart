@@ -3,40 +3,30 @@ import 'package:flutter/material.dart';
 import '../database/db_helper.dart';
 import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
-import '../widgets/gradient_button.dart';
 
 class EditarMetaModal extends StatefulWidget {
   final Map<String, dynamic> meta;
   final Future<void> Function()? onSalvo;
 
-  const EditarMetaModal({
-    super.key,
-    required this.meta,
-    this.onSalvo,
-  });
+  const EditarMetaModal({super.key, required this.meta, this.onSalvo});
 
   @override
   State<EditarMetaModal> createState() => _EditarMetaModalState();
 
-  static Future<void> show({
-    required BuildContext context,
-    required Map<String, dynamic> meta,
-    Future<void> Function()? onSalvo,
-  }) {
-    return showModalBottomSheet(
+  static Future<void> show(
+      {required BuildContext context,
+      required Map<String, dynamic> meta,
+      Future<void> Function()? onSalvo}) {
+    return showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        decoration: BoxDecoration(
-          color: AppColors.surface(context),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: EditarMetaModal(
-          meta: meta,
-          onSalvo: onSalvo,
-        ),
+      barrierDismissible: true,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        child: EditarMetaModal(meta: meta, onSalvo: onSalvo),
       ),
     );
   }
@@ -48,12 +38,10 @@ class _EditarMetaModalState extends State<EditarMetaModal> {
   final _tituloController = TextEditingController();
   final _descricaoController = TextEditingController();
   final _valorObjetivoController = TextEditingController();
-  final _dataFimController = TextEditingController();
-
   String _corSelecionada = 'viagem';
   String _iconeSelecionado = 'viagem';
   DateTime? _dataFim;
-  bool _carregando = false;
+  bool _isLoading = false;
 
   final List<Map<String, dynamic>> _opcoesTipo = [
     {
@@ -81,10 +69,6 @@ class _EditarMetaModalState extends State<EditarMetaModal> {
   @override
   void initState() {
     super.initState();
-    _preencherDados();
-  }
-
-  void _preencherDados() {
     _tituloController.text = widget.meta['titulo'] ?? '';
     _descricaoController.text = widget.meta['descricao'] ?? '';
     final valor = (widget.meta['valor_objetivo'] ?? 0).toDouble();
@@ -92,420 +76,263 @@ class _EditarMetaModalState extends State<EditarMetaModal> {
         valor.toStringAsFixed(2).replaceAll('.', ',');
     _corSelecionada = widget.meta['cor'] ?? 'viagem';
     _iconeSelecionado = widget.meta['icone'] ?? 'viagem';
-
     _dataFim = DateTime.parse(widget.meta['data_fim']);
-    _dataFimController.text = Formatador.data(_dataFim!);
-  }
-
-  @override
-  void dispose() {
-    _tituloController.dispose();
-    _descricaoController.dispose();
-    _valorObjetivoController.dispose();
-    _dataFimController.dispose();
-    super.dispose();
   }
 
   Future<void> _selecionarData() async {
     final data = await showDatePicker(
-      context: context,
-      initialDate: _dataFim ?? DateTime.now().add(const Duration(days: 30)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-    );
-
-    if (data != null) {
-      setState(() {
-        _dataFim = data;
-        _dataFimController.text = Formatador.data(data);
-      });
-    }
+        context: context,
+        initialDate: _dataFim ?? DateTime.now().add(const Duration(days: 30)),
+        firstDate: DateTime.now(),
+        lastDate: DateTime.now().add(const Duration(days: 365 * 5)));
+    if (data != null) setState(() => _dataFim = data);
   }
 
-  double _parseValor(String texto) {
-    try {
-      return double.parse(
-          texto.replaceAll(',', '.').replaceAll('R\$', '').trim());
-    } catch (e) {
-      return 0;
-    }
-  }
+  double _parseValor(String texto) =>
+      double.tryParse(
+          texto.replaceAll(',', '.').replaceAll('R\$', '').trim()) ??
+      0;
 
   Future<void> _salvarMeta() async {
     if (!_formKey.currentState!.validate()) return;
-
     if (_dataFim == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selecione uma data limite'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+          const SnackBar(content: Text('Selecione uma data limite')));
       return;
     }
-
     final valorObjetivo = _parseValor(_valorObjetivoController.text);
     if (valorObjetivo <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Digite um valor válido para a meta'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+          const SnackBar(content: Text('Digite um valor válido')));
       return;
     }
-
-    setState(() => _carregando = true);
-
+    setState(() => _isLoading = true);
     try {
-      final meta = {
+      await _dbHelper.updateMeta({
         'id': widget.meta['id'],
         'titulo': _tituloController.text,
         'descricao': _descricaoController.text,
         'valor_objetivo': valorObjetivo,
         'data_fim': _dataFim!.toIso8601String(),
         'cor': _corSelecionada,
-        'icone': _iconeSelecionado,
-      };
-
-      await _dbHelper.updateMeta(meta);
-
-      if (mounted) {
-        if (widget.onSalvo != null) {
-          await widget.onSalvo!();
-        }
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✏️ Meta atualizada com sucesso!'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+        'icone': _iconeSelecionado
+      });
+      if (widget.onSalvo != null) await widget.onSalvo!();
+      if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao atualizar meta: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro: $e'), backgroundColor: Colors.red));
     } finally {
-      if (mounted) setState(() => _carregando = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // CABEÇALHO
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'Editar Meta',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+    return Container(
+      width: MediaQuery.of(context).size.width - 40,
+      constraints: const BoxConstraints(maxWidth: 500, maxHeight: 580),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 8))
+          ]),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildHeader('Editar Meta', context),
+          const Divider(height: 1, color: Color(0xFFEEEEEE)),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Tipo da meta',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                        height: 60,
+                        child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _opcoesTipo.length,
+                            itemBuilder: (context, index) {
+                              final opcao = _opcoesTipo[index];
+                              final isSelected =
+                                  _corSelecionada == opcao['cor'];
+                              return GestureDetector(
+                                  onTap: () => setState(() {
+                                        _corSelecionada = opcao['cor'];
+                                        _iconeSelecionado = opcao['icone'];
+                                      }),
+                                  child: Container(
+                                      width: 70,
+                                      margin: const EdgeInsets.only(right: 12),
+                                      decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? (opcao['color'] as Color)
+                                                  .withValues(alpha: 0.2)
+                                              : Colors.grey[100],
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                              color: isSelected
+                                                  ? opcao['color'] as Color
+                                                  : Colors.grey[300]!,
+                                              width: isSelected ? 2 : 1)),
+                                      child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                                _getIconeParaTipo(
+                                                    opcao['icone']),
+                                                color: isSelected
+                                                    ? opcao['color'] as Color
+                                                    : Colors.grey[600]),
+                                            const SizedBox(height: 4),
+                                            Text(opcao['nome'],
+                                                style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: isSelected
+                                                        ? opcao['color']
+                                                            as Color
+                                                        : Colors.grey[600]))
+                                          ])));
+                            })),
+                    const SizedBox(height: 20),
+                    _buildTextField(_tituloController, 'Título',
+                        hint: 'Ex: Viagem para a praia'),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                        _descricaoController, 'Descrição (opcional)',
+                        maxLines: 2),
+                    const SizedBox(height: 16),
+                    _buildTextField(_valorObjetivoController, 'Valor da meta',
+                        isNumber: true, prefix: 'R\$ '),
+                    const SizedBox(height: 16),
+                    _buildDatePickerField(),
+                    const SizedBox(height: 24),
+                    _buildButtons(context),
+                  ],
                 ),
-              ),
-            ],
-          ),
-        ),
-
-        // FORMULÁRIO
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Tipo da meta
-                  Text(
-                    'Tipo da meta',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary(context),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: 60,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _opcoesTipo.length,
-                      itemBuilder: (context, index) {
-                        final opcao = _opcoesTipo[index];
-                        final isSelected = _corSelecionada == opcao['cor'];
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _corSelecionada = opcao['cor'];
-                              _iconeSelecionado = opcao['icone'];
-                            });
-                          },
-                          child: Container(
-                            width: 70,
-                            margin: const EdgeInsets.only(right: 12),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? (opcao['color'] as Color).withValues(alpha:0.2)
-                                  : AppColors.muted(context),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isSelected
-                                    ? opcao['color'] as Color
-                                    : AppColors.border(context),
-                                width: isSelected ? 2 : 1,
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  _getIconeParaTipo(opcao['icone']),
-                                  color: isSelected
-                                      ? opcao['color'] as Color
-                                      : AppColors.textSecondary(context),
-                                  size: 24,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  opcao['nome'],
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: isSelected
-                                        ? opcao['color'] as Color
-                                        : AppColors.textSecondary(context),
-                                    fontWeight: isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Título
-                  Text(
-                    'Título',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary(context),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _tituloController,
-                    style: TextStyle(color: AppColors.textPrimary(context)),
-                    decoration: InputDecoration(
-                      hintText: 'Ex: Viagem para a praia',
-                      hintStyle: TextStyle(color: AppColors.textHint(context)),
-                      prefixIcon:
-                          const Icon(Icons.title, color: AppColors.primary),
-                      filled: true,
-                      fillColor: AppColors.surface(context),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: AppColors.border(context)),
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Digite um título';
-                      }
-                      return null;
-                    },
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Descrição
-                  Text(
-                    'Descrição (opcional)',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary(context),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _descricaoController,
-                    maxLines: 2,
-                    style: TextStyle(color: AppColors.textPrimary(context)),
-                    decoration: InputDecoration(
-                      hintText: 'Ex: Guardar dinheiro para viajar em dezembro',
-                      hintStyle: TextStyle(color: AppColors.textHint(context)),
-                      prefixIcon: const Icon(Icons.description,
-                          color: AppColors.primary),
-                      filled: true,
-                      fillColor: AppColors.surface(context),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: AppColors.border(context)),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Valor objetivo
-                  Text(
-                    'Valor da meta',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary(context),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _valorObjetivoController,
-                    keyboardType: TextInputType.number,
-                    style: TextStyle(color: AppColors.textPrimary(context)),
-                    decoration: InputDecoration(
-                      hintText: '0,00',
-                      hintStyle: TextStyle(color: AppColors.textHint(context)),
-                      prefixIcon: const Icon(Icons.attach_money,
-                          color: AppColors.primary),
-                      prefixText: 'R\$ ',
-                      filled: true,
-                      fillColor: AppColors.surface(context),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: AppColors.border(context)),
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Digite o valor da meta';
-                      }
-                      return null;
-                    },
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Data limite
-                  Text(
-                    'Data limite',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary(context),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: _selecionarData,
-                    child: AbsorbPointer(
-                      child: TextFormField(
-                        controller: _dataFimController,
-                        style: TextStyle(color: AppColors.textPrimary(context)),
-                        decoration: InputDecoration(
-                          hintText: 'Selecione uma data',
-                          hintStyle:
-                              TextStyle(color: AppColors.textHint(context)),
-                          prefixIcon: const Icon(Icons.calendar_today,
-                              color: AppColors.primary),
-                          suffixIcon: Icon(Icons.arrow_drop_down,
-                              color: AppColors.textHint(context)),
-                          filled: true,
-                          fillColor: AppColors.surface(context),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                BorderSide(color: AppColors.border(context)),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Botões
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text(
-                            'Cancelar',
-                            style: TextStyle(
-                                color: AppColors.textSecondary(context)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _carregando
-                            ? const Center(
-                                child: SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(),
-                                ),
-                              )
-                            : GradientButton(
-                                text: 'SALVAR ALTERAÇÕES',
-                                onPressed: _salvarMeta,
-                              ),
-                      ),
-                    ],
-                  ),
-                ],
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  IconData _getIconeParaTipo(String tipo) {
-    switch (tipo) {
-      case 'viagem':
-        return Icons.flight;
-      case 'carro':
-        return Icons.directions_car;
-      case 'casa':
-        return Icons.home;
-      case 'estudo':
-        return Icons.school;
-      case 'investimento':
-        return Icons.trending_up;
-      default:
-        return Icons.flag;
-    }
+  Widget _buildHeader(String title, BuildContext context) {
+    return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+        child:
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A))),
+          GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Icon(Icons.close, size: 20, color: Colors.grey[500]))
+        ]));
   }
-}
 
+  Widget _buildTextField(TextEditingController controller, String label,
+      {String? hint,
+      bool isNumber = false,
+      String prefix = '',
+      int maxLines = 1}) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      const SizedBox(height: 8),
+      TextFormField(
+          controller: controller,
+          keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+          maxLines: maxLines,
+          decoration: InputDecoration(
+              hintText: hint ?? label,
+              prefixText: prefix.isEmpty ? null : prefix,
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14)),
+          validator: (v) => v == null || v.isEmpty ? 'Digite $label' : null)
+    ]);
+  }
+
+  Widget _buildDatePickerField() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Data limite',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      const SizedBox(height: 8),
+      InkWell(
+          onTap: _selecionarData,
+          child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(10)),
+              child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                        _dataFim != null
+                            ? Formatador.data(_dataFim!)
+                            : 'Selecionar data',
+                        style: const TextStyle(fontSize: 14)),
+                    Icon(Icons.calendar_today,
+                        size: 18, color: Colors.grey[500])
+                  ])))
+    ]);
+  }
+
+  Widget _buildButtons(BuildContext context) {
+    return Row(children: [
+      Expanded(
+          child: OutlinedButton(
+              onPressed: () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  side: BorderSide(color: Colors.grey[400]!),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10))),
+              child: const Text('Cancelar'))),
+      const SizedBox(width: 12),
+      Expanded(
+          child: _isLoading
+              ? const Center(
+                  child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator()))
+              : ElevatedButton(
+                  onPressed: _salvarMeta,
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF7B2CBF),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10))),
+                  child: const Text('SALVAR')))
+    ]);
+  }
+
+  IconData _getIconeParaTipo(String tipo) => switch (tipo) {
+        'viagem' => Icons.flight,
+        'carro' => Icons.directions_car,
+        'casa' => Icons.home,
+        'estudo' => Icons.school,
+        'investimento' => Icons.trending_up,
+        _ => Icons.flag
+      };
+}

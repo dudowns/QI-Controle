@@ -230,7 +230,8 @@ class MetaRepository with LoadingMixin {
   Future<Result<int>> updateMetaResult(Map<String, dynamic> meta) async {
     return await withLoadingResult(() async {
       try {
-        final id = meta['id'];
+        // ignore: unused_local_variable
+        // ignore: unused_local_variable`n    final id = meta['id'];
         meta.remove('id');
         meta['sync_status'] = 'pending';
         meta['updated_at'] = DateTime.now().toIso8601String();
@@ -506,4 +507,3 @@ class MetaRepository with LoadingMixin {
     }
   }
 }
-

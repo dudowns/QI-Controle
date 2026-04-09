@@ -5,40 +5,32 @@ import '../database/db_helper.dart';
 import '../models/provento_model.dart';
 import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
-import '../widgets/gradient_button.dart';
 
 class EditarProventoModal extends StatefulWidget {
   final Map<String, dynamic> provento;
   final Function? onAtualizado;
 
-  const EditarProventoModal({
-    super.key,
-    required this.provento,
-    this.onAtualizado,
-  });
+  const EditarProventoModal(
+      {super.key, required this.provento, this.onAtualizado});
 
   @override
   State<EditarProventoModal> createState() => _EditarProventoModalState();
 
-  static Future<void> show({
-    required BuildContext context,
-    required Map<String, dynamic> provento,
-    Function? onAtualizado,
-  }) {
-    return showModalBottomSheet(
+  static Future<void> show(
+      {required BuildContext context,
+      required Map<String, dynamic> provento,
+      Function? onAtualizado}) {
+    return showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.8,
-        decoration: BoxDecoration(
-          color: AppColors.surface(context),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: EditarProventoModal(
-          provento: provento,
-          onAtualizado: onAtualizado,
-        ),
+      barrierDismissible: true,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        child:
+            EditarProventoModal(provento: provento, onAtualizado: onAtualizado),
       ),
     );
   }
@@ -47,15 +39,12 @@ class EditarProventoModal extends StatefulWidget {
 class _EditarProventoModalState extends State<EditarProventoModal> {
   final DBHelper _dbHelper = DBHelper();
   final _formKey = GlobalKey<FormState>();
-
   late TextEditingController _tickerController;
   late TextEditingController _valorController;
   late TextEditingController _quantidadeController;
-  late TextEditingController _observacaoController;
-
   late DateTime _dataPagamento;
   late DateTime? _dataCom;
-  bool _carregando = false;
+  bool _isLoading = false;
   bool _temDataCom = false;
 
   @override
@@ -63,523 +52,209 @@ class _EditarProventoModalState extends State<EditarProventoModal> {
     super.initState();
     _tickerController = TextEditingController(text: widget.provento['ticker']);
     _valorController = TextEditingController(
-      text: (widget.provento['valor_por_cota'] ?? 0)
-          .toStringAsFixed(2)
-          .replaceAll('.', ','),
-    );
+        text: (widget.provento['valor_por_cota'] ?? 0)
+            .toStringAsFixed(2)
+            .replaceAll('.', ','));
     _quantidadeController = TextEditingController(
-      text: (widget.provento['quantidade'] ?? 1).toString(),
-    );
-    _observacaoController = TextEditingController(
-      text: widget.provento['observacao'] ?? '',
-    );
-
+        text: (widget.provento['quantidade'] ?? 1).toString());
     _dataPagamento = DateTime.parse(widget.provento['data_pagamento']);
-
     if (widget.provento['data_com'] != null) {
       _dataCom = DateTime.parse(widget.provento['data_com']);
       _temDataCom = true;
     }
   }
 
-  @override
-  void dispose() {
-    _tickerController.dispose();
-    _valorController.dispose();
-    _quantidadeController.dispose();
-    _observacaoController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _selecionarDataPagamento() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dataPagamento,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      locale: const Locale('pt', 'BR'),
-    );
-    if (picked != null) {
-      setState(() => _dataPagamento = picked);
-    }
-  }
-
-  Future<void> _selecionarDataCom() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dataCom ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      locale: const Locale('pt', 'BR'),
-    );
-    if (picked != null) {
-      setState(() => _dataCom = picked);
-    }
-  }
-
   Future<void> _atualizarProvento() async {
     if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _carregando = true);
-
+    setState(() => _isLoading = true);
     try {
       final valor = double.parse(_valorController.text.replaceAll(',', '.'));
       final quantidade =
           double.parse(_quantidadeController.text.replaceAll(',', '.'));
-      final total = valor * quantidade;
-
-      final proventoAtualizado = {
+      await _dbHelper.updateProvento({
         'id': widget.provento['id'],
         'ticker': _tickerController.text.toUpperCase(),
         'valor_por_cota': valor,
         'quantidade': quantidade,
-        'total_recebido': total,
+        'total_recebido': valor * quantidade,
         'data_pagamento': _dataPagamento.toIso8601String(),
-        'data_com': _temDataCom ? _dataCom?.toIso8601String() : null,
-        'observacao': _observacaoController.text,
-      };
-
-      await _dbHelper.updateProvento(proventoAtualizado);
-
-      if (mounted) {
-        widget.onAtualizado?.call();
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Provento atualizado!'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+        'data_com': _temDataCom ? _dataCom?.toIso8601String() : null
+      });
+      widget.onAtualizado?.call();
+      if (mounted) Navigator.pop(context);
     } catch (e) {
-      _mostrarErro('Erro ao atualizar: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro: $e'), backgroundColor: Colors.red));
     } finally {
-      if (mounted) setState(() => _carregando = false);
+      setState(() => _isLoading = false);
     }
-  }
-
-  Future<void> _excluirProvento() async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface(context),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha:0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.delete, color: Colors.red),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Excluir Provento',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary(context),
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          'Deseja realmente excluir este provento?',
-          style: TextStyle(color: AppColors.textSecondary(context)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'Cancelar',
-              style: TextStyle(color: AppColors.textSecondary(context)),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('EXCLUIR'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar == true && mounted) {
-      setState(() => _carregando = true);
-      try {
-        await _dbHelper.deleteProvento(widget.provento['id']);
-        widget.onAtualizado?.call();
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🗑️ Provento excluído!'),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } catch (e) {
-        _mostrarErro('Erro ao excluir: $e');
-      } finally {
-        if (mounted) setState(() => _carregando = false);
-      }
-    }
-  }
-
-  void _mostrarErro(String mensagem) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensagem),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // 🔝 CABEÇALHO
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'Editar Provento',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha:0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.white),
-                  onPressed: _excluirProvento,
-                  tooltip: 'Excluir provento',
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // 📝 FORMULÁRIO
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Ticker
-                  Text(
-                    'Ativo',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary(context),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _tickerController,
-                    style: TextStyle(color: AppColors.textPrimary(context)),
-                    decoration: InputDecoration(
-                      hintText: 'Ex: PETR4, VALE3',
-                      hintStyle: TextStyle(color: AppColors.textHint(context)),
-                      prefixIcon: const Icon(Icons.trending_up,
-                          color: AppColors.primary),
-                      filled: true,
-                      fillColor: AppColors.surface(context),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: AppColors.border(context)),
-                      ),
-                    ),
-                    textCapitalization: TextCapitalization.characters,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Digite o ticker';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Valor e Quantidade (lado a lado)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Valor por cota',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary(context),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            TextFormField(
-                              controller: _valorController,
-                              keyboardType: TextInputType.number,
-                              style: TextStyle(
-                                  color: AppColors.textPrimary(context)),
-                              decoration: InputDecoration(
-                                hintText: '0,00',
-                                hintStyle: TextStyle(
-                                    color: AppColors.textHint(context)),
-                                prefixIcon: const Icon(Icons.attach_money,
-                                    color: AppColors.primary),
-                                prefixText: 'R\$ ',
-                                filled: true,
-                                fillColor: AppColors.surface(context),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                      color: AppColors.border(context)),
-                                ),
-                              ),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Digite o valor';
-                                }
-                                if (double.tryParse(
-                                        value.replaceAll(',', '.')) ==
-                                    null) {
-                                  return 'Valor inválido';
-                                }
-                                return null;
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Quantidade',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary(context),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            TextFormField(
-                              controller: _quantidadeController,
-                              keyboardType: TextInputType.number,
-                              style: TextStyle(
-                                  color: AppColors.textPrimary(context)),
-                              decoration: InputDecoration(
-                                hintText: '1',
-                                hintStyle: TextStyle(
-                                    color: AppColors.textHint(context)),
-                                prefixIcon: const Icon(Icons.numbers,
-                                    color: AppColors.primary),
-                                filled: true,
-                                fillColor: AppColors.surface(context),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                      color: AppColors.border(context)),
-                                ),
-                              ),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Digite a quantidade';
-                                }
-                                if (double.tryParse(
-                                        value.replaceAll(',', '.')) ==
-                                    null) {
-                                  return 'Quantidade inválida';
-                                }
-                                return null;
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Data de pagamento
-                  Text(
-                    'Data de pagamento',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary(context),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  InkWell(
-                    onTap: _selecionarDataPagamento,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface(context),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border(context)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_today,
-                              color: AppColors.primary),
-                          const SizedBox(width: 12),
-                          Text(
-                            DateFormat('dd/MM/yyyy').format(_dataPagamento),
-                            style: TextStyle(
-                                color: AppColors.textPrimary(context)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Data COM (opcional)
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: _temDataCom,
-                        onChanged: (value) {
-                          setState(() => _temDataCom = value!);
-                        },
-                        activeColor: AppColors.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('Possui data COM'),
-                    ],
-                  ),
-
-                  if (_temDataCom) ...[
-                    const SizedBox(height: 8),
-                    InkWell(
-                      onTap: _selecionarDataCom,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 16),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface(context),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border(context)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.event, color: AppColors.primary),
-                            const SizedBox(width: 12),
-                            Text(
-                              _dataCom != null
-                                  ? DateFormat('dd/MM/yyyy').format(_dataCom!)
-                                  : 'Selecionar data COM',
-                              style: TextStyle(
-                                color: _dataCom != null
-                                    ? AppColors.textPrimary(context)
-                                    : AppColors.textHint(context),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+    return Container(
+      width: MediaQuery.of(context).size.width - 40,
+      constraints: const BoxConstraints(maxWidth: 500, maxHeight: 580),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 8))
+          ]),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildHeader('Editar Provento', context),
+          const Divider(height: 1, color: Color(0xFFEEEEEE)),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    _buildTextField(_tickerController, 'Ativo',
+                        hint: 'Ex: PETR4'),
                     const SizedBox(height: 16),
-                  ],
-
-                  // Observação
-                  Text(
-                    'Observação (opcional)',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary(context),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _observacaoController,
-                    maxLines: 2,
-                    style: TextStyle(color: AppColors.textPrimary(context)),
-                    decoration: InputDecoration(
-                      hintText: 'Observações adicionais...',
-                      hintStyle: TextStyle(color: AppColors.textHint(context)),
-                      prefixIcon:
-                          const Icon(Icons.note, color: AppColors.primary),
-                      filled: true,
-                      fillColor: AppColors.surface(context),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: AppColors.border(context)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Botões
-                  Row(
-                    children: [
+                    Row(children: [
                       Expanded(
-                        child: TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text(
-                            'Cancelar',
-                            style: TextStyle(
-                                color: AppColors.textSecondary(context)),
-                          ),
-                        ),
-                      ),
+                          child: _buildTextField(
+                              _valorController, 'Valor por cota',
+                              isNumber: true, prefix: 'R\$ ')),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _carregando
-                            ? const Center(
-                                child: SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(),
-                                ),
-                              )
-                            : GradientButton(
-                                text: 'ATUALIZAR',
-                                onPressed: _atualizarProvento,
-                              ),
-                      ),
+                          child: _buildTextField(
+                              _quantidadeController, 'Quantidade',
+                              isNumber: true))
+                    ]),
+                    const SizedBox(height: 16),
+                    _buildDatePickerField('Data de pagamento', _dataPagamento,
+                        (date) => setState(() => _dataPagamento = date)),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Checkbox(
+                          value: _temDataCom,
+                          onChanged: (value) =>
+                              setState(() => _temDataCom = value!),
+                          activeColor: const Color(0xFF7B2CBF)),
+                      const Text('Possui data COM')
+                    ]),
+                    if (_temDataCom) ...[
+                      const SizedBox(height: 8),
+                      _buildDatePickerField(
+                          'Data COM',
+                          _dataCom ?? DateTime.now(),
+                          (date) => setState(() => _dataCom = date))
                     ],
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    _buildButtons(context),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
-}
 
+  Widget _buildHeader(String title, BuildContext context) {
+    return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+        child:
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A))),
+          GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Icon(Icons.close, size: 20, color: Colors.grey[500]))
+        ]));
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label,
+      {String? hint, bool isNumber = false, String prefix = ''}) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      const SizedBox(height: 8),
+      TextFormField(
+          controller: controller,
+          keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+          decoration: InputDecoration(
+              hintText: hint ?? label,
+              prefixText: prefix.isEmpty ? null : prefix,
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14)),
+          validator: (v) => v == null || v.isEmpty ? 'Digite $label' : null)
+    ]);
+  }
+
+  Widget _buildDatePickerField(
+      String label, DateTime date, Function(DateTime) onChanged) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      const SizedBox(height: 8),
+      InkWell(
+          onTap: () async {
+            final picked = await showDatePicker(
+                context: context,
+                initialDate: date,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now().add(const Duration(days: 365)));
+            if (picked != null) onChanged(picked);
+          },
+          child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(10)),
+              child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(DateFormat('dd/MM/yyyy').format(date),
+                        style: const TextStyle(fontSize: 14)),
+                    Icon(Icons.calendar_today,
+                        size: 18, color: Colors.grey[500])
+                  ])))
+    ]);
+  }
+
+  Widget _buildButtons(BuildContext context) {
+    return Row(children: [
+      Expanded(
+          child: OutlinedButton(
+              onPressed: () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  side: BorderSide(color: Colors.grey[400]!),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10))),
+              child: const Text('Cancelar'))),
+      const SizedBox(width: 12),
+      Expanded(
+          child: _isLoading
+              ? const Center(
+                  child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator()))
+              : ElevatedButton(
+                  onPressed: _atualizarProvento,
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF7B2CBF),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10))),
+                  child: const Text('ATUALIZAR')))
+    ]);
+  }
+}

@@ -1,13 +1,13 @@
-import '../services/logger_service.dart';
 // lib/screens/renda_fixa_screen.dart
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../database/db_helper.dart';
 import '../models/renda_fixa_model.dart';
 import '../services/renda_fixa_diaria.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/date_formatter.dart';
-import 'novo_investimento_dialog.dart';
-import 'detalhes_renda_fixa.dart';
+import '../widgets/renda_fixa_modal.dart';
+import '../widgets/detalhes_renda_fixa_modal.dart';
 import '../constants/app_colors.dart';
 
 class RendaFixaScreen extends StatefulWidget {
@@ -42,7 +42,7 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
           dados.map((json) => RendaFixaModel.fromJson(json)).toList();
       _calcularTotais();
     } catch (e) {
-      LoggerService.info('❌ Erro ao carregar renda fixa: $e');
+      debugPrint('❌ Erro ao carregar renda fixa: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -74,37 +74,267 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
     _rendimentoTotal = atual - aplicado;
   }
 
-  Future<void> _adicionarInvestimento(RendaFixaModel investimento) async {
-    try {
-      await _dbHelper.insertRendaFixa(investimento.toJson());
-      await _carregarDados();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ ${investimento.nome} adicionado!'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
+  Future<void> _adicionarInvestimento() async {
+    await RendaFixaModal.show(
+      context: context,
+      onSalvar: (investimento) async {
+        try {
+          await _dbHelper.insertRendaFixa(investimento.toJson());
+          await _carregarDados();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ ${investimento.nome} adicionado!'),
+                backgroundColor: AppColors.success,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Erro: $e'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+        }
+      },
+    );
+  }
+
+  Future<void> _editarInvestimento(RendaFixaModel inv) async {
+    await RendaFixaModal.show(
+      context: context,
+      investimento: inv,
+      onSalvar: (investimento) async {
+        try {
+          final json = investimento.toJson();
+
+          if (investimento.id != null && investimento.id!.isNotEmpty) {
+            // 🔥 CORREÇÃO: Não tentar converter para int, manter como String
+            json['id'] = investimento.id;
+            await _dbHelper.updateRendaFixa(json);
+          } else {
+            await _dbHelper.insertRendaFixa(json);
+          }
+
+          await _carregarDados();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✏️ Investimento atualizado!'),
+                backgroundColor: Colors.blue,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Erro: $e'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+        }
+      },
+    );
+  }
+
+  // 🔥 MÉTODO PARA ADICIONAR VALOR AO INVESTIMENTO (COM DATA)
+  Future<void> _adicionarValorInvestimento(RendaFixaModel inv) async {
+    final valorController = TextEditingController();
+    DateTime dataDeposito = DateTime.now();
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.attach_money, color: Colors.green),
+                ),
+                const SizedBox(width: 12),
+                const Text('Adicionar Valor',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SizedBox(
+              width: 350,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Investimento: ${inv.nome}',
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: Colors.green.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Valor atual:'),
+                        Text(
+                          CurrencyFormatter.format(inv.valorAplicado),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Valor do depósito',
+                      style: TextStyle(fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: valorController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      hintText: '0,00',
+                      prefixText: 'R\$ ',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                    ),
+                    autofocus: true,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Data do depósito',
+                      style: TextStyle(fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: dataDeposito,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) {
+                        setStateDialog(() => dataDeposito = picked);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            DateFormat('dd/MM/yyyy').format(dataDeposito),
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          Icon(Icons.calendar_today,
+                              size: 18, color: Colors.grey[500]),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('ADICIONAR'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (confirmar == true && valorController.text.isNotEmpty) {
+      try {
+        final valorAdicional =
+            double.parse(valorController.text.replaceAll(',', '.'));
+        if (valorAdicional <= 0) throw Exception('Valor inválido');
+
+        final novoValorTotal = inv.valorAplicado + valorAdicional;
+
+        // 🔥 Salvar a data do depósito na observação (histórico)
+        final dataFormatada = DateFormat('dd/MM/yyyy').format(dataDeposito);
+        final observacaoAtual = inv.observacao ?? '';
+        final novaObservacao = observacaoAtual.isEmpty
+            ? 'Aporte: R\$ ${valorAdicional.toStringAsFixed(2)} em $dataFormatada'
+            : '$observacaoAtual\nAporte: R\$ ${valorAdicional.toStringAsFixed(2)} em $dataFormatada';
+
+        final investimentoAtualizado = inv.copyWith(
+          valorAplicado: novoValorTotal,
+          observacao: novaObservacao,
         );
-      }
-    } catch (e) {
-      if (mounted) {
+
+        final json = investimentoAtualizado.toJson();
+        if (inv.id != null && inv.id!.isNotEmpty) {
+          json['id'] = inv.id; // 🔥 Manter como String
+        }
+
+        await _dbHelper.updateRendaFixa(json);
+        await _carregarDados();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  '✅ Adicionado R\$ ${valorAdicional.toStringAsFixed(2)} em $dataFormatada!'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Erro: $e'),
-            backgroundColor: AppColors.error,
+            backgroundColor: Colors.red,
           ),
         );
       }
     }
   }
 
-  Future<void> _excluirInvestimento(int id, String nome) async {
-    final confirm = await showDialog<bool>(
+  Future<void> _excluirInvestimento(RendaFixaModel inv) async {
+    final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Excluir Investimento'),
-        content: Text('Deseja excluir "$nome"?'),
+        content: Text('Deseja realmente excluir "${inv.nome}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -117,36 +347,66 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
         ],
       ),
     );
-    if (confirm == true) {
+
+    if (confirmar == true) {
       try {
-        await _dbHelper.deleteRendaFixa(id);
+        if (inv.id != null && inv.id!.isNotEmpty) {
+          // 🔥 CORREÇÃO: Converter String para int apenas se for necessário
+          // O método deleteRendaFixa espera int, mas o ID pode ser String
+          // Vamos usar o método genérico delete
+          final db = await _dbHelper.database;
+          await db.delete(
+            'renda_fixa',
+            where: 'id = ? OR remote_id = ?',
+            whereArgs: [inv.id, inv.id],
+          );
+        }
         await _carregarDados();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('🗑️ $nome excluído!'),
-              backgroundColor: AppColors.warning,
+            const SnackBar(
+              content: Text('🗑️ Investimento excluído!'),
+              backgroundColor: Colors.orange,
               behavior: SnackBarBehavior.floating,
             ),
           );
         }
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erro ao excluir: $e'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao excluir: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
     }
+  }
+
+  void _verDetalhes(RendaFixaModel inv) {
+    DetalhesRendaFixaModal.show(
+      context: context,
+      investimento: inv,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background(context),
+      appBar: AppBar(
+        title: null,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: AppColors.textPrimary(context),
+        centerTitle: false,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh, color: AppColors.textPrimary(context)),
+            onPressed: _carregarDados,
+            tooltip: 'Atualizar',
+          ),
+        ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
@@ -154,14 +414,14 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         SizedBox(
                           height: 36,
                           child: ElevatedButton(
-                            onPressed: () => _mostrarDialogAdicionar(),
+                            onPressed: _adicionarInvestimento,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
@@ -262,10 +522,7 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
                                     );
                                   },
                                   onDismissed: (direction) {
-                                    if (inv.id != null) {
-                                      _excluirInvestimento(
-                                          int.parse(inv.id!), inv.nome);
-                                    }
+                                    _excluirInvestimento(inv);
                                   },
                                   child: _buildRendaFixaCard(inv),
                                 );
@@ -329,7 +586,7 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: _getCorTipo(inv.tipoRenda).withValues(alpha:0.1),
+                  color: _getCorTipo(inv.tipoRenda).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(_getIconeTipo(inv.tipoRenda),
@@ -350,7 +607,8 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: _getCorTipo(inv.tipoRenda).withValues(alpha:0.1),
+                            color: _getCorTipo(inv.tipoRenda)
+                                .withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(inv.tipoRenda,
@@ -386,7 +644,7 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                        color: cor.withValues(alpha:0.1),
+                        color: cor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8)),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -406,6 +664,31 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
                                 fontWeight: FontWeight.w500)),
                       ],
                     ),
+                  ),
+                ],
+              ),
+              // 🔥 BOTÕES: DEPÓSITO, EDITAR, EXCLUIR
+              Row(
+                children: [
+                  // Botão Depositar (💰)
+                  IconButton(
+                    icon: Icon(Icons.account_balance_wallet,
+                        size: 18, color: Colors.green[600]),
+                    onPressed: () => _adicionarValorInvestimento(inv),
+                    tooltip: 'Adicionar valor',
+                  ),
+                  // Botão Editar (✏️)
+                  IconButton(
+                    icon: Icon(Icons.edit, size: 18, color: Colors.grey[600]),
+                    onPressed: () => _editarInvestimento(inv),
+                    tooltip: 'Editar',
+                  ),
+                  // Botão Excluir (🗑️)
+                  IconButton(
+                    icon: Icon(Icons.delete_outline,
+                        size: 18, color: Colors.grey[600]),
+                    onPressed: () => _excluirInvestimento(inv),
+                    tooltip: 'Excluir',
                   ),
                 ],
               ),
@@ -456,25 +739,4 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
         return 'IPCA + ${inv.taxa.toStringAsFixed(2)}%';
     }
   }
-
-  void _mostrarDialogAdicionar() {
-    showDialog(
-      context: context,
-      builder: (_) => NovoInvestimentoDialog(
-        onSalvar: (investimento) async {
-          await _adicionarInvestimento(investimento);
-        },
-      ),
-    );
-  }
-
-  void _verDetalhes(RendaFixaModel inv) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DetalhesRendaFixaScreen(investimento: inv),
-      ),
-    ).then((_) => _carregarDados());
-  }
 }
-

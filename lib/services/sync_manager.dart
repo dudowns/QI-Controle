@@ -1,8 +1,8 @@
-import '../services/logger_service.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sqflite/sqflite.dart';
 import '../database/db_helper.dart';
+import '../services/logger_service.dart';
 
 class SyncManager {
   static final SyncManager _instance = SyncManager._internal();
@@ -30,34 +30,40 @@ class SyncManager {
     LoggerService.info('🔄 Iniciando sincronização...');
 
     try {
+      // Enviar pendentes
       await syncPendingLancamentos();
       await syncPendingInvestimentos();
       await syncPendingMetas();
       await syncPendingProventos();
       await syncPendingRendaFixa();
+      await syncPendingContas();
+      await syncPendingPagamentos();
 
+      // Buscar remotos
       await fetchRemoteLancamentos();
       await fetchRemoteInvestimentos();
       await fetchRemoteMetas();
       await fetchRemoteProventos();
       await fetchRemoteRendaFixa();
+      await fetchRemoteContas();
 
       LoggerService.info('✅ Sincronização completa!');
     } catch (e) {
-      LoggerService.info('❌ Erro na sincronização: $e');
+      LoggerService.error('❌ Erro na sincronização: $e');
     } finally {
       _isSyncing = false;
     }
   }
 
-  // ========== SINCRONIZAÇÃO DE LANÇAMENTOS (CORRIGIDA) ==========
+  // ========== SINCRONIZAÇÃO DE LANÇAMENTOS ==========
 
   Future<void> syncPendingLancamentos() async {
     final db = await dbHelper.database;
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    LoggerService.info('🔍 Buscando lançamentos pendentes para user: ${user.id}');
+    LoggerService.info(
+        '🔍 Buscando lançamentos pendentes para user: ${user.id}');
 
     final pending = await db.query(
       DBHelper.tabelaLancamentos,
@@ -70,20 +76,19 @@ class SyncManager {
       return;
     }
 
-    LoggerService.info('📤 Enviando ${pending.length} lançamentos pendentes...');
+    LoggerService.info(
+        '📤 Enviando ${pending.length} lançamentos pendentes...');
 
     for (var localData in pending) {
       LoggerService.info(
           '  📝 Processando: ${localData['descricao']} (ID: ${localData['id']})');
 
       try {
-        // Garantir que a data está no formato correto (YYYY-MM-DD)
         String dataStr = localData['data'].toString();
         if (dataStr.contains('T')) {
           dataStr = dataStr.split('T')[0];
         }
 
-        // 🔥 CORREÇÃO: mapear 'gasto' para 'despesa' (conforme constraint do Supabase)
         String tipoOriginal = localData['tipo'].toString();
         String tipoCorreto;
 
@@ -94,7 +99,7 @@ class SyncManager {
         } else if (tipoOriginal == 'receita') {
           tipoCorreto = 'receita';
         } else {
-          tipoCorreto = 'despesa'; // fallback seguro
+          tipoCorreto = 'despesa';
           LoggerService.info(
               '  ⚠️ Tipo desconhecido "$tipoOriginal", usando "despesa"');
         }
@@ -114,7 +119,6 @@ class SyncManager {
         final remoteId = localData['remote_id'] as String?;
 
         if (remoteId != null && remoteId.isNotEmpty) {
-          // Atualizar registro existente
           await supabase
               .from('lancamentos')
               .update(remoteData)
@@ -129,9 +133,9 @@ class SyncManager {
             where: 'id = ?',
             whereArgs: [localData['id']],
           );
-          LoggerService.info('  ✅ Lançamento atualizado: ${localData['descricao']}');
+          LoggerService.info(
+              '  ✅ Lançamento atualizado: ${localData['descricao']}');
         } else {
-          // Inserir novo registro
           final response = await supabase
               .from('lancamentos')
               .insert(remoteData)
@@ -152,7 +156,7 @@ class SyncManager {
               '  ✅ Lançamento inserido: ${localData['descricao']} (remote_id: ${response['id']})');
         }
       } catch (e) {
-        LoggerService.info('  ❌ Erro ao sincronizar lançamento: $e');
+        LoggerService.error('  ❌ Erro ao sincronizar lançamento: $e');
         await db.update(
           DBHelper.tabelaLancamentos,
           {
@@ -204,11 +208,12 @@ class SyncManager {
             'created_at': remote['criado_em'],
             'updated_at': remote['atualizado_em'],
           });
-          LoggerService.info('  📥 Novo lançamento importado: ${remote['descricao']}');
+          LoggerService.info(
+              '  📥 Novo lançamento importado: ${remote['descricao']}');
         }
       }
     } catch (e) {
-      LoggerService.info('  ❌ Erro ao buscar lançamentos: $e');
+      LoggerService.error('  ❌ Erro ao buscar lançamentos: $e');
     }
   }
 
@@ -226,7 +231,8 @@ class SyncManager {
     );
 
     if (pending.isEmpty) return;
-    LoggerService.info('📤 Enviando ${pending.length} investimentos pendentes...');
+    LoggerService.info(
+        '📤 Enviando ${pending.length} investimentos pendentes...');
 
     for (var localData in pending) {
       try {
@@ -269,7 +275,7 @@ class SyncManager {
           );
         }
       } catch (e) {
-        LoggerService.info('  ❌ Erro ao sincronizar investimento: $e');
+        LoggerService.error('  ❌ Erro ao sincronizar investimento: $e');
       }
     }
   }
@@ -308,7 +314,7 @@ class SyncManager {
         }
       }
     } catch (e) {
-      LoggerService.info('  ❌ Erro ao buscar investimentos: $e');
+      LoggerService.error('  ❌ Erro ao buscar investimentos: $e');
     }
   }
 
@@ -363,7 +369,7 @@ class SyncManager {
           );
         }
       } catch (e) {
-        LoggerService.info('  ❌ Erro ao sincronizar meta: $e');
+        LoggerService.error('  ❌ Erro ao sincronizar meta: $e');
       }
     }
   }
@@ -403,7 +409,7 @@ class SyncManager {
         }
       }
     } catch (e) {
-      LoggerService.info('  ❌ Erro ao buscar metas: $e');
+      LoggerService.error('  ❌ Erro ao buscar metas: $e');
     }
   }
 
@@ -465,7 +471,7 @@ class SyncManager {
           );
         }
       } catch (e) {
-        LoggerService.info('  ❌ Erro ao sincronizar provento: $e');
+        LoggerService.error('  ❌ Erro ao sincronizar provento: $e');
       }
     }
   }
@@ -505,7 +511,7 @@ class SyncManager {
         }
       }
     } catch (e) {
-      LoggerService.info('  ❌ Erro ao buscar proventos: $e');
+      LoggerService.error('  ❌ Erro ao buscar proventos: $e');
     }
   }
 
@@ -569,7 +575,7 @@ class SyncManager {
           );
         }
       } catch (e) {
-        LoggerService.info('  ❌ Erro ao sincronizar renda fixa: $e');
+        LoggerService.error('  ❌ Erro ao sincronizar renda fixa: $e');
       }
     }
   }
@@ -579,7 +585,8 @@ class SyncManager {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    LoggerService.info('📥 Buscando investimentos de renda fixa do servidor...');
+    LoggerService.info(
+        '📥 Buscando investimentos de renda fixa do servidor...');
 
     try {
       final remoteRendaFixa =
@@ -609,7 +616,181 @@ class SyncManager {
         }
       }
     } catch (e) {
-      LoggerService.info('  ❌ Erro ao buscar renda fixa: $e');
+      LoggerService.error('  ❌ Erro ao buscar renda fixa: $e');
+    }
+  }
+
+  // ========== SINCRONIZAÇÃO DE CONTAS ==========
+
+  Future<void> syncPendingContas() async {
+    final db = await dbHelper.database;
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    final pending = await db.query(
+      DBHelper.tabelaContas,
+      where: 'sync_status = ? AND user_id = ?',
+      whereArgs: ['pending', user.id],
+    );
+
+    if (pending.isEmpty) return;
+    LoggerService.info('📤 Enviando ${pending.length} contas pendentes...');
+
+    for (var localData in pending) {
+      try {
+        final remoteData = {
+          'nome': localData['nome'],
+          'valor': localData['valor'],
+          'dia_vencimento': localData['dia_vencimento'],
+          'tipo': localData['tipo'],
+          'categoria': localData['categoria'],
+          'ativa': localData['ativa'],
+          'parcelas_total': localData['parcelas_total'],
+          'parcelas_pagas': localData['parcelas_pagas'],
+          'data_inicio': localData['data_inicio']?.toString().split('T')[0],
+          'data_fim': localData['data_fim']?.toString().split('T')[0],
+          'user_id': user.id,
+        };
+
+        final remoteId = localData['remote_id'] as String?;
+
+        if (remoteId != null && remoteId.isNotEmpty) {
+          await supabase.from('contas').update(remoteData).eq('id', remoteId);
+          await db.update(
+            DBHelper.tabelaContas,
+            {'sync_status': 'synced'},
+            where: 'id = ?',
+            whereArgs: [localData['id']],
+          );
+          LoggerService.info('  ✅ Conta atualizada: ${localData['nome']}');
+        } else {
+          final response = await supabase
+              .from('contas')
+              .insert(remoteData)
+              .select()
+              .single();
+          await db.update(
+            DBHelper.tabelaContas,
+            {'remote_id': response['id'], 'sync_status': 'synced'},
+            where: 'id = ?',
+            whereArgs: [localData['id']],
+          );
+          LoggerService.info(
+              '  ✅ Conta inserida: ${localData['nome']} (remote_id: ${response['id']})');
+        }
+      } catch (e) {
+        LoggerService.error('  ❌ Erro ao sincronizar conta: $e');
+      }
+    }
+  }
+
+  Future<void> fetchRemoteContas() async {
+    final db = await dbHelper.database;
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    LoggerService.info('📥 Buscando contas do servidor...');
+
+    try {
+      final remoteContas =
+          await supabase.from('contas').select().eq('user_id', user.id);
+
+      for (var remote in remoteContas) {
+        final localExists = await db.query(
+          DBHelper.tabelaContas,
+          where: 'remote_id = ?',
+          whereArgs: [remote['id']],
+        );
+
+        if (localExists.isEmpty) {
+          await db.insert(DBHelper.tabelaContas, {
+            'remote_id': remote['id'],
+            'user_id': remote['user_id'],
+            'nome': remote['nome'],
+            'valor': remote['valor'],
+            'dia_vencimento': remote['dia_vencimento'],
+            'tipo': remote['tipo'],
+            'categoria': remote['categoria'],
+            'ativa': remote['ativa'],
+            'parcelas_total': remote['parcelas_total'],
+            'parcelas_pagas': remote['parcelas_pagas'],
+            'data_inicio': remote['data_inicio'],
+            'data_fim': remote['data_fim'],
+            'sync_status': 'synced',
+          });
+          LoggerService.info('  📥 Nova conta: ${remote['nome']}');
+        }
+      }
+    } catch (e) {
+      LoggerService.error('  ❌ Erro ao buscar contas: $e');
+    }
+  }
+
+  // ========== SINCRONIZAÇÃO DE PAGAMENTOS ==========
+
+  Future<void> syncPendingPagamentos() async {
+    final db = await dbHelper.database;
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    final pending = await db.query(
+      DBHelper.tabelaPagamentos,
+      where: 'sync_status = ? AND user_id = ?',
+      whereArgs: ['pending', user.id],
+    );
+
+    if (pending.isEmpty) return;
+    LoggerService.info('📤 Enviando ${pending.length} pagamentos pendentes...');
+
+    for (var localData in pending) {
+      try {
+        // Buscar remote_id da conta associada
+        final conta = await db.query(
+          DBHelper.tabelaContas,
+          where: 'id = ?',
+          whereArgs: [localData['conta_id']],
+        );
+        final contaRemoteId =
+            conta.isNotEmpty ? conta.first['remote_id'] as String? : null;
+
+        final remoteData = {
+          'conta_id': contaRemoteId ?? localData['conta_id'],
+          'ano_mes': localData['ano_mes'],
+          'valor': localData['valor'],
+          'data_pagamento': localData['data_pagamento'],
+          'status': localData['status'],
+          'user_id': user.id,
+        };
+
+        final remoteId = localData['remote_id'] as String?;
+
+        if (remoteId != null && remoteId.isNotEmpty) {
+          await supabase
+              .from('pagamentos_mensais')
+              .update(remoteData)
+              .eq('id', remoteId);
+          await db.update(
+            DBHelper.tabelaPagamentos,
+            {'sync_status': 'synced'},
+            where: 'id = ?',
+            whereArgs: [localData['id']],
+          );
+        } else {
+          final response = await supabase
+              .from('pagamentos_mensais')
+              .insert(remoteData)
+              .select()
+              .single();
+          await db.update(
+            DBHelper.tabelaPagamentos,
+            {'remote_id': response['id'], 'sync_status': 'synced'},
+            where: 'id = ?',
+            whereArgs: [localData['id']],
+          );
+        }
+      } catch (e) {
+        LoggerService.error('  ❌ Erro ao sincronizar pagamento: $e');
+      }
     }
   }
 
@@ -637,7 +818,7 @@ class SyncManager {
         await supabase.from(table).delete().eq('id', remoteId);
         LoggerService.info('🗑️ Deletado no servidor: $table/$remoteId');
       } catch (e) {
-        LoggerService.info('❌ Erro ao deletar no servidor: $e');
+        LoggerService.error('❌ Erro ao deletar no servidor: $e');
       }
     }
 
@@ -659,7 +840,8 @@ class SyncManager {
       return;
     }
 
-    LoggerService.info('📤 FORÇANDO ENVIO DE TODOS OS DADOS PARA O SUPABASE...');
+    LoggerService.info(
+        '📤 FORÇANDO ENVIO DE TODOS OS DADOS PARA O SUPABASE...');
     LoggerService.info('🔍 User ID: ${user.id}');
 
     // ========== LANÇAMENTOS ==========
@@ -677,7 +859,6 @@ class SyncManager {
           dataStr = dataStr.split('T')[0];
         }
 
-        // 🔥 CORREÇÃO também no forcarEnvioTodosDados
         String tipoOriginal = local['tipo'].toString();
         String tipoCorreto;
 
@@ -724,11 +905,10 @@ class SyncManager {
               '  ✅ Inserido: ${local['descricao']} (remote_id: ${response['id']})');
         }
       } catch (e) {
-        LoggerService.info('  ❌ Erro: ${local['descricao']} - $e');
+        LoggerService.error('  ❌ Erro: ${local['descricao']} - $e');
       }
     }
 
     LoggerService.info('✅ FORÇAMENTO DE ENVIO CONCLUÍDO!');
   }
 }
-

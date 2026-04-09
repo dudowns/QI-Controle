@@ -13,6 +13,7 @@ import 'screens/lancamentos.dart';
 import 'services/auth_service.dart';
 import 'services/theme_service.dart';
 import 'services/loading_service.dart';
+import 'services/sync_service.dart';
 import 'screens/investimentos.dart';
 import 'screens/metas_screen.dart';
 import 'screens/dashboard.dart';
@@ -32,6 +33,9 @@ void main() async {
 
   Intl.defaultLocale = 'pt_BR';
 
+  // Inicializar serviço de sincronização
+  SyncService().initialize();
+
   runApp(const MyApp());
 }
 
@@ -48,7 +52,7 @@ class MyApp extends StatelessWidget {
       child: Consumer<ThemeService>(
         builder: (context, themeService, child) {
           return MaterialApp(
-            title: 'Controle Financeiro',
+            title: 'QI Controle',
             debugShowCheckedModeBanner: false,
             theme: _buildLightTheme(),
             darkTheme: _buildDarkTheme(),
@@ -105,7 +109,7 @@ class MyApp extends StatelessWidget {
       cardTheme: CardThemeData(
         color: Colors.white,
         elevation: 2,
-        shadowColor: Colors.black.withValues(alpha:0.1),
+        shadowColor: Colors.black.withValues(alpha: 0.1),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -144,7 +148,7 @@ class MyApp extends StatelessWidget {
       cardTheme: CardThemeData(
         color: const Color(0xFF1E1E1E),
         elevation: 2,
-        shadowColor: Colors.black.withValues(alpha:0.3),
+        shadowColor: Colors.black.withValues(alpha: 0.3),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -162,4 +166,3 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-

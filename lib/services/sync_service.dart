@@ -1,9 +1,10 @@
-import '../services/logger_service.dart';
+// lib/services/sync_service.dart
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'sync_manager.dart';
+import 'logger_service.dart';
 
-class SyncService {
+class SyncService extends ChangeNotifier {
   static final SyncService _instance = SyncService._internal();
   factory SyncService() => _instance;
   SyncService._internal();
@@ -12,12 +13,12 @@ class SyncService {
   final Connectivity _connectivity = Connectivity();
 
   bool _isInitialized = false;
+  bool _isSyncing = false;
 
   void initialize() {
     if (_isInitialized) return;
     _isInitialized = true;
 
-    // Escutar mudanças de conectividade
     _connectivity.onConnectivityChanged
         .listen((List<ConnectivityResult> results) {
       final isConnected =
@@ -25,25 +26,30 @@ class SyncService {
 
       if (isConnected) {
         LoggerService.info('🌐 Conexão detectada, iniciando sincronização...');
-        _syncManager.syncAll();
+        syncNow();
       }
     });
 
     LoggerService.info('✅ SyncService inicializado');
-
-    // Sincroniza imediatamente ao iniciar
     syncNow();
   }
 
   Future<void> syncNow() async {
-    LoggerService.info('🔄 Sincronização manual solicitada');
+    if (_isSyncing) {
+      LoggerService.info('⚠️ Sincronização já em andamento');
+      return;
+    }
 
-    // 🔥 REMOVIDA A VERIFICAÇÃO DE CONEXÃO - SINCRONIZA SEMPRE
-    // Isso vai tentar sincronizar independente do status de internet
+    LoggerService.info('🔄 Sincronização manual solicitada');
+    _isSyncing = true;
+
     try {
       await _syncManager.syncAll();
+      notifyListeners(); // 🔥 NOTIFICAR TODOS OS LISTENERS
     } catch (e) {
-      LoggerService.info('❌ Erro na sincronização: $e');
+      LoggerService.error('❌ Erro na sincronização: $e');
+    } finally {
+      _isSyncing = false;
     }
   }
 
@@ -55,4 +61,3 @@ class SyncService {
     await _syncManager.deleteAndSync(table, localId, remoteId);
   }
 }
-
