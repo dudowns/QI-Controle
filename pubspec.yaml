@@ -10,8 +10,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-
-    
   # 🔥 LOCALIZAÇÕES
   flutter_localizations:
     sdk: flutter
@@ -22,8 +20,6 @@ dependencies:
   sqflite_common_ffi: ^2.3.0
   path: ^1.8.0
   path_provider: ^2.1.0
-
-
 
   # ========== UI E ANIMAÇÕES ==========
   animate_do: ^3.3.4
@@ -44,7 +40,6 @@ dependencies:
   csv: ^5.0.0
   share_plus: ^7.0.0
   http: ^1.1.0
-
   app_links: ^6.0.0
   url_launcher: ^6.3.0
   
@@ -67,11 +62,17 @@ dependencies:
   supabase_flutter: ^2.12.2
   google_sign_in: ^6.3.0
 
-  # 🔥 NOVAS DEPENDÊNCIAS
+  # ========== PDF E IMPRESSÃO ==========
+  pdf: ^3.10.7
+  printing: ^5.11.1
+
+  # ========== UI ADICIONAL ==========
   google_fonts: ^6.1.0
   font_awesome_flutter: ^10.7.0
   cached_network_image: ^3.3.0
 
+  # 🔥 ADICIONADO - NECESSÁRIO PARA .withValues() e .withoutValues()
+  flex_color_scheme: ^7.3.1
 
 dev_dependencies:
   flutter_test:

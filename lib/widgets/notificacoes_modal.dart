@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
 import '../constants/app_colors.dart';
-import '../utils/date_helper.dart';
 
 class NotificacoesModal extends StatefulWidget {
   const NotificacoesModal({super.key});
@@ -42,21 +41,19 @@ class _NotificacoesModalState extends State<NotificacoesModal> {
   }
 
   String _formatarData(DateTime data) {
-    final now = DateHelper.agoraBrasilia();
+    final now = DateTime.now();
     final difference = now.difference(data);
 
     if (difference.inDays == 0) {
       if (difference.inHours == 0) {
-        if (difference.inMinutes == 0) {
-          return 'Agora mesmo';
-        }
-        return 'Há ${difference.inMinutes} min';
+        if (difference.inMinutes == 0) return 'Agora mesmo';
+        return 'Ha ${difference.inMinutes} min';
       }
-      return 'Há ${difference.inHours} h';
+      return 'Ha ${difference.inHours} h';
     } else if (difference.inDays == 1) {
       return 'Ontem';
     } else if (difference.inDays < 7) {
-      return 'Há ${difference.inDays} dias';
+      return 'Ha ${difference.inDays} dias';
     } else {
       return DateFormat('dd/MM/yyyy').format(data);
     }
@@ -68,7 +65,6 @@ class _NotificacoesModalState extends State<NotificacoesModal> {
 
     return Column(
       children: [
-        // 🔝 CABEÇALHO
         Container(
           padding: const EdgeInsets.all(16),
           decoration: const BoxDecoration(
@@ -78,138 +74,107 @@ class _NotificacoesModalState extends State<NotificacoesModal> {
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
-              ),
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.pop(context)),
               const SizedBox(width: 8),
-              const Text(
-                'Notificações',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              const Text('Notificacoes',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold)),
               const Spacer(),
               if (notificacoes.isNotEmpty) ...[
                 IconButton(
-                  icon: const Icon(Icons.done_all, color: Colors.white),
-                  onPressed: () {
-                    _notifService.marcarTodasComoLidas();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('✅ Todas marcadas como lidas'),
-                        backgroundColor: Colors.green,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                  tooltip: 'Marcar todas como lidas',
-                ),
+                    icon: const Icon(Icons.done_all, color: Colors.white),
+                    onPressed: () {
+                      _notifService.marcarTodasComoLidas();
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content: Text('Todas marcadas como lidas'),
+                          backgroundColor: Colors.green,
+                          behavior: SnackBarBehavior.floating));
+                    },
+                    tooltip: 'Marcar todas como lidas'),
                 const SizedBox(width: 4),
                 IconButton(
-                  icon: const Icon(Icons.delete_sweep, color: Colors.white),
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        backgroundColor: AppColors.surface(context),
-                        title: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.red.withValues(alpha:0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child:
-                                  const Icon(Icons.warning, color: Colors.red),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Limpar notificações',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary(context),
-                              ),
-                            ),
-                          ],
-                        ),
-                        content: Text(
-                          'Deseja remover todas as notificações?',
-                          style: TextStyle(
-                              color: AppColors.textSecondary(context)),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: Text(
-                              'Cancelar',
-                              style: TextStyle(
-                                  color: AppColors.textSecondary(context)),
-                            ),
-                          ),
-                          ElevatedButton(
-                            onPressed: () {
-                              _notifService.limparTodas();
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('🗑️ Notificações removidas'),
-                                  backgroundColor: Colors.orange,
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                            ),
-                            child: const Text('LIMPAR'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                  tooltip: 'Limpar todas',
-                ),
+                    icon: const Icon(Icons.delete_sweep, color: Colors.white),
+                    onPressed: () {
+                      showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                                backgroundColor: AppColors.surface(context),
+                                title: Row(children: [
+                                  Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                          color:
+                                              Colors.red.withValues(alpha: 0.1),
+                                          borderRadius:
+                                              BorderRadius.circular(8)),
+                                      child: const Icon(Icons.warning,
+                                          color: Colors.red)),
+                                  const SizedBox(width: 12),
+                                  Text('Limpar notificacoes',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color:
+                                              AppColors.textPrimary(context))),
+                                ]),
+                                content: Text(
+                                    'Deseja remover todas as notificacoes?',
+                                    style: TextStyle(
+                                        color:
+                                            AppColors.textSecondary(context))),
+                                actions: [
+                                  TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: Text('Cancelar',
+                                          style: TextStyle(
+                                              color: AppColors.textSecondary(
+                                                  context)))),
+                                  ElevatedButton(
+                                      onPressed: () {
+                                        _notifService.limparTodas();
+                                        Navigator.pop(context);
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(const SnackBar(
+                                                content: Text(
+                                                    'Notificacoes removidas'),
+                                                backgroundColor: Colors.orange,
+                                                behavior:
+                                                    SnackBarBehavior.floating));
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.red,
+                                          foregroundColor: Colors.white),
+                                      child: const Text('LIMPAR')),
+                                ],
+                              ));
+                    },
+                    tooltip: 'Limpar todas'),
               ],
             ],
           ),
         ),
-
-        // 📝 CONTEÚDO
         Expanded(
           child: notificacoes.isEmpty
               ? Center(
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.notifications_none,
-                        size: 64,
-                        color: AppColors.muted(context),
-                      ),
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                      Icon(Icons.notifications_none,
+                          size: 64, color: AppColors.muted(context)),
                       const SizedBox(height: 16),
-                      Text(
-                        'Nenhuma notificação',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary(context),
-                        ),
-                      ),
+                      Text('Nenhuma notificacao',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary(context))),
                       const SizedBox(height: 8),
-                      Text(
-                        'As notificações de proventos aparecerão aqui',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textSecondary(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
+                      Text('As notificacoes de proventos aparecerao aqui',
+                          style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textSecondary(context))),
+                    ]))
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: notificacoes.length,
@@ -217,113 +182,91 @@ class _NotificacoesModalState extends State<NotificacoesModal> {
                     final notif = notificacoes[index];
                     final bool lida = notif['lida'] ?? false;
                     final String ticker = notif['ticker'] ?? '';
-                    final String titulo = notif['titulo'] ?? 'Notificação';
+                    final String titulo = notif['titulo'] ?? 'Notificacao';
                     final String mensagem = notif['mensagem'] ?? '';
-                    final DateTime data = notif['data'] ?? DateTime.now();
+                    final DateTime data = notif['data'] is DateTime
+                        ? notif['data']
+                        : DateTime.parse(notif['data'].toString());
                     final int id = notif['id'] ?? 0;
 
                     return Dismissible(
                       key: Key('notif_$id'),
                       direction: DismissDirection.endToStart,
                       background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 20),
-                        color: Colors.green,
-                        child: const Icon(Icons.done, color: Colors.white),
-                      ),
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          color: Colors.green,
+                          child: const Icon(Icons.done, color: Colors.white)),
                       onDismissed: (direction) {
-                        if (!lida) {
-                          _notifService.marcarComoLida(id);
-                        }
+                        if (!lida) _notifService.marcarComoLida(id);
                       },
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: lida
-                              ? AppColors.surface(context).withValues(alpha:0.5)
-                              : AppColors.surface(context),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
                             color: lida
-                                ? AppColors.border(context)
-                                : AppColors.primary.withValues(alpha:0.3),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            // Ícone
-                            Container(
+                                ? AppColors.surface(context)
+                                    .withValues(alpha: 0.5)
+                                : AppColors.surface(context),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                                color: lida
+                                    ? AppColors.border(context)
+                                    : AppColors.primary
+                                        .withValues(alpha: 0.3))),
+                        child: Row(children: [
+                          Container(
                               width: 48,
                               height: 48,
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: ticker.contains('11')
-                                    ? Colors.green.withValues(alpha:0.1)
-                                    : AppColors.primary.withValues(alpha:0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                                  color: ticker.contains('11')
+                                      ? Colors.green.withValues(alpha: 0.1)
+                                      : AppColors.primary
+                                          .withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12)),
                               child: Icon(
-                                ticker.contains('11')
-                                    ? Icons.apartment
-                                    : Icons.notifications,
-                                color: ticker.contains('11')
-                                    ? Colors.green
-                                    : AppColors.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-
-                            // Informações
-                            Expanded(
+                                  ticker.contains('11')
+                                      ? Icons.apartment
+                                      : Icons.notifications,
+                                  color: ticker.contains('11')
+                                      ? Colors.green
+                                      : AppColors.primary)),
+                          const SizedBox(width: 16),
+                          Expanded(
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    titulo,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                Text(titulo,
                                     style: TextStyle(
-                                      fontWeight: lida
-                                          ? FontWeight.normal
-                                          : FontWeight.bold,
-                                      fontSize: 16,
-                                      color: lida
-                                          ? AppColors.textSecondary(context)
-                                          : AppColors.textPrimary(context),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    mensagem,
+                                        fontWeight: lida
+                                            ? FontWeight.normal
+                                            : FontWeight.bold,
+                                        fontSize: 16,
+                                        color: lida
+                                            ? AppColors.textSecondary(context)
+                                            : AppColors.textPrimary(context))),
+                                const SizedBox(height: 4),
+                                Text(mensagem,
                                     style: TextStyle(
-                                      fontSize: 14,
-                                      color: AppColors.textSecondary(context),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _formatarData(data),
+                                        fontSize: 14,
+                                        color:
+                                            AppColors.textSecondary(context))),
+                                const SizedBox(height: 4),
+                                Text(_formatarData(data),
                                     style: TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textSecondary(context)
-                                          .withValues(alpha:0.7),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // Indicador de não lida
-                            if (!lida)
-                              Container(
+                                        fontSize: 11,
+                                        color: AppColors.textSecondary(context)
+                                            .withValues(alpha: 0.7))),
+                              ])),
+                          if (!lida)
+                            Container(
                                 width: 10,
                                 height: 10,
                                 decoration: const BoxDecoration(
-                                  color: AppColors.primary,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                          ],
-                        ),
+                                    color: AppColors.primary,
+                                    shape: BoxShape.circle)),
+                        ]),
                       ),
                     );
                   },
@@ -333,4 +276,3 @@ class _NotificacoesModalState extends State<NotificacoesModal> {
     );
   }
 }
-

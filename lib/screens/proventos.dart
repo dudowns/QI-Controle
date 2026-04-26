@@ -1,13 +1,13 @@
-import '../services/logger_service.dart';
-// lib/screens/proventos.dart
+// lib/screens/proventos.dart - VERSÃO FINAL COMPLETA E CORRIGIDA
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:animate_do/animate_do.dart';
+import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../database/db_helper.dart';
-import '../models/provento_model.dart';
-import '../models/investimento_model.dart';
 import '../constants/app_colors.dart';
-import '../utils/formatters.dart';
 import '../widgets/app_modals.dart';
+import '../widgets/toast.dart';
 
 class ProventosScreen extends StatefulWidget {
   const ProventosScreen({super.key});
@@ -17,277 +17,249 @@ class ProventosScreen extends StatefulWidget {
 }
 
 class _ProventosScreenState extends State<ProventosScreen> {
-  final DBHelper _dbHelper = DBHelper();
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   List<Provento> _proventos = [];
-  List<String> _tickersDisponiveis = [];
-  bool _carregando = true;
-  String _filtroPeriodo = '12M';
-  final List<String> _periodos = ['1M', '3M', '6M', '12M', 'TODOS'];
+  List<Provento> _filteredProventos = [];
+  bool _isLoading = true;
+  bool _isSyncing = false;
+  String _selectedPeriod = '12M';
+  String _searchQuery = '';
+  String _sortBy = 'date';
+  bool _isDisposed = false;
+  bool _showChart = true;
 
-  final Map<String, double> _proventosPorMes = {};
-  final Map<String, double> _proventosPorAtivo = {};
-  double _totalPeriodo = 0;
-  double _mediaMensal = 0;
-  double _projetadoProximoMes = 0;
+  final _currencyFormatter =
+      NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+  final _dateFormatter = DateFormat('dd/MM/yyyy');
+
+  final List<String> _periodos = ['1M', '3M', '6M', '12M', 'ALL'];
+  final Map<String, String> _tiposProvento = {
+    'DIVIDENDO': 'Dividendo',
+    'JCP': 'JCP',
+    'RENDIMENTO': 'Rendimento',
+    'BONIFICACAO': 'Bonificação',
+    'OUTROS': 'Outros',
+  };
+
+  List<String> _tickersDisponiveis = [];
+
+  final List<Color> _chartColors = [
+    const Color(0xFF8B5CF6),
+    const Color(0xFF3B82F6),
+    const Color(0xFF10B981),
+    const Color(0xFFF59E0B),
+    const Color(0xFFEF4444),
+    const Color(0xFFEC4899),
+    const Color(0xFF6366F1),
+    const Color(0xFF14B8A6),
+  ];
 
   @override
   void initState() {
     super.initState();
-    _carregarDados();
-    _carregarTickers();
+    _isDisposed = false;
+    _carregarTudo();
   }
 
-  Future<void> _carregarDados() async {
-    setState(() => _carregando = true);
-    try {
-      final dados = await _dbHelper.getAllProventos();
-      _proventos = dados.map((json) => Provento.fromJson(json)).toList();
-      _calcularEstatisticas();
-    } catch (e) {
-      LoggerService.info('❌ Erro ao carregar proventos: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao carregar: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    } finally {
-      setState(() => _carregando = false);
-    }
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
+  Future<void> _carregarTudo() async {
+    await _carregarTickers();
+    await _carregarProventos();
   }
 
   Future<void> _carregarTickers() async {
     try {
-      final dados = await _dbHelper.getAllInvestimentos();
-      _tickersDisponiveis =
-          dados.map((inv) => inv['ticker'] as String).toSet().toList();
+      final response = await _supabase
+          .from('investimentos')
+          .select('ticker')
+          .order('ticker');
+
+      if (!_isDisposed && mounted) {
+        final tickers = response
+            .map((item) => item['ticker'].toString().toUpperCase())
+            .toSet()
+            .toList();
+        tickers.sort();
+
+        setState(() {
+          _tickersDisponiveis = tickers;
+        });
+      }
     } catch (e) {
-      LoggerService.info('❌ Erro ao carregar tickers: $e');
-      _tickersDisponiveis = [];
+      if (kDebugMode) debugPrint('❌ Erro ao carregar tickers: $e');
     }
   }
 
-  void _calcularEstatisticas() {
-    _proventosPorMes.clear();
-    _proventosPorAtivo.clear();
-    _totalPeriodo = 0;
+  Future<void> _carregarProventos() async {
+    if (_isDisposed || !mounted) return;
 
-    final agora = DateTime.now();
-    DateTime dataLimite;
+    setState(() => _isLoading = true);
 
-    switch (_filtroPeriodo) {
-      case '1M':
-        dataLimite = DateTime(agora.year, agora.month - 1, agora.day);
-        break;
-      case '3M':
-        dataLimite = DateTime(agora.year, agora.month - 3, agora.day);
-        break;
-      case '6M':
-        dataLimite = DateTime(agora.year, agora.month - 6, agora.day);
-        break;
-      case '12M':
-        dataLimite = DateTime(agora.year - 1, agora.month, agora.day);
-        break;
-      default:
-        dataLimite = DateTime(2000);
-    }
+    try {
+      final response = await _supabase
+          .from('proventos')
+          .select()
+          .order('data_pagamento', ascending: false);
 
-    for (var p in _proventos) {
-      if (p.dataPagamento.isAfter(dataLimite) || _filtroPeriodo == 'TODOS') {
-        _totalPeriodo += p.totalRecebido;
+      if (!_isDisposed && mounted) {
+        final proventos =
+            response.map((json) => Provento.fromJson(json)).toList();
 
-        final chaveMes = _formatarMes(p.dataPagamento);
-        _proventosPorMes[chaveMes] =
-            (_proventosPorMes[chaveMes] ?? 0) + p.totalRecebido;
-
-        _proventosPorAtivo[p.ticker] =
-            (_proventosPorAtivo[p.ticker] ?? 0) + p.totalRecebido;
+        setState(() {
+          _proventos = proventos;
+          _aplicarFiltros();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (!_isDisposed && mounted) {
+        setState(() => _isLoading = false);
+        Toast.error(context, 'Erro ao carregar proventos');
       }
     }
-
-    _mediaMensal =
-        _proventosPorMes.isEmpty ? 0 : _totalPeriodo / _proventosPorMes.length;
-
-    final tresMesesAtras = DateTime(agora.year, agora.month - 3, agora.day);
-    double somaUltimos3 = 0;
-    int count = 0;
-
-    for (var p in _proventos) {
-      if (p.dataPagamento.isAfter(tresMesesAtras)) {
-        somaUltimos3 += p.totalRecebido;
-        count++;
-      }
-    }
-
-    _projetadoProximoMes = count > 0 ? somaUltimos3 / count : 0;
   }
 
-  String _formatarMes(DateTime data) {
-    const meses = [
-      'Jan',
-      'Fev',
-      'Mar',
-      'Abr',
-      'Mai',
-      'Jun',
-      'Jul',
-      'Ago',
-      'Set',
-      'Out',
-      'Nov',
-      'Dez'
-    ];
-    return '${meses[data.month - 1]}/${data.year.toString().substring(2)}';
-  }
+  void _aplicarFiltros() {
+    List<Provento> resultado = List.from(_proventos);
 
-  List<PieChartSectionData> _getGraficoProventos() {
-    final List<PieChartSectionData> sections = [];
-    final cores = [
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.purple,
-      Colors.teal,
-      Colors.pink,
-      Colors.amber,
-      Colors.brown
-    ];
-
-    final ativosOrdenados = _proventosPorAtivo.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    int corIndex = 0;
-    for (var entry in ativosOrdenados.take(6)) {
-      final percentual = (entry.value / _totalPeriodo) * 100;
-      sections.add(PieChartSectionData(
-        value: entry.value,
-        color: cores[corIndex % cores.length],
-        title: percentual > 3 ? '${percentual.toStringAsFixed(1)}%' : '',
-        titleStyle: const TextStyle(
-            fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
-        radius: 70,
-      ));
-      corIndex++;
+    if (_selectedPeriod != 'ALL') {
+      final meses = int.parse(_selectedPeriod.replaceAll('M', ''));
+      final dataCorte = DateTime.now().subtract(Duration(days: meses * 30));
+      resultado =
+          resultado.where((p) => p.dataPagamento.isAfter(dataCorte)).toList();
     }
 
-    if (ativosOrdenados.length > 6) {
-      double outros = 0;
-      for (int i = 6; i < ativosOrdenados.length; i++) {
-        outros += ativosOrdenados[i].value;
-      }
-      if (outros > 0) {
-        sections.add(PieChartSectionData(
-          value: outros,
-          color: Colors.grey,
-          title: 'Outros',
-          titleStyle: const TextStyle(
-              fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
-          radius: 70,
-        ));
-      }
+    if (_searchQuery.isNotEmpty) {
+      resultado = resultado
+          .where((p) =>
+              p.ticker.toLowerCase().contains(_searchQuery.toLowerCase()))
+          .toList();
     }
 
-    return sections;
+    resultado.sort((a, b) {
+      switch (_sortBy) {
+        case 'date':
+          return b.dataPagamento.compareTo(a.dataPagamento);
+        case 'amount':
+          return b.totalRecebido.compareTo(a.totalRecebido);
+        case 'ticker':
+          return a.ticker.compareTo(b.ticker);
+        default:
+          return 0;
+      }
+    });
+
+    if (!_isDisposed && mounted) {
+      setState(() {
+        _filteredProventos = resultado;
+      });
+    }
   }
 
-  Future<void> _adicionarProvento() async {
-    if (_tickersDisponiveis.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Primeiro adicione um investimento'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
+  List<Map<String, dynamic>> get _dadosGrafico {
+    final Map<String, double> porTicker = {};
+
+    for (var p in _filteredProventos) {
+      porTicker[p.ticker] = (porTicker[p.ticker] ?? 0) + p.totalRecebido;
+    }
+
+    final total = porTicker.values.fold(0.0, (a, b) => a + b);
+
+    return porTicker.entries.map((entry) {
+      return {
+        'ticker': entry.key,
+        'valor': entry.value,
+        'percentual': total > 0 ? (entry.value / total) * 100 : 0,
+      };
+    }).toList()
+      ..sort((a, b) => (b['valor'] as double).compareTo(a['valor'] as double));
+  }
+
+  Future<void> _mostrarFormulario([Provento? provento]) async {
+    Map<String, dynamic>? dadosProvento;
+
+    if (provento != null) {
+      dadosProvento = {
+        'ticker': provento.ticker,
+        'tipo_provento': provento.tipoProvento,
+        'valor_por_cota': provento.valorPorCota,
+        'quantidade': provento.quantidade ?? 1,
+        'data_pagamento': provento.dataPagamento.toIso8601String(),
+        'data_com': provento.dataCom?.toIso8601String(),
+        'observacao': provento.observacao,
+      };
     }
 
     final resultado = await AppModals.mostrarModalProvento(
       context: context,
+      provento: dadosProvento,
       tickersDisponiveis: _tickersDisponiveis,
     );
 
-    if (resultado != null) {
-      final novoProvento = Provento(
-        ticker: resultado['ticker'],
-        tipo: _getTipoProvento(resultado['tipo_provento']),
-        valorPorCota: resultado['valor_por_cota'],
-        quantidade: resultado['quantidade'],
-        dataPagamento: DateTime.parse(resultado['data_pagamento']),
-        dataCom: resultado['data_com'] != null
-            ? DateTime.parse(resultado['data_com'])
-            : null,
-      );
-      await _dbHelper.insertProvento(novoProvento.toJson());
-      await _carregarDados();
+    if (resultado != null && mounted) {
+      await _salvarProvento(resultado, provento);
+    }
+  }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Provento adicionado!'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+  Future<void> _salvarProvento(Map<String, dynamic> dados,
+      [Provento? provento]) async {
+    if (_isDisposed || !mounted) return;
+
+    setState(() => _isSyncing = true);
+
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        Toast.error(context, 'Usuário não autenticado');
+        return;
+      }
+
+      final valorPorCota = (dados['valor_por_cota'] as num).toDouble();
+      final quantidade = (dados['quantidade'] as num?)?.toDouble() ?? 1.0;
+      final totalRecebido = valorPorCota * quantidade;
+
+      final data = {
+        'user_id': user.id,
+        'ticker': dados['ticker'].toString().toUpperCase(),
+        'tipo_provento': dados['tipo_provento'] ?? 'DIVIDENDO',
+        'valor_por_cota': valorPorCota,
+        'quantidade': quantidade,
+        'total_recebido': totalRecebido,
+        'data_pagamento': dados['data_pagamento'],
+        'data_com': dados['data_com'],
+        'sync_status': 'pending',
+      };
+
+      if (provento != null) {
+        await _supabase.from('proventos').update(data).eq('id', provento.id);
+        Toast.success(context, '✅ Provento atualizado!');
+      } else {
+        await _supabase.from('proventos').insert(data);
+        Toast.success(context, '✅ Provento adicionado!');
+      }
+
+      await _carregarProventos();
+    } catch (e) {
+      Toast.error(context, 'Erro ao salvar');
+    } finally {
+      if (!_isDisposed && mounted) {
+        setState(() => _isSyncing = false);
       }
     }
   }
 
-  TipoProvento _getTipoProvento(String tipo) {
-    switch (tipo) {
-      case 'Dividendo':
-        return TipoProvento.dividendo;
-      case 'JCP':
-        return TipoProvento.jcp;
-      case 'Rendimento':
-        return TipoProvento.rendaFixa;
-      default:
-        return TipoProvento.outros;
-    }
-  }
-
-  Future<void> _editarProvento(Provento provento) async {
-    final resultado = await AppModals.mostrarModalProvento(
-      context: context,
-      provento: provento.toJson(),
-      tickersDisponiveis: _tickersDisponiveis,
-    );
-
-    if (resultado != null) {
-      final proventoAtualizado = Provento(
-        id: provento.id,
-        ticker: resultado['ticker'],
-        tipo: _getTipoProvento(resultado['tipo_provento']),
-        valorPorCota: resultado['valor_por_cota'],
-        quantidade: resultado['quantidade'],
-        dataPagamento: DateTime.parse(resultado['data_pagamento']),
-        dataCom: resultado['data_com'] != null
-            ? DateTime.parse(resultado['data_com'])
-            : null,
-      );
-      await _dbHelper.updateProvento(proventoAtualizado.toJson());
-      await _carregarDados();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✏️ Provento atualizado!'),
-            backgroundColor: Colors.blue,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _excluirProvento(int id, String ticker) async {
-    final confirm = await showDialog<bool>(
+  Future<void> _deletarProvento(Provento provento) async {
+    final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Excluir Provento'),
-        content: Text('Deseja excluir provento de $ticker?'),
+        title: const Text('Confirmar exclusão'),
+        content: Text('Excluir provento de ${provento.ticker}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -295,341 +267,706 @@ class _ProventosScreenState extends State<ProventosScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Excluir'),
           ),
         ],
       ),
     );
 
-    if (confirm == true) {
-      await _dbHelper.deleteProvento(id);
-      await _carregarDados();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🗑️ Provento excluído!'),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+    if (confirmar != true) return;
+
+    try {
+      await _supabase.from('proventos').delete().eq('id', provento.id);
+      Toast.success(context, '✅ Provento excluído!');
+      await _carregarProventos();
+    } catch (e) {
+      Toast.error(context, 'Erro ao excluir');
     }
+  }
+
+  Map<String, dynamic> _calcularEstatisticas() {
+    final total =
+        _filteredProventos.fold(0.0, (sum, p) => sum + p.totalRecebido);
+    final passados = _filteredProventos.where((p) => !p.isFuture).toList();
+    final futuros = _filteredProventos.where((p) => p.isFuture).toList();
+
+    final totalPassado = passados.fold(0.0, (sum, p) => sum + p.totalRecebido);
+    final totalFuturo = futuros.fold(0.0, (sum, p) => sum + p.totalRecebido);
+    final media =
+        _filteredProventos.isEmpty ? 0 : total / _filteredProventos.length;
+
+    return {
+      'total': total,
+      'totalPassado': totalPassado,
+      'totalFuturo': totalFuturo,
+      'media': media,
+      'quantidade': _filteredProventos.length,
+    };
   }
 
   @override
   Widget build(BuildContext context) {
-    final sections = _getGraficoProventos();
+    final stats = _calcularEstatisticas();
+    final dadosGrafico = _dadosGrafico;
 
     return Scaffold(
       backgroundColor: AppColors.background(context),
-      body: _carregando
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                // Seletor de período
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Período:',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Row(
-                          children: _periodos.map((periodo) {
-                            final isSelected = _filtroPeriodo == periodo;
-                            return Expanded(
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 2),
-                                child: FilterChip(
-                                  label: Text(periodo),
-                                  selected: isSelected,
-                                  onSelected: (selected) {
-                                    setState(() {
-                                      _filtroPeriodo = periodo;
-                                      _calcularEstatisticas();
-                                    });
-                                  },
-                                  selectedColor:
-                                      AppColors.primary.withValues(alpha:0.1),
-                                  checkmarkColor: AppColors.primary,
-                                  labelStyle: TextStyle(
-                                    fontSize: 11,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Barra superior
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.refresh,
+                      color: AppColors.textSecondary(context),
+                      size: 22,
+                    ),
+                    onPressed: _carregarTudo,
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.add_circle_outline,
+                      color: AppColors.primary,
+                      size: 24,
+                    ),
+                    onPressed: () => _mostrarFormulario(),
+                  ),
+                ],
+              ),
+            ),
+
+            // Filtros
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: _periodos.map((periodo) {
+                          final isSelected = _selectedPeriod == periodo;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() => _selectedPeriod = periodo);
+                                _aplicarFiltros();
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppColors.primary
+                                          .withValues(alpha: 0.12)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? AppColors.primary
+                                            .withValues(alpha: 0.3)
+                                        : AppColors.divider(context)
+                                            .withValues(alpha: 0.5),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  periodo == 'ALL' ? 'Todos' : periodo,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.w400,
                                     color: isSelected
                                         ? AppColors.primary
                                         : AppColors.textSecondary(context),
-                                    fontWeight: isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
                                   ),
                                 ),
                               ),
-                            );
-                          }).toList(),
-                        ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      setState(() => _sortBy = value);
+                      _aplicarFiltros();
+                    },
+                    color: AppColors.surface(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.sort_rounded,
+                        size: 20,
+                        color: AppColors.textSecondary(context),
+                      ),
+                    ),
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'date',
+                        child: Text('Por data',
+                            style: TextStyle(
+                                color: AppColors.textPrimary(context))),
+                      ),
+                      PopupMenuItem(
+                        value: 'amount',
+                        child: Text('Por valor',
+                            style: TextStyle(
+                                color: AppColors.textPrimary(context))),
+                      ),
+                      PopupMenuItem(
+                        value: 'ticker',
+                        child: Text('Por ticker',
+                            style: TextStyle(
+                                color: AppColors.textPrimary(context))),
                       ),
                     ],
                   ),
-                ),
-                // Cards de resumo
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                          child: _buildResumoCard('Total', _totalPeriodo,
-                              Icons.summarize, AppColors.primary)),
-                      const SizedBox(width: 12),
-                      Expanded(
-                          child: _buildResumoCard('Média', _mediaMensal,
-                              Icons.calculate, Colors.green)),
-                      const SizedBox(width: 12),
-                      Expanded(
-                          child: _buildResumoCard(
-                              'Projetado',
-                              _projetadoProximoMes,
-                              Icons.trending_up,
-                              Colors.orange)),
-                    ],
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Busca
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Buscar ticker...',
+                  hintStyle: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary(context),
                   ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    size: 18,
+                    color: AppColors.textSecondary(context),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: AppColors.surface(context),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  isDense: true,
                 ),
-                const SizedBox(height: 16),
-                // Lista de proventos
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        if (sections.isNotEmpty && _totalPeriodo > 0)
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface(context),
-                              borderRadius: BorderRadius.circular(20),
-                              border:
-                                  Border.all(color: AppColors.border(context)),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('💰 Distribuição por Ativo',
-                                    style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  height: 200,
-                                  child: PieChart(PieChartData(
-                                    sectionsSpace: 0,
-                                    centerSpaceRadius: 40,
-                                    sections: sections,
-                                  )),
-                                ),
-                              ],
-                            ),
-                          ),
-                        const SizedBox(height: 16),
-                        if (_proventos.isEmpty)
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(32),
-                              child: Column(
-                                children: [
-                                  Icon(Icons.attach_money,
-                                      size: 64, color: Colors.grey[400]),
-                                  const SizedBox(height: 16),
-                                  Text('Nenhum provento registrado',
-                                      style: TextStyle(
-                                          fontSize: 16,
-                                          color: Colors.grey[600])),
-                                  const SizedBox(height: 8),
-                                  Text('Toque no botão + para adicionar',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[500])),
-                                ],
-                              ),
-                            ),
-                          )
-                        else
-                          ..._proventos.map((p) => _buildProventoCard(p)),
-                      ],
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textPrimary(context),
+                ),
+                onChanged: (value) {
+                  setState(() => _searchQuery = value);
+                  _aplicarFiltros();
+                },
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Cards de estatísticas
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildStatCard(
+                      'Recebido',
+                      _currencyFormatter.format(stats['totalPassado']),
+                      Icons.trending_down,
+                      const Color(0xFF10B981),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildStatCard(
+                      'A Receber',
+                      _currencyFormatter.format(stats['totalFuturo']),
+                      Icons.calendar_today,
+                      const Color(0xFF3B82F6),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildStatCard(
+                      'Média',
+                      _currencyFormatter.format(stats['media']),
+                      Icons.equalizer,
+                      const Color(0xFFF59E0B),
+                    ),
+                  ),
+                ],
+              ),
             ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primary,
-        onPressed: _adicionarProvento,
-        child: const Icon(Icons.add, color: Colors.white),
+
+            const SizedBox(height: 12),
+
+            // Gráfico de Pizza
+            if (dadosGrafico.isNotEmpty && _filteredProventos.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface(context),
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: AppColors.border(context), width: 0.5),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Distribuição por Ativo',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary(context),
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            _showChart
+                                ? Icons.keyboard_arrow_up
+                                : Icons.keyboard_arrow_down,
+                            size: 20,
+                            color: AppColors.textSecondary(context),
+                          ),
+                          onPressed: () {
+                            setState(() => _showChart = !_showChart);
+                          },
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
+                    if (_showChart) ...[
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 140,
+                        child: Row(
+                          children: [
+                            // Gráfico
+                            Expanded(
+                              flex: 1,
+                              child: PieChart(
+                                PieChartData(
+                                  sectionsSpace: 2,
+                                  centerSpaceRadius: 30,
+                                  sections: dadosGrafico
+                                      .take(6)
+                                      .toList()
+                                      .asMap()
+                                      .entries
+                                      .map((entry) {
+                                    final index = entry.key;
+                                    final item = entry.value;
+                                    final valor = item['valor'] as double;
+                                    final percentual =
+                                        item['percentual'] as double;
+
+                                    return PieChartSectionData(
+                                      value: valor,
+                                      color: _chartColors[
+                                          index % _chartColors.length],
+                                      title: percentual > 5
+                                          ? '${percentual.toStringAsFixed(0)}%'
+                                          : '',
+                                      titleStyle: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                      radius: 45,
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ),
+                            // Legenda
+                            Expanded(
+                              flex: 1,
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: dadosGrafico.take(6).length,
+                                itemBuilder: (context, index) {
+                                  final item = dadosGrafico[index];
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: BoxDecoration(
+                                            color: _chartColors[
+                                                index % _chartColors.length],
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            item['ticker'],
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: AppColors.textSecondary(
+                                                  context),
+                                            ),
+                                          ),
+                                        ),
+                                        Text(
+                                          _currencyFormatter
+                                              .format(item['valor']),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color:
+                                                AppColors.textPrimary(context),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+            if (dadosGrafico.isNotEmpty) const SizedBox(height: 8),
+
+            // Lista de proventos
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filteredProventos.isEmpty
+                      ? _buildEmptyState()
+                      : RefreshIndicator(
+                          onRefresh: _carregarTudo,
+                          color: AppColors.primary,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 4),
+                            itemCount: _filteredProventos.length,
+                            itemBuilder: (context, index) {
+                              final provento = _filteredProventos[index];
+                              return FadeInLeft(
+                                delay: Duration(milliseconds: index * 30),
+                                child: _buildProventoCard(provento),
+                              );
+                            },
+                          ),
+                        ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildResumoCard(
-      String label, double valor, IconData icone, Color cor) {
+  Widget _buildStatCard(
+      String title, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       decoration: BoxDecoration(
-        color: AppColors.surface(context),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border(context)),
+        color: AppColors.cardBackground(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border(context), width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Icon(icone, size: 14, color: cor),
-            const SizedBox(width: 4),
-            Text(label,
+          Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 4),
+              Text(
+                title,
                 style: TextStyle(
-                    fontSize: 10, color: AppColors.textSecondary(context))),
-          ]),
-          const SizedBox(height: 8),
-          Text(Formatador.moedaCompacta(valor),
-              style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold, color: cor)),
+                  fontSize: 11,
+                  color: AppColors.textSecondary(context),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary(context),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildProventoCard(Provento p) {
-    final isFuturo = p.dataPagamento.isAfter(DateTime.now());
-    final diasParaPagamento = p.dataPagamento.difference(DateTime.now()).inDays;
+  Widget _buildProventoCard(Provento provento) {
+    final isFuture = provento.isFuture;
+    final iconColor =
+        isFuture ? const Color(0xFF3B82F6) : const Color(0xFF10B981);
 
-    Color statusColor;
-    String statusText;
-
-    if (isFuturo) {
-      if (diasParaPagamento <= 7) {
-        statusColor = Colors.orange;
-        statusText = '⚠️ Próximo';
-      } else {
-        statusColor = AppColors.primary;
-        statusText = '⏳ Futuro';
-      }
-    } else {
-      statusColor = Colors.green;
-      statusText = '✅ Recebido';
-    }
-
-    return Dismissible(
-      key: Key(p.id ?? DateTime.now().millisecondsSinceEpoch.toString()),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        color: Colors.red,
-        child: const Icon(Icons.delete, color: Colors.white),
-      ),
-      confirmDismiss: (direction) async {
-        return await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Excluir'),
-            content: Text('Excluir provento de ${p.ticker}?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child:
-                    const Text('Excluir', style: TextStyle(color: Colors.red)),
-              ),
-            ],
-          ),
-        );
-      },
-      onDismissed: (direction) => _excluirProvento(int.parse(p.id!), p.ticker),
-      child: InkWell(
-        onTap: () => _editarProvento(p),
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border(context)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha:0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Icons.monetization_on, color: statusColor),
+        side: BorderSide(color: AppColors.border(context), width: 0.5),
+      ),
+      elevation: 0,
+      color: AppColors.cardBackground(context),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            // Ícone
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Text(p.ticker,
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary(context))),
-                      const SizedBox(width: 8),
+              child: Icon(
+                isFuture ? Icons.calendar_today : Icons.payments,
+                color: iconColor,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Informações
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    provento.ticker,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary(context),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha:0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(statusText,
-                            style: TextStyle(
-                                fontSize: 10,
-                                color: statusColor,
-                                fontWeight: FontWeight.bold)),
+                        child: Text(
+                          _tiposProvento[provento.tipoProvento] ??
+                              provento.tipoProvento,
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
-                    ]),
-                    const SizedBox(height: 4),
-                    Text(p.tipo.nome,
+                      Text(
+                        _dateFormatter.format(provento.dataPagamento),
                         style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary(context))),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(Formatador.moeda(p.totalRecebido),
-                      style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: statusColor)),
-                  const SizedBox(height: 4),
-                  Text(
-                      '${p.quantidade.toStringAsFixed(0)} cotas × ${Formatador.moeda(p.valorPorCota)}',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary(context))),
-                  const SizedBox(height: 4),
-                  Text('Pagamento: ${Formatador.data(p.dataPagamento)}',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary(context))),
+                          fontSize: 10,
+                          color: AppColors.textSecondary(context),
+                        ),
+                      ),
+                      if (isFuture)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color:
+                                const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'Futuro',
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: const Color(0xFF3B82F6),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ),
-            ],
-          ),
+            ),
+
+            // Valor e ações
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  _currencyFormatter.format(provento.totalRecebido),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: iconColor,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () => _mostrarFormulario(provento),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(Icons.edit,
+                            size: 16, color: AppColors.primary),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => _deletarProvento(provento),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(Icons.delete_outline,
+                            size: 16, color: AppColors.error),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.payments_outlined,
+              size: 64,
+              color: AppColors.textSecondary(context).withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Nenhum provento',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary(context),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _searchQuery.isNotEmpty
+                  ? 'Nenhum resultado para "$_searchQuery"'
+                  : 'Toque em + para adicionar',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary(context),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+// 📦 MODELO PROVENTO
+class Provento {
+  final String id;
+  final String ticker;
+  final String tipoProvento;
+  final double valorPorCota;
+  final double? quantidade;
+  final double totalRecebido;
+  final DateTime dataPagamento;
+  final DateTime? dataCom;
+  final bool isFuture;
+  final String? observacao;
+
+  Provento({
+    required this.id,
+    required this.ticker,
+    required this.tipoProvento,
+    required this.valorPorCota,
+    this.quantidade,
+    required this.totalRecebido,
+    required this.dataPagamento,
+    this.dataCom,
+    required this.isFuture,
+    this.observacao,
+  });
+
+  factory Provento.fromJson(Map<String, dynamic> json) {
+    DateTime dataPagamento;
+    try {
+      dataPagamento = json['data_pagamento'] != null
+          ? DateTime.parse(json['data_pagamento'].toString())
+          : DateTime.now();
+    } catch (e) {
+      dataPagamento = DateTime.now();
+    }
+
+    DateTime? dataCom;
+    try {
+      dataCom = json['data_com'] != null
+          ? DateTime.parse(json['data_com'].toString())
+          : null;
+    } catch (e) {
+      dataCom = null;
+    }
+
+    return Provento(
+      id: json['id'].toString(),
+      ticker: json['ticker']?.toString() ?? '',
+      tipoProvento: json['tipo_provento']?.toString() ?? 'DIVIDENDO',
+      valorPorCota: (json['valor_por_cota'] as num?)?.toDouble() ?? 0.0,
+      quantidade: (json['quantidade'] as num?)?.toDouble(),
+      totalRecebido: (json['total_recebido'] as num?)?.toDouble() ?? 0.0,
+      dataPagamento: dataPagamento,
+      dataCom: dataCom,
+      isFuture: dataPagamento.isAfter(DateTime.now()),
+      observacao: json['observacao']?.toString(),
+    );
+  }
+}

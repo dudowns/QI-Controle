@@ -29,9 +29,9 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
 
   final List<String> _tiposProvento = [
     'Dividendo',
-    'Juros sobre Capital Próprio',
+    'Juros sobre Capital Proprio',
     'Rendimento',
-    'Amortização',
+    'Amortizacao',
   ];
 
   @override
@@ -89,7 +89,7 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Provento adicionado!'),
+            content: Text('Provento adicionado!'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
@@ -118,7 +118,6 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Ticker
               TextFormField(
                 controller: _tickerController,
                 decoration: const InputDecoration(
@@ -128,22 +127,16 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
                   prefixIcon: Icon(Icons.sell),
                 ),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Campo obrigatório';
-                  }
+                  if (value == null || value.isEmpty)
+                    return 'Campo obrigatorio';
                   return null;
                 },
               ),
               const SizedBox(height: 16),
-
-              // Tipo de Provento
               DropdownButtonFormField<String>(
-                initialValue: _tipoProvento,
+                value: _tipoProvento, // ✅ CORRIGIDO: initialValue -> value
                 items: _tiposProvento.map((tipo) {
-                  return DropdownMenuItem(
-                    value: tipo,
-                    child: Text(tipo),
-                  );
+                  return DropdownMenuItem(value: tipo, child: Text(tipo));
                 }).toList(),
                 onChanged: (value) => setState(() => _tipoProvento = value!),
                 decoration: const InputDecoration(
@@ -153,8 +146,6 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-
-              // Valor por Cota
               TextFormField(
                 controller: _valorPorCotaController,
                 decoration: const InputDecoration(
@@ -166,19 +157,14 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
                 ),
                 keyboardType: TextInputType.number,
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Campo obrigatório';
-                  }
+                  if (value == null || value.isEmpty)
+                    return 'Campo obrigatorio';
                   final val = double.tryParse(value.replaceAll(',', '.'));
-                  if (val == null || val <= 0) {
-                    return 'Digite um valor válido';
-                  }
+                  if (val == null || val <= 0) return 'Digite um valor valido';
                   return null;
                 },
               ),
               const SizedBox(height: 16),
-
-              // Quantidade
               TextFormField(
                 controller: _quantidadeController,
                 decoration: const InputDecoration(
@@ -189,19 +175,15 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
                 ),
                 keyboardType: TextInputType.number,
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Campo obrigatório';
-                  }
+                  if (value == null || value.isEmpty)
+                    return 'Campo obrigatorio';
                   final val = int.tryParse(value);
-                  if (val == null || val <= 0) {
-                    return 'Digite uma quantidade válida';
-                  }
+                  if (val == null || val <= 0)
+                    return 'Digite uma quantidade valida';
                   return null;
                 },
               ),
               const SizedBox(height: 16),
-
-              // Total Recebido (opcional)
               TextFormField(
                 controller: _totalRecebidoController,
                 decoration: const InputDecoration(
@@ -214,70 +196,57 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 16),
-
-              // Data Pagamento
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton.icon(
-                      onPressed: () => _selecionarData(context, true),
-                      icon: const Icon(Icons.calendar_today),
-                      label: Text(
-                        _dataPagamento == null
-                            ? 'Data Pagamento *'
-                            : Formatador.data(_dataPagamento!),
-                      ),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          side: BorderSide(color: Colors.grey[400]!),
-                        ),
+              Row(children: [
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () => _selecionarData(context, true),
+                    icon: const Icon(Icons.calendar_today),
+                    label: Text(
+                      _dataPagamento == null
+                          ? 'Data Pagamento *'
+                          : Formatador.data(_dataPagamento!),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: Colors.grey[400]!),
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ]),
               const SizedBox(height: 8),
-
-              // Data Com (opcional)
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton.icon(
-                      onPressed: () => _selecionarData(context, false),
-                      icon: const Icon(Icons.event),
-                      label: Text(
-                        _dataCom == null
-                            ? 'Data Com (opcional)'
-                            : Formatador.data(_dataCom!),
-                      ),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          side: BorderSide(color: Colors.grey[400]!),
-                        ),
+              Row(children: [
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () => _selecionarData(context, false),
+                    icon: const Icon(Icons.event),
+                    label: Text(
+                      _dataCom == null
+                          ? 'Data Com (opcional)'
+                          : Formatador.data(_dataCom!),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: Colors.grey[400]!),
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ]),
             ],
           ),
         ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        GradientButton(
-          text: 'Salvar',
-          onPressed: _salvarProvento,
-        ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar')),
+        GradientButton(text: 'Salvar', onPressed: _salvarProvento),
       ],
     );
   }
 }
-

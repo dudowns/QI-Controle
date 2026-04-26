@@ -1,11 +1,12 @@
-import '../services/logger_service.dart';
 // lib/screens/metas_screen.dart
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../database/db_helper.dart';
-import '../models/meta_model.dart';
 import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
-import '../widgets/app_modals.dart';
+import '../services/logger_service.dart';
+import '../widgets/toast.dart';
+import '../widgets/animated_counter.dart';
 
 class MetasScreen extends StatefulWidget {
   const MetasScreen({super.key});
@@ -18,7 +19,7 @@ class _MetasScreenState extends State<MetasScreen> {
   final DBHelper _dbHelper = DBHelper();
 
   List<Map<String, dynamic>> _metas = [];
-  bool _carregando = true;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -28,89 +29,304 @@ class _MetasScreenState extends State<MetasScreen> {
 
   Future<void> _carregarMetas() async {
     if (!mounted) return;
-    setState(() => _carregando = true);
+    setState(() => _isLoading = true);
 
     try {
       _metas = await _dbHelper.getAllMetas();
     } catch (e) {
-      LoggerService.info('❌ Erro ao carregar metas: $e');
+      LoggerService.error('Erro ao carregar metas: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao carregar metas: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        Toast.error(context, 'Erro ao carregar: $e');
       }
     } finally {
-      if (mounted) setState(() => _carregando = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _adicionarMeta() async {
-    final resultado = await AppModals.mostrarModalMeta(context: context);
+    final resultado = await _mostrarModalMeta();
     if (resultado != null) {
       await _salvarMeta(resultado);
+      await _carregarMetas();
     }
   }
 
   Future<void> _editarMeta(Map<String, dynamic> meta) async {
-    final resultado = await AppModals.mostrarModalMeta(
-      context: context,
-      meta: meta,
-    );
+    final resultado = await _mostrarModalMeta(meta: meta);
     if (resultado != null) {
       await _atualizarMeta(resultado);
+      await _carregarMetas();
     }
+  }
+
+  Future<Map<String, dynamic>?> _mostrarModalMeta(
+      {Map<String, dynamic>? meta}) async {
+    final tituloController = TextEditingController(text: meta?['titulo'] ?? '');
+    final descricaoController =
+        TextEditingController(text: meta?['descricao'] ?? '');
+    final valorObjetivoController =
+        TextEditingController(text: meta?['valor_objetivo']?.toString() ?? '');
+    final valorAtualController =
+        TextEditingController(text: meta?['valor_atual']?.toString() ?? '');
+    final dataFimController = TextEditingController();
+    String cor = meta?['cor'] ?? '#4CAF50';
+    String icone = meta?['icone'] ?? '🎯';
+    DateTime? dataInicio;
+    DateTime? dataFim;
+
+    dataInicio = meta != null && meta['data_inicio'] != null
+        ? DateTime.parse(meta['data_inicio'])
+        : DateTime.now();
+
+    if (meta?['data_fim'] != null) {
+      dataFim = DateTime.parse(meta!['data_fim']);
+      dataFimController.text = DateFormat('dd/MM/yyyy').format(dataFim);
+    }
+
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            title: Text(meta == null ? 'Nova Meta' : 'Editar Meta'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: tituloController,
+                    decoration: const InputDecoration(
+                      labelText: 'Titulo da Meta',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descricaoController,
+                    decoration: const InputDecoration(
+                      labelText: 'Descricao (opcional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: valorObjetivoController,
+                    decoration: const InputDecoration(
+                      labelText: 'Valor Objetivo',
+                      border: OutlineInputBorder(),
+                      prefixText: 'R\$ ',
+                    ),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: valorAtualController,
+                    decoration: const InputDecoration(
+                      labelText: 'Valor Atual (opcional)',
+                      border: OutlineInputBorder(),
+                      prefixText: 'R\$ ',
+                    ),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Data de inicio: ${DateFormat('dd/MM/yyyy').format(dataInicio!)}',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        Icon(Icons.calendar_today,
+                            size: 18, color: Colors.grey[600]),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: dataFim ??
+                            DateTime.now().add(const Duration(days: 30)),
+                        firstDate: DateTime.now(),
+                        lastDate:
+                            DateTime.now().add(const Duration(days: 365 * 5)),
+                      );
+                      if (picked != null) {
+                        dataFim = picked;
+                        dataFimController.text =
+                            DateFormat('dd/MM/yyyy').format(picked);
+                        setStateDialog(() {});
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            dataFimController.text.isEmpty
+                                ? 'Data de conclusao'
+                                : dataFimController.text,
+                            style: TextStyle(
+                              color: dataFimController.text.isEmpty
+                                  ? Colors.grey
+                                  : Colors.black,
+                            ),
+                          ),
+                          const Icon(Icons.calendar_today, size: 18),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: cor, // ✅ CORRIGIDO: initialValue -> value
+                    decoration: const InputDecoration(
+                      labelText: 'Cor',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      '#4CAF50',
+                      '#2196F3',
+                      '#FF9800',
+                      '#F44336',
+                      '#9C27B0',
+                      '#00BCD4'
+                    ].map((c) {
+                      return DropdownMenuItem(
+                        value: c,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 20,
+                              height: 20,
+                              decoration: BoxDecoration(
+                                color: Color(
+                                    int.parse(c.replaceFirst('#', '0xFF'))),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(c),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (value) => setStateDialog(() => cor = value!),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final titulo = tituloController.text.trim();
+                  if (titulo.isEmpty) {
+                    Toast.warning(context, 'Digite o titulo da meta');
+                    return;
+                  }
+
+                  double valorObjetivo;
+                  double valorAtual;
+
+                  try {
+                    String valorObjStr = valorObjetivoController.text
+                        .replaceAll('R\$', '')
+                        .replaceAll(' ', '')
+                        .replaceAll(',', '.')
+                        .trim();
+
+                    if (valorObjStr.isEmpty) {
+                      Toast.warning(context, 'Digite o valor objetivo');
+                      return;
+                    }
+                    valorObjetivo = double.parse(valorObjStr);
+
+                    String valorAtualStr = valorAtualController.text
+                        .replaceAll('R\$', '')
+                        .replaceAll(' ', '')
+                        .replaceAll(',', '.')
+                        .trim();
+
+                    valorAtual =
+                        valorAtualStr.isEmpty ? 0 : double.parse(valorAtualStr);
+                  } catch (e) {
+                    Toast.error(context,
+                        'Valor invalido. Use numeros como: 1000 ou 1000,50');
+                    return;
+                  }
+
+                  if (dataFim == null) {
+                    Toast.warning(context, 'Selecione a data de conclusao');
+                    return;
+                  }
+
+                  Navigator.pop(context, {
+                    'id': meta?['id'],
+                    'titulo': titulo,
+                    'descricao': descricaoController.text.trim(),
+                    'valor_objetivo': valorObjetivo,
+                    'valor_atual': valorAtual,
+                    'data_inicio': DateFormat('yyyy-MM-dd').format(dataInicio!),
+                    'data_fim': DateFormat('yyyy-MM-dd').format(dataFim!),
+                    'cor': cor,
+                    'icone': icone,
+                    'concluida': meta?['concluida'] ?? 0,
+                  });
+                },
+                child: const Text('Salvar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _salvarMeta(Map<String, dynamic> meta) async {
     try {
       await _dbHelper.insertMeta(meta);
-      await _carregarMetas();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎯 Meta criada com sucesso!'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        Toast.success(context, '${meta['titulo']} adicionada!');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao criar meta: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        Toast.error(context, 'Erro ao salvar: $e');
       }
+      LoggerService.error('Erro ao salvar meta: $e');
     }
   }
 
   Future<void> _atualizarMeta(Map<String, dynamic> meta) async {
     try {
       await _dbHelper.updateMeta(meta);
-      await _carregarMetas();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✏️ Meta atualizada!'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        Toast.success(context, '${meta['titulo']} atualizada!');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao atualizar: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        Toast.error(context, 'Erro ao atualizar: $e');
       }
+      LoggerService.error('Erro ao atualizar meta: $e');
     }
   }
 
@@ -118,7 +334,6 @@ class _MetasScreenState extends State<MetasScreen> {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface(context),
         title: const Text('Excluir Meta'),
         content: Text('Deseja excluir "$titulo"?'),
         actions: [
@@ -139,82 +354,67 @@ class _MetasScreenState extends State<MetasScreen> {
         await _dbHelper.deleteMeta(id);
         await _carregarMetas();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🗑️ Meta excluída!'),
-              backgroundColor: AppColors.warning,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          Toast.success(context, '$titulo excluida!');
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erro ao excluir: $e'),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          Toast.error(context, 'Erro ao excluir: $e');
         }
       }
     }
   }
 
-  Future<void> _adicionarDeposito(Map<String, dynamic> meta) async {
-    final resultado = await AppModals.mostrarModalDeposito(
+  Future<void> _atualizarProgresso(Map<String, dynamic> meta) async {
+    final valorController = TextEditingController();
+
+    final confirmar = await showDialog<bool>(
       context: context,
-      meta: meta,
+      builder: (context) => AlertDialog(
+        title: const Text('Adicionar Progresso'),
+        content: TextField(
+          controller: valorController,
+          decoration: const InputDecoration(
+            labelText: 'Valor a adicionar',
+            border: OutlineInputBorder(),
+            prefixText: 'R\$ ',
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Adicionar'),
+          ),
+        ],
+      ),
     );
-    if (resultado != null) {
-      await _salvarDeposito(
-          meta['id'], resultado['valor'], resultado['observacao']);
-    }
-  }
 
-  Future<void> _salvarDeposito(
-      int metaId, double valor, String? observacao) async {
-    try {
-      final deposito = {
-        'meta_id': metaId,
-        'valor': valor,
-        'data_deposito': DateTime.now().toIso8601String(),
-        'observacao': observacao,
-      };
-      await _dbHelper.insertDepositoMeta(deposito);
+    if (confirmar == true && valorController.text.isNotEmpty) {
+      try {
+        String valorStr = valorController.text
+            .replaceAll('R\$', '')
+            .replaceAll(' ', '')
+            .replaceAll(',', '.')
+            .trim();
 
-      final depositos = await _dbHelper.getDepositosByMetaId(metaId);
-      double novoValor = 0;
-      for (var d in depositos) {
-        novoValor += (d['valor'] as num).toDouble();
-      }
-      await _dbHelper.atualizarProgressoMeta(metaId, novoValor);
+        final valorAdicional = double.parse(valorStr);
+        final novoValorAtual =
+            (meta['valor_atual'] as num).toDouble() + valorAdicional;
 
-      final meta = await _dbHelper.getMetaById(metaId);
-      if (meta != null) {
-        final valorObjetivo = (meta['valor_objetivo'] as num).toDouble();
-        if (novoValor >= valorObjetivo) {
-          await _dbHelper.concluirMeta(metaId);
+        await _dbHelper.atualizarProgressoMeta(meta['id'], novoValorAtual);
+        await _carregarMetas();
+
+        if (mounted) {
+          Toast.success(context, 'Progresso atualizado!');
         }
-      }
-
-      await _carregarMetas();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Depósito adicionado!'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao adicionar depósito: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+      } catch (e) {
+        if (mounted) {
+          Toast.error(context, 'Valor invalido');
+        }
       }
     }
   }
@@ -224,10 +424,9 @@ class _MetasScreenState extends State<MetasScreen> {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        title: const Text('Minhas Metas'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        centerTitle: true,
+        title: const Text('Metas'),
+        backgroundColor: Colors.transparent,
+        foregroundColor: AppColors.textPrimary(context),
         elevation: 0,
         actions: [
           IconButton(
@@ -237,876 +436,252 @@ class _MetasScreenState extends State<MetasScreen> {
           ),
         ],
       ),
-      body: _carregando
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _metas.isEmpty
-              ? _buildEmptyState()
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.flag,
+                          size: 64, color: AppColors.muted(context)),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Nenhuma meta cadastrada',
+                        style:
+                            TextStyle(color: AppColors.textSecondary(context)),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Clique no botao + para criar sua primeira meta',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textHint(context)),
+                      ),
+                    ],
+                  ),
+                )
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: _metas.length,
                   itemBuilder: (context, index) {
                     final meta = _metas[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildMetaCard(meta),
-                    );
+                    return _buildMetaCard(meta);
                   },
                 ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primary,
         onPressed: _adicionarMeta,
-        tooltip: 'Nova meta',
+        backgroundColor: AppColors.primary,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha:0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.flag_outlined,
-              size: 64,
-              color: AppColors.primary.withValues(alpha:0.5),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Nenhuma meta cadastrada',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary(context),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Comece definindo seus objetivos financeiros',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.textSecondary(context),
-            ),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _adicionarMeta,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.add, size: 18),
-                SizedBox(width: 8),
-                Text('CRIAR PRIMEIRA META'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildMetaCard(Map<String, dynamic> meta) {
-    final valorObjetivo = (meta['valor_objetivo'] as num).toDouble();
-    final valorAtual = (meta['valor_atual'] as num).toDouble();
-    final dataFim = DateTime.parse(meta['data_fim']);
-    final concluida = (meta['concluida'] as int) == 1;
-    final cor = _getCorPorTipo(meta['cor']);
-    final icone = _getIconePorTipo(meta['icone']);
-
-    final progresso = valorObjetivo > 0 ? valorAtual / valorObjetivo : 0.0;
+    final titulo = meta['titulo'] ?? 'Sem titulo';
+    final descricao = meta['descricao'] ?? '';
+    final valorObjetivo = (meta['valor_objetivo'] as num?)?.toDouble() ?? 0;
+    final valorAtual = (meta['valor_atual'] as num?)?.toDouble() ?? 0;
+    final progresso = valorObjetivo > 0 ? (valorAtual / valorObjetivo) : 0;
     final percentual = (progresso * 100).clamp(0, 100);
-    final falta = (valorObjetivo - valorAtual).clamp(0, valorObjetivo);
-
-    final hoje = DateTime.now();
-    final diasRestantes = dataFim.difference(hoje).inDays;
-
-    Color statusColor = Colors.green;
-    String statusText = 'No prazo';
-
-    if (concluida) {
-      statusColor = Colors.green;
-      statusText = 'Concluída';
-    } else if (diasRestantes < 0) {
-      statusColor = Colors.red;
-      statusText = 'Atrasada';
-    } else if (diasRestantes < 7) {
-      statusColor = Colors.orange;
-      statusText = 'Próximo do fim';
-    }
+    final dataInicio = meta['data_inicio'] != null
+        ? DateTime.parse(meta['data_inicio'].toString())
+        : DateTime.now();
+    final dataFim = DateTime.parse(meta['data_fim'].toString());
+    final corHex = meta['cor'] ?? '#4CAF50';
+    final cor = Color(int.parse(corHex.replaceFirst('#', '0xFF')));
+    final diasRestantes = dataFim.difference(DateTime.now()).inDays;
+    final estaConcluida = meta['concluida'] == 1 || valorAtual >= valorObjetivo;
 
     return Card(
-      margin: EdgeInsets.zero,
-      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: () => _verDetalhesMeta(meta),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: cor.withValues(alpha:0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(icone, color: cor, size: 24),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: cor,
+                    borderRadius: BorderRadius.circular(4),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        titulo,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (descricao.isNotEmpty)
                         Text(
-                          meta['titulo'],
+                          descricao,
                           style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary(context),
+                            fontSize: 12,
+                            color: AppColors.textSecondary(context),
                           ),
                         ),
-                        if (meta['descricao'] != null &&
-                            meta['descricao'].toString().isNotEmpty)
-                          Text(
-                            meta['descricao'],
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary(context),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                      ],
-                    ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Objetivo: ${Formatador.moeda(valorObjetivo)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary(context),
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                if (estaConcluida)
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha:0.1),
+                      color: Colors.green.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: statusColor.withValues(alpha:0.3)),
                     ),
-                    child: Row(
+                    child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          concluida
-                              ? Icons.check_circle
-                              : (diasRestantes < 0
-                                  ? Icons.warning
-                                  : Icons.schedule),
-                          size: 12,
-                          color: statusColor,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          statusText,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: statusColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        Icon(Icons.check_circle, size: 14, color: Colors.green),
+                        SizedBox(width: 4),
+                        Text('Concluida',
+                            style:
+                                TextStyle(fontSize: 10, color: Colors.green)),
                       ],
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Progresso',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary(context),
-                    ),
-                  ),
-                  Text(
-                    '${percentual.toStringAsFixed(1)}%',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: percentual >= 100 ? Colors.green : cor,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progresso.clamp(0.0, 1.0),
-                  backgroundColor: Colors.grey[200],
-                  color: percentual >= 100 ? Colors.green : cor,
-                  minHeight: 8,
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Progresso: ${percentual.toStringAsFixed(1)}%',
+                  style: const TextStyle(fontSize: 12),
                 ),
+                Text(
+                  '${Formatador.moeda(valorAtual)} / ${Formatador.moeda(valorObjetivo)}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: (valorObjetivo > 0 ? (valorAtual / valorObjetivo) : 0.0)
+                    .clamp(0.0, 1.0),
+                backgroundColor: Colors.grey[200],
+                color: cor,
+                minHeight: 8,
               ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Atual',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary(context),
-                        ),
-                      ),
-                      Text(
-                        Formatador.moeda(valorAtual),
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        'Meta',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary(context),
-                        ),
-                      ),
-                      Text(
-                        Formatador.moeda(valorObjetivo),
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_today,
-                        size: 12,
-                        color: AppColors.textSecondary(context),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Até ${Formatador.data(dataFim)}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (!concluida && falta > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha:0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'Faltam R\$ ${falta.toStringAsFixed(2).replaceAll('.', ',')}',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                        ),
-                      ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today,
+                        size: 14, color: Colors.grey[500]),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Inicio: ${DateFormat('dd/MM/yyyy').format(dataInicio)}',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                     ),
-                ],
-              ),
-            ],
-          ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Icon(Icons.flag, size: 14, color: Colors.grey[500]),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Fim: ${DateFormat('dd/MM/yyyy').format(dataFim)}',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (diasRestantes > 0 && !estaConcluida)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '$diasRestantes dias restantes',
+                      style:
+                          const TextStyle(fontSize: 10, color: Colors.orange),
+                    ),
+                  ),
+                if (diasRestantes < 0 && !estaConcluida)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'Atrasada',
+                      style: TextStyle(fontSize: 10, color: Colors.red),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (!estaConcluida)
+                  ElevatedButton.icon(
+                    onPressed: () => _atualizarProgresso(meta),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Progresso'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: cor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      minimumSize: const Size(0, 32),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: () => _editarMeta(meta),
+                  icon: const Icon(Icons.edit, size: 18),
+                  tooltip: 'Editar',
+                ),
+                IconButton(
+                  onPressed: () => _excluirMeta(meta['id'], titulo),
+                  icon: const Icon(Icons.delete, size: 18),
+                  tooltip: 'Excluir',
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
-
-  Future<void> _verDetalhesMeta(Map<String, dynamic> meta) async {
-    final depositos = await _dbHelper.getDepositosByMetaId(meta['id']);
-    final valorAtual = (meta['valor_atual'] as num).toDouble();
-    final valorObjetivo = (meta['valor_objetivo'] as num).toDouble();
-    final dataFim = DateTime.parse(meta['data_fim']);
-    final progresso = valorObjetivo > 0 ? valorAtual / valorObjetivo : 0.0;
-    final percentual = (progresso * 100).clamp(0, 100);
-    final cor = _getCorPorTipo(meta['cor']);
-    final icone = _getIconePorTipo(meta['icone']);
-    final concluida = (meta['concluida'] as int) == 1;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateModal) {
-          return Container(
-            height: MediaQuery.of(context).size.height * 0.9,
-            decoration: BoxDecoration(
-              color: AppColors.surface(context),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(20)),
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      Expanded(
-                        child: Text(
-                          meta['titulo'],
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit, size: 20),
-                            color: Colors.white,
-                            onPressed: () {
-                              Navigator.pop(context);
-                              _editarMeta(meta);
-                            },
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete, size: 20),
-                            color: Colors.white,
-                            onPressed: () async {
-                              Navigator.pop(context);
-                              _excluirMeta(meta['id'], meta['titulo']);
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface(context),
-                            borderRadius: BorderRadius.circular(20),
-                            border:
-                                Border.all(color: AppColors.border(context)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(15),
-                                    decoration: BoxDecoration(
-                                      color: cor.withValues(alpha:0.1),
-                                      borderRadius: BorderRadius.circular(15),
-                                    ),
-                                    child: Icon(icone, color: cor, size: 30),
-                                  ),
-                                  const SizedBox(width: 15),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          meta['titulo'],
-                                          style: TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.bold,
-                                            color:
-                                                AppColors.textPrimary(context),
-                                          ),
-                                        ),
-                                        if (meta['descricao'] != null &&
-                                            meta['descricao']
-                                                .toString()
-                                                .isNotEmpty)
-                                          Text(
-                                            meta['descricao'],
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: AppColors.textSecondary(
-                                                  context),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (concluida)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            AppColors.success.withValues(alpha:0.1),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: const Row(
-                                        children: [
-                                          Icon(Icons.check_circle,
-                                              color: AppColors.success,
-                                              size: 16),
-                                          SizedBox(width: 4),
-                                          Text(
-                                            'Concluída',
-                                            style: TextStyle(
-                                              color: AppColors.success,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
-                              Divider(color: AppColors.divider(context)),
-                              const SizedBox(height: 10),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Progresso',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textPrimary(context),
-                                    ),
-                                  ),
-                                  Text(
-                                    '${percentual.toStringAsFixed(1)}%',
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: percentual >= 100
-                                          ? AppColors.success
-                                          : cor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: LinearProgressIndicator(
-                                  value: progresso.clamp(0.0, 1.0),
-                                  backgroundColor: AppColors.muted(context),
-                                  color: percentual >= 100
-                                      ? AppColors.success
-                                      : cor,
-                                  minHeight: 12,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Valor Atual',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color:
-                                              AppColors.textSecondary(context),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        Formatador.moeda(valorAtual),
-                                        style: TextStyle(
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.bold,
-                                          color: cor,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        'Meta',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color:
-                                              AppColors.textSecondary(context),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        Formatador.moeda(valorObjetivo),
-                                        style: TextStyle(
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.textPrimary(context),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surface(context),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                      color: AppColors.border(context)),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.calendar_today,
-                                          size: 16,
-                                          color:
-                                              AppColors.textSecondary(context),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          'Data limite:',
-                                          style: TextStyle(
-                                            color: AppColors.textSecondary(
-                                                context),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    Text(
-                                      Formatador.data(dataFim),
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.textPrimary(context),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: cor.withValues(alpha:0.05),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border:
-                                      Border.all(color: cor.withValues(alpha:0.2)),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.trending_up,
-                                            color: cor, size: 20),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          'Falta alcançar:',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w500,
-                                            color:
-                                                AppColors.textPrimary(context),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    Text(
-                                      Formatador.moeda(
-                                          (valorObjetivo - valorAtual)
-                                              .clamp(0, valorObjetivo)),
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                        color: cor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        if (!concluida)
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () => _adicionarDeposito(meta),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                              ),
-                              child: const Text(
-                                'ADICIONAR DEPÓSITO',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 20),
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface(context),
-                            borderRadius: BorderRadius.circular(20),
-                            border:
-                                Border.all(color: AppColors.border(context)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Histórico de Depósitos',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.textPrimary(context),
-                                    ),
-                                  ),
-                                  if (depositos.isNotEmpty)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: cor.withValues(alpha:0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        '${depositos.length} ${depositos.length == 1 ? 'depósito' : 'depósitos'}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: cor,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              if (depositos.isEmpty)
-                                Center(
-                                  child: Column(
-                                    children: [
-                                      Icon(
-                                        Icons.history,
-                                        size: 48,
-                                        color: AppColors.muted(context),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        'Nenhum depósito ainda',
-                                        style: TextStyle(
-                                          color:
-                                              AppColors.textSecondary(context),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Clique no botão acima para começar',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color:
-                                              AppColors.textSecondary(context),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              else
-                                ListView.builder(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  itemCount: depositos.length,
-                                  itemBuilder: (context, index) {
-                                    final d = depositos[index];
-                                    final valorDeposito =
-                                        (d['valor'] as num).toDouble();
-                                    final dataDeposito =
-                                        DateTime.parse(d['data_deposito']);
-                                    return Container(
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.surface(context),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                            color: AppColors.border(context)),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Icon(Icons.paid,
-                                                  size: 20, color: cor),
-                                              const SizedBox(width: 12),
-                                              Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    Formatador.moeda(
-                                                        valorDeposito),
-                                                    style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color:
-                                                          AppColors.textPrimary(
-                                                              context),
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    Formatador.data(
-                                                        dataDeposito),
-                                                    style: TextStyle(
-                                                      fontSize: 11,
-                                                      color: AppColors
-                                                          .textSecondary(
-                                                              context),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                          if (d['observacao'] != null &&
-                                              d['observacao']
-                                                  .toString()
-                                                  .isNotEmpty)
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: cor.withValues(alpha:0.1),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                              child: Text(
-                                                d['observacao'],
-                                                style: TextStyle(
-                                                    fontSize: 11, color: cor),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Color _getCorPorTipo(String? cor) {
-    switch (cor) {
-      case 'viagem':
-        return Colors.blue;
-      case 'carro':
-        return Colors.red;
-      case 'casa':
-        return Colors.green;
-      case 'estudo':
-        return Colors.orange;
-      case 'investimento':
-        return Colors.purple;
-      default:
-        return AppColors.primary;
-    }
-  }
-
-  IconData _getIconePorTipo(String? icone) {
-    switch (icone) {
-      case 'viagem':
-        return Icons.flight;
-      case 'carro':
-        return Icons.directions_car;
-      case 'casa':
-        return Icons.home;
-      case 'estudo':
-        return Icons.school;
-      case 'investimento':
-        return Icons.trending_up;
-      default:
-        return Icons.flag;
-    }
-  }
 }
-

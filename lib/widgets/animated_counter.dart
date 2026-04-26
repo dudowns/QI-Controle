@@ -63,8 +63,9 @@ class _AnimatedCounterState extends State<AnimatedCounter>
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
+        final value = _animation.value; // 🔥 JÁ É DOUBLE
         return Text(
-          widget.formatter(_animation.value),
+          widget.formatter(value), // 🔥 PASSA DOUBLE DIRETO
           style: widget.style,
         );
       },
@@ -77,4 +78,3 @@ class _AnimatedCounterState extends State<AnimatedCounter>
     super.dispose();
   }
 }
-

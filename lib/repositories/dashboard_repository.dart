@@ -1,15 +1,14 @@
-import '../services/logger_service.dart';
-// lib/repositories/dashboard_repository.dart
+﻿// lib/repositories/dashboard_repository.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/foundation.dart';
+import '../services/logger_service.dart';
 
 class DashboardRepository {
   final supabase = Supabase.instance.client;
 
-  /// Buscar resumo do mês usando a função SQL
+  /// Buscar resumo do mes usando a funcao SQL
   Future<Map<String, dynamic>> getResumoMes(DateTime data) async {
     final userId = supabase.auth.currentUser?.id;
-    if (userId == null) throw Exception('Usuário não logado');
+    if (userId == null) throw Exception('Usuario nao logado');
 
     try {
       final response = await supabase.rpc('get_resumo_mes', params: {
@@ -17,7 +16,7 @@ class DashboardRepository {
         'p_data': data.toIso8601String().split('T')[0],
       });
 
-      LoggerService.info('📊 Resumo do mês: $response');
+      LoggerService.info('Resumo do mes: $response');
 
       if (response == null) {
         return {
@@ -28,7 +27,7 @@ class DashboardRepository {
         };
       }
 
-      // 🔥 VERIFICAR SE A RESPOSTA É UMA LISTA
+      // VERIFICAR SE A RESPOSTA E UMA LISTA
       dynamic dados = response;
       if (response is List && response.isNotEmpty) {
         dados = response.first;
@@ -41,7 +40,7 @@ class DashboardRepository {
         'totalLancamentos': _toInt(dados['total_lancamentos']),
       };
     } catch (e) {
-      LoggerService.info('❌ Erro getResumoMes: $e');
+      LoggerService.info('Erro getResumoMes: $e');
       return {
         'receitas': 0.0,
         'despesas': 0.0,
@@ -76,12 +75,12 @@ class DashboardRepository {
         };
       }).toList();
     } catch (e) {
-      LoggerService.info('❌ Erro getGastosPorCategoria: $e');
+      LoggerService.info('Erro getGastosPorCategoria: $e');
       return [];
     }
   }
 
-  /// Buscar evolução mensal do ano
+  /// Buscar evolucao mensal do ano
   Future<List<Map<String, dynamic>>> getEvolucaoMensal(int ano) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return [];
@@ -103,7 +102,7 @@ class DashboardRepository {
         };
       }).toList();
     } catch (e) {
-      LoggerService.info('❌ Erro getEvolucaoMensal: $e');
+      LoggerService.info('Erro getEvolucaoMensal: $e');
       return [];
     }
   }
@@ -123,10 +122,8 @@ class DashboardRepository {
     if (value is String) return int.tryParse(value) ?? 0;
     return 0;
   }
-  // lib/repositories/dashboard_repository.dart
-// ADICIONAR ESTE MÉTODO
 
-  /// Buscar todos os lançamentos (fallback local)
+  /// Buscar todos os lancamentos (fallback local)
   Future<List<Map<String, dynamic>>> getAllLancamentos() async {
     try {
       final userId = supabase.auth.currentUser?.id;
@@ -138,9 +135,9 @@ class DashboardRepository {
           .eq('user_id', userId)
           .order('data', ascending: false);
 
-      return response ;
+      return response;
     } catch (e) {
-      LoggerService.info('❌ Erro getAllLancamentos: $e');
+      LoggerService.info('Erro getAllLancamentos: $e');
       return [];
     }
   }

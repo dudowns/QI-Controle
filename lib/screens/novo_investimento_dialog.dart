@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/renda_fixa_model.dart';
 import '../constants/app_colors.dart';
-import '../utils/currency_formatter.dart';
+import '../utils/formatters.dart';
 import '../widgets/gradient_button.dart';
 
 class NovoInvestimentoDialog extends StatefulWidget {
@@ -28,7 +28,7 @@ class NovoInvestimentoDialog extends StatefulWidget {
     return showDialog(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black.withValues(alpha:0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (context) => Dialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -56,7 +56,7 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
 
   String _tipoRenda = 'CDB';
   String _indexador = 'posFixadoCDI';
-  String _liquidez = 'Diária';
+  String _liquidez = 'Diaria';
   bool _isLCI = false;
   bool _isLoading = false;
   bool _isEditing = false;
@@ -71,7 +71,7 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
     'LCI',
     'LCA',
     'Tesouro Direto',
-    'Debênture',
+    'Debenture',
     'CRI',
     'CRA',
     'Outros',
@@ -79,12 +79,12 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
 
   final List<Map<String, dynamic>> _indexadores = const [
     {'valor': 'preFixado', 'label': 'Prefixado'},
-    {'valor': 'posFixadoCDI', 'label': 'Pós-fixado (% CDI)'},
+    {'valor': 'posFixadoCDI', 'label': 'Pos-fixado (% CDI)'},
     {'valor': 'ipca', 'label': 'IPCA+'},
   ];
 
   final List<String> _liquidezOpcoes = [
-    'Diária',
+    'Diaria',
     'D+30',
     'D+60',
     'D+90',
@@ -93,7 +93,7 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
 
   String get _userId {
     final user = _supabase.auth.currentUser;
-    if (user == null) throw Exception('Usuário não logado');
+    if (user == null) throw Exception('Usuario nao logado');
     return user.id;
   }
 
@@ -115,7 +115,7 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
     _tipoRenda = inv.tipoRenda;
     _dataAplicacao = inv.dataAplicacao;
     _dataVencimento = inv.dataVencimento;
-    _liquidez = inv.liquidezDiaria ? 'Diária' : 'No vencimento';
+    _liquidez = inv.liquidezDiaria ? 'Diaria' : 'No vencimento';
     _isLCI = inv.isIsento;
     _indexador = _getIndexadorString(inv.indexador);
     _calcularSimulacao();
@@ -189,7 +189,6 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
     }
 
     final dias = _dataVencimento.difference(_dataAplicacao).inDays;
-
     double rendimentoBruto;
 
     switch (_indexador) {
@@ -234,7 +233,6 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
 
   Future<void> _salvarInvestimento() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
 
     final valor =
@@ -244,7 +242,6 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
     final dias = _dataVencimento.difference(_dataAplicacao).inDays;
 
     try {
-      // 🔥 CRIA MAPA MANUALMENTE PARA EVITAR PROBLEMAS COM TIPOS
       final Map<String, dynamic> dados = {
         'nome': _nomeController.text,
         'tipo_renda': _tipoRenda,
@@ -265,38 +262,30 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
       };
 
       if (_isEditing && widget.investimento?.id != null) {
-        // 🔥 EDIÇÃO: Forçamos a leitura do ID como String ou int conforme seu Model
-        final idParaEditar = widget.investimento!.id;
-
-        await _supabase.from('renda_fixa').update(dados).eq('id',
-            idParaEditar!); // O '!' garante ao Flutter que o ID não é nulo aqui
+        await _supabase
+            .from('renda_fixa')
+            .update(dados)
+            .eq('id', widget.investimento!.id!);
       } else {
-        // 🔥 INSERÇÃO
         dados['user_id'] = _userId;
         await _supabase.from('renda_fixa').insert(dados);
       }
 
       if (mounted) {
         Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(_isEditing
-                ? '✅ ${_nomeController.text} atualizado!'
-                : '✅ ${_nomeController.text} adicionado!'),
+                ? '${_nomeController.text} atualizado!'
+                : '${_nomeController.text} adicionado!'),
             backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+            behavior: SnackBarBehavior.floating));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('Erro ao salvar: $e'),
             backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+            behavior: SnackBarBehavior.floating));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -322,361 +311,321 @@ class _NovoInvestimentoDialogState extends State<NovoInvestimentoDialog> {
       width: MediaQuery.of(context).size.width - 40,
       constraints: const BoxConstraints(maxWidth: 500, maxHeight: 650),
       decoration: BoxDecoration(
-        color: AppColors.surface(context),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha:0.2),
-              blurRadius: 20,
-              offset: const Offset(0, 10))
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
+          color: AppColors.surface(context),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 20,
+                offset: const Offset(0, 10))
+          ]),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
               color: AppColors.primary,
               borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(24), topRight: Radius.circular(24)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
+                  topLeft: Radius.circular(24), topRight: Radius.circular(24))),
+          child: Row(children: [
+            Expanded(
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Renda Fixa',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      Text(
-                          _isEditing
-                              ? 'Editar investimento'
-                              : 'Adicionar novo investimento',
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha:0.7),
-                              fontSize: 13)),
-                    ],
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
+                  const Text('Renda Fixa',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(
+                      _isEditing
+                          ? 'Editar investimento'
+                          : 'Adicionar novo investimento',
+                      style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 13)),
+                ])),
+            GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha:0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         shape: BoxShape.circle),
-                    child:
-                        const Icon(Icons.close, color: Colors.white, size: 18),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Form(
+                    child: const Icon(Icons.close,
+                        color: Colors.white, size: 18))),
+          ]),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Form(
                 key: _formKey,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Nome',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _nomeController,
-                      decoration: InputDecoration(
-                        hintText: 'Ex: CDB Banco X',
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Campo obrigatório' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Tipo',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey[300]!),
-                          borderRadius: BorderRadius.circular(12)),
-                      child: DropdownButton<String>(
-                        value: _tipoRenda,
-                        isExpanded: true,
-                        underline: const SizedBox(),
-                        items: _tiposRenda
-                            .map((tipo) => DropdownMenuItem(
-                                value: tipo, child: Text(tipo)))
-                            .toList(),
-                        onChanged: (value) =>
-                            setState(() => _tipoRenda = value!),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Valor',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _valorController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        hintText: '0,00',
-                        prefixText: 'R\$ ',
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onChanged: (_) => _calcularSimulacao(),
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Campo obrigatório' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Taxa',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _taxaController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        hintText: _indexador == 'posFixadoCDI'
-                            ? 'Ex: 120'
-                            : 'Ex: 12,5',
-                        suffixText:
-                            _indexador == 'posFixadoCDI' ? '% CDI' : '% a.a.',
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onChanged: (_) => _calcularSimulacao(),
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Campo obrigatório' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Indexador',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey[300]!),
-                          borderRadius: BorderRadius.circular(12)),
-                      child: DropdownButton<String>(
-                        value: _indexador,
-                        isExpanded: true,
-                        underline: const SizedBox(),
-                        items: _indexadores
-                            .map((item) => DropdownMenuItem(
-                                value: item['valor'] as String,
-                                child: Text(item['label'] as String)))
-                            .toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _indexador = value!;
-                            _calcularSimulacao();
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Nome',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                          controller: _nomeController,
+                          decoration: InputDecoration(
+                              hintText: 'Ex: CDB Banco X',
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12))),
+                          validator: (v) => v == null || v.isEmpty
+                              ? 'Campo obrigatorio'
+                              : null),
+                      const SizedBox(height: 16),
+                      const Text('Tipo',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey[300]!),
+                              borderRadius: BorderRadius.circular(12)),
+                          child: DropdownButton<String>(
+                              value: _tipoRenda,
+                              isExpanded: true,
+                              underline: const SizedBox(),
+                              items: _tiposRenda
+                                  .map((tipo) => DropdownMenuItem(
+                                      value: tipo, child: Text(tipo)))
+                                  .toList(),
+                              onChanged: (value) =>
+                                  setState(() => _tipoRenda = value!))),
+                      const SizedBox(height: 16),
+                      const Text('Valor',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                          controller: _valorController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                              hintText: '0,00',
+                              prefixText: 'R\$ ',
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12))),
+                          onChanged: (_) => _calcularSimulacao(),
+                          validator: (v) => v == null || v.isEmpty
+                              ? 'Campo obrigatorio'
+                              : null),
+                      const SizedBox(height: 16),
+                      const Text('Taxa',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                          controller: _taxaController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                              hintText: _indexador == 'posFixadoCDI'
+                                  ? 'Ex: 120'
+                                  : 'Ex: 12,5',
+                              suffixText: _indexador == 'posFixadoCDI'
+                                  ? '% CDI'
+                                  : '% a.a.',
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12))),
+                          onChanged: (_) => _calcularSimulacao(),
+                          validator: (v) => v == null || v.isEmpty
+                              ? 'Campo obrigatorio'
+                              : null),
+                      const SizedBox(height: 16),
+                      const Text('Indexador',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey[300]!),
+                              borderRadius: BorderRadius.circular(12)),
+                          child: DropdownButton<String>(
+                              value: _indexador,
+                              isExpanded: true,
+                              underline: const SizedBox(),
+                              items: _indexadores
+                                  .map((item) => DropdownMenuItem(
+                                      value: item['valor'] as String,
+                                      child: Text(item['label'] as String)))
+                                  .toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  _indexador = value!;
+                                  _calcularSimulacao();
+                                });
+                              })),
+                      const SizedBox(height: 16),
+                      Row(children: [
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Aplicação',
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                              const Text('Aplicacao',
                                   style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500)),
                               const SizedBox(height: 4),
                               InkWell(
-                                onTap: _selecionarDataAplicacao,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 12),
-                                  decoration: BoxDecoration(
-                                      border:
-                                          Border.all(color: Colors.grey[300]!),
-                                      borderRadius: BorderRadius.circular(12)),
-                                  child: Text(
-                                      DateFormat('dd/MM/yyyy')
-                                          .format(_dataAplicacao),
-                                      style: const TextStyle(fontSize: 13)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                                  onTap: _selecionarDataAplicacao,
+                                  child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 12),
+                                      decoration: BoxDecoration(
+                                          border: Border.all(
+                                              color: Colors.grey[300]!),
+                                          borderRadius:
+                                              BorderRadius.circular(12)),
+                                      child: Text(
+                                          DateFormat('dd/MM/yyyy')
+                                              .format(_dataAplicacao),
+                                          style:
+                                              const TextStyle(fontSize: 13)))),
+                            ])),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                               const Text('Vencimento',
                                   style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500)),
                               const SizedBox(height: 4),
                               InkWell(
-                                onTap: _selecionarDataVencimento,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 12),
-                                  decoration: BoxDecoration(
-                                      border:
-                                          Border.all(color: Colors.grey[300]!),
-                                      borderRadius: BorderRadius.circular(12)),
-                                  child: Text(
-                                      DateFormat('dd/MM/yyyy')
-                                          .format(_dataVencimento),
-                                      style: const TextStyle(fontSize: 13)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Liquidez',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey[300]!),
-                          borderRadius: BorderRadius.circular(12)),
-                      child: DropdownButton<String>(
-                        value: _liquidez,
-                        isExpanded: true,
-                        underline: const SizedBox(),
-                        items: _liquidezOpcoes
-                            .map((opcao) => DropdownMenuItem(
-                                value: opcao, child: Text(opcao)))
-                            .toList(),
-                        onChanged: (value) =>
-                            setState(() => _liquidez = value!),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: _isLCI,
-                          onChanged: (value) {
-                            setState(() {
-                              _isLCI = value!;
-                              _calcularSimulacao();
-                            });
-                          },
-                          activeColor: AppColors.primary,
-                        ),
-                        const Text('Isento (LCI/LCA)'),
-                      ],
-                    ),
-                    if (_valorFinal > 0) ...[
+                                  onTap: _selecionarDataVencimento,
+                                  child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 12),
+                                      decoration: BoxDecoration(
+                                          border: Border.all(
+                                              color: Colors.grey[300]!),
+                                          borderRadius:
+                                              BorderRadius.circular(12)),
+                                      child: Text(
+                                          DateFormat('dd/MM/yyyy')
+                                              .format(_dataVencimento),
+                                          style:
+                                              const TextStyle(fontSize: 13)))),
+                            ])),
+                      ]),
                       const SizedBox(height: 16),
+                      const Text('Liquidez',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
                       Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha:0.05),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: AppColors.primary.withValues(alpha:0.2)),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text('Valor Final:'),
-                                  Text(CurrencyFormatter.format(_valorFinal),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.primary)),
-                                ]),
-                            const SizedBox(height: 4),
-                            Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text('Rend. Líquido:'),
-                                  Text(
-                                      CurrencyFormatter.format(
-                                          _rendimentoLiquido),
-                                      style: const TextStyle(
-                                          color: Colors.green,
-                                          fontWeight: FontWeight.bold)),
-                                ]),
-                            if (_iof > 0)
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey[300]!),
+                              borderRadius: BorderRadius.circular(12)),
+                          child: DropdownButton<String>(
+                              value: _liquidez,
+                              isExpanded: true,
+                              underline: const SizedBox(),
+                              items: _liquidezOpcoes
+                                  .map((opcao) => DropdownMenuItem(
+                                      value: opcao, child: Text(opcao)))
+                                  .toList(),
+                              onChanged: (value) =>
+                                  setState(() => _liquidez = value!))),
+                      const SizedBox(height: 16),
+                      Row(children: [
+                        Checkbox(
+                            value: _isLCI,
+                            onChanged: (value) {
+                              setState(() {
+                                _isLCI = value!;
+                                _calcularSimulacao();
+                              });
+                            },
+                            activeColor: AppColors.primary),
+                        const Text('Isento (LCI/LCA)'),
+                      ]),
+                      if (_valorFinal > 0) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                                color:
+                                    AppColors.primary.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.2))),
+                            child: Column(children: [
                               Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text('IOF:',
-                                        style: TextStyle(fontSize: 12)),
-                                    Text(CurrencyFormatter.format(_iof),
+                                    const Text('Valor Final:'),
+                                    Text(Formatador.moeda(_valorFinal),
                                         style: const TextStyle(
-                                            fontSize: 12, color: Colors.red)),
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.primary)),
                                   ]),
-                            if (_ir > 0)
+                              const SizedBox(height: 4),
                               Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text('IR:',
-                                        style: TextStyle(fontSize: 12)),
-                                    Text(CurrencyFormatter.format(_ir),
+                                    const Text('Rend. Liquido:'),
+                                    Text(Formatador.moeda(_rendimentoLiquido),
                                         style: const TextStyle(
-                                            fontSize: 12, color: Colors.red)),
+                                            color: Colors.green,
+                                            fontWeight: FontWeight.bold)),
                                   ]),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
+                              if (_iof > 0)
+                                Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('IOF:',
+                                          style: TextStyle(fontSize: 12)),
+                                      Text(Formatador.moeda(_iof),
+                                          style: const TextStyle(
+                                              fontSize: 12, color: Colors.red)),
+                                    ]),
+                              if (_ir > 0)
+                                Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('IR:',
+                                          style: TextStyle(fontSize: 12)),
+                                      Text(Formatador.moeda(_ir),
+                                          style: const TextStyle(
+                                              fontSize: 12, color: Colors.red)),
+                                    ]),
+                            ])),
+                      ],
+                      const SizedBox(height: 24),
+                      Row(children: [
                         Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: OutlinedButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14)),
-                            child: const Text('Cancelar'),
-                          ),
-                        ),
+                            child: OutlinedButton(
+                                onPressed: () => Navigator.pop(context),
+                                style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14)),
+                                child: const Text('Cancelar'))),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: _isLoading
-                              ? const Center(child: CircularProgressIndicator())
-                              : GradientButton(
-                                  text: _isEditing ? 'ATUALIZAR' : 'SALVAR',
-                                  onPressed: _salvarInvestimento,
-                                ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
+                            child: _isLoading
+                                ? const Center(
+                                    child: CircularProgressIndicator())
+                                : GradientButton(
+                                    text: _isEditing ? 'ATUALIZAR' : 'SALVAR',
+                                    onPressed: _salvarInvestimento)),
+                      ]),
+                    ])),
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 }
-

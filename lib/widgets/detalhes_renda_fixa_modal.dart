@@ -1,11 +1,10 @@
-// lib/widgets/detalhes_renda_fixa_modal.dart
+﻿// lib/widgets/detalhes_renda_fixa_modal.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/renda_fixa_model.dart';
 import '../services/renda_fixa_diaria.dart';
-import '../utils/currency_formatter.dart';
-import '../utils/date_formatter.dart';
+import '../utils/formatters.dart';
 import '../constants/app_colors.dart';
 
 class DetalhesRendaFixaModal extends StatefulWidget {
@@ -98,7 +97,7 @@ class _DetalhesRendaFixaModalState extends State<DetalhesRendaFixaModal> {
       case Indexador.preFixado:
         return 'Prefixado';
       case Indexador.posFixadoCDI:
-        return 'Pós-fixado (% CDI)';
+        return 'PÃ³s-fixado (% CDI)';
       case Indexador.ipca:
         return 'IPCA+';
     }
@@ -160,7 +159,7 @@ class _DetalhesRendaFixaModalState extends State<DetalhesRendaFixaModal> {
                             style:
                                 TextStyle(color: Colors.white70, fontSize: 11)),
                         const SizedBox(height: 4),
-                        Text(CurrencyFormatter.format(_valorHoje),
+                        Text(Formatador.moeda(_valorHoje),
                             style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 28,
@@ -193,7 +192,7 @@ class _DetalhesRendaFixaModalState extends State<DetalhesRendaFixaModal> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Text('desde a aplicação',
+                            Text('desde a aplicaÃ§Ã£o',
                                 style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.7),
                                     fontSize: 10)),
@@ -232,19 +231,19 @@ class _DetalhesRendaFixaModalState extends State<DetalhesRendaFixaModal> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                            DateFormatter.formatDate(
+                            Formatador.data(
                                 widget.investimento.dataAplicacao),
                             style: const TextStyle(
                                 fontSize: 10, color: Colors.grey)),
                         Text(
-                            DateFormatter.formatDate(
+                            Formatador.data(
                                 widget.investimento.dataVencimento),
                             style: const TextStyle(
                                 fontSize: 10, color: Colors.grey)),
                       ]),
                   const SizedBox(height: 16),
 
-                  // Gráfico
+                  // GrÃ¡fico
                   if (_evolucao.isNotEmpty) ...[
                     SizedBox(
                       height: 120,
@@ -308,8 +307,8 @@ class _DetalhesRendaFixaModalState extends State<DetalhesRendaFixaModal> {
                     children: [
                       Expanded(
                           child: _buildInfoCard(
-                              'Aplicação',
-                              CurrencyFormatter.format(
+                              'AplicaÃ§Ã£o',
+                              Formatador.moeda(
                                   widget.investimento.valorAplicado),
                               Icons.account_balance_wallet,
                               Colors.blue)),
@@ -325,7 +324,7 @@ class _DetalhesRendaFixaModalState extends State<DetalhesRendaFixaModal> {
                       Expanded(
                           child: _buildInfoCard(
                               'Rendimento Hoje',
-                              CurrencyFormatter.format(
+                              Formatador.moeda(
                                   _calcularRendimentoHoje()),
                               Icons.trending_up,
                               Colors.orange)),
@@ -333,7 +332,7 @@ class _DetalhesRendaFixaModalState extends State<DetalhesRendaFixaModal> {
                       Expanded(
                           child: _buildInfoCard(
                               'IR (parcial)',
-                              CurrencyFormatter.format(_irParcial),
+                              Formatador.moeda(_irParcial),
                               Icons.receipt,
                               Colors.red)),
                     ],
@@ -345,25 +344,25 @@ class _DetalhesRendaFixaModalState extends State<DetalhesRendaFixaModal> {
                   _buildDetalheLinha(
                       'Liquidez',
                       widget.investimento.liquidezDiaria
-                          ? 'Diária'
+                          ? 'DiÃ¡ria'
                           : 'No vencimento'),
-                  _buildDetalheLinha('Dias úteis',
+                  _buildDetalheLinha('Dias Ãºteis',
                       '${_calcularDiasUteisAteHoje()} de ${widget.investimento.diasUteis}'),
                   if (!widget.investimento.isIsento) ...[
                     const Divider(height: 16),
                     _buildDetalheLinha('Rendimento Bruto',
-                        CurrencyFormatter.format(_rendimentoHoje),
+                        Formatador.moeda(_rendimentoHoje),
                         cor: Colors.green),
                     _buildDetalheLinha(
-                        'IOF', '-${CurrencyFormatter.format(_iofParcial)}',
+                        'IOF', '-${Formatador.moeda(_iofParcial)}',
                         cor: Colors.red),
                     _buildDetalheLinha(
-                        'IR', '-${CurrencyFormatter.format(_irParcial)}',
+                        'IR', '-${Formatador.moeda(_irParcial)}',
                         cor: Colors.red),
                     const Divider(height: 8),
                     _buildDetalheLinha(
-                        'Rendimento Líquido',
-                        CurrencyFormatter.format(
+                        'Rendimento LÃ­quido',
+                        Formatador.moeda(
                             _rendimentoHoje - _iofParcial - _irParcial),
                         cor: Colors.green,
                         negrito: true),
@@ -371,7 +370,7 @@ class _DetalhesRendaFixaModalState extends State<DetalhesRendaFixaModal> {
                   const Divider(height: 16),
                   _buildDetalheLinha(
                       'Valor Final Projetado',
-                      CurrencyFormatter.format(
+                      Formatador.moeda(
                           widget.investimento.valorFinal ?? 0),
                       cor: const Color(0xFF7B2CBF),
                       negrito: true),
@@ -489,3 +488,4 @@ class _DetalhesRendaFixaModalState extends State<DetalhesRendaFixaModal> {
     );
   }
 }
+

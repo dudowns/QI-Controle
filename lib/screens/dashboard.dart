@@ -1,5 +1,6 @@
 // lib/screens/dashboard.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../database/db_helper.dart';
@@ -7,6 +8,8 @@ import '../constants/app_colors.dart';
 import '../constants/app_categories.dart';
 import '../utils/formatters.dart';
 import '../widgets/animated_counter.dart';
+import '../services/dashboard_service.dart';
+import '../widgets/toast.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -17,6 +20,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final DBHelper _dbHelper = DBHelper();
+  final DashboardService _dashboardService = DashboardService();
 
   List<Map<String, dynamic>> _lancamentos = [];
   List<Map<String, dynamic>> _investimentos = [];
@@ -74,6 +78,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() => _isLoading = true);
 
     try {
+      final metricas = await _dashboardService.getMetricasRapidas();
+
+      _totalReceitas = metricas['receitas_mes'] ?? 0;
+      _totalDespesas = metricas['despesas_mes'] ?? 0;
+      _metasAtivas = metricas['metas_ativas'] ?? 0;
+      _quantidadeContas = metricas['contas_pendentes'] ?? 0;
+
       _lancamentos = await _dbHelper.getAllLancamentos();
       _investimentos = await _dbHelper.getAllInvestimentos();
       _metas = await _dbHelper.getAllMetas();
@@ -86,7 +97,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _calcularGastosPorCategoria();
       _carregarUltimosLancamentos();
     } catch (e) {
-      debugPrint('❌ Erro ao carregar dashboard: $e');
+      debugPrint('Erro ao carregar dashboard: $e');
+      if (mounted) {
+        Toast.error(context, 'Erro ao carregar dashboard');
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -97,7 +111,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     double despesas = 0;
 
     for (var lancamento in _lancamentos) {
-      final data = DateTime.parse(lancamento['data']);
+      final data = DateTime.parse(lancamento['data'].toString());
       if (data.year == _mesSelecionado.year &&
           data.month == _mesSelecionado.month) {
         if (lancamento['tipo'] == 'receita') {
@@ -144,7 +158,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _calcularEstatisticas() {
     final lancamentosMes = _lancamentos.where((lancamento) {
-      final data = DateTime.parse(lancamento['data']);
+      final data = DateTime.parse(lancamento['data'].toString());
       return data.year == _mesSelecionado.year &&
           data.month == _mesSelecionado.month;
     }).toList();
@@ -198,7 +212,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       double despesas = 0;
 
       for (var lancamento in _lancamentos) {
-        final dataLanc = DateTime.parse(lancamento['data']);
+        final dataLanc = DateTime.parse(lancamento['data'].toString());
         if (dataLanc.year == data.year && dataLanc.month == data.month) {
           if (lancamento['tipo'] == 'receita') {
             receitas += (lancamento['valor'] as num).toDouble();
@@ -221,7 +235,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     double totalDespesas = 0;
 
     for (var lancamento in _lancamentos) {
-      final data = DateTime.parse(lancamento['data']);
+      final data = DateTime.parse(lancamento['data'].toString());
       if (data.year == _mesSelecionado.year &&
           data.month == _mesSelecionado.month) {
         if (lancamento['tipo'] != 'receita') {
@@ -246,7 +260,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _carregarUltimosLancamentos() {
     _ultimosLancamentos = _lancamentos.where((lancamento) {
-      final data = DateTime.parse(lancamento['data']);
+      final data = DateTime.parse(lancamento['data'].toString());
       return data.year == _mesSelecionado.year &&
           data.month == _mesSelecionado.month;
     }).toList()
@@ -292,59 +306,115 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [_buildMonthSelector()],
+            TweenAnimationBuilder(
+              tween: Tween<double>(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOutCubic,
+              builder: (context, opacity, child) {
+                return Opacity(
+                  opacity: opacity,
+                  child: Transform.translate(
+                    offset: Offset(0, 50 * (1 - opacity)),
+                    child: child,
+                  ),
+                );
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [_buildMonthSelector()],
+              ),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                _buildStatCard('Receitas', _totalReceitas, AppColors.success,
-                    Icons.trending_up),
-                const SizedBox(width: 12),
-                _buildStatCard('Despesas', _totalDespesas, AppColors.error,
-                    Icons.trending_down),
-                const SizedBox(width: 12),
-                _buildStatCard(
-                  'Contas Pendentes',
-                  _totalContasPendentes,
-                  AppColors.warning,
-                  Icons.receipt,
-                  subtitle: '$_quantidadeContas conta(s)',
-                ),
-                const SizedBox(width: 12),
-                _buildStatCard(
-                  'Patrimônio',
-                  _patrimonio,
-                  AppColors.primary,
-                  Icons.account_balance,
-                  subtitle: '$_metasAtivas meta(s) ativa(s)',
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 6,
-                  child: _buildExpensesSection(),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 4,
-                  child: Column(
-                    children: [
-                      _buildIncomeExpenseChart(),
-                      const SizedBox(height: 12),
-                      _buildStatsCard(),
-                    ],
+            TweenAnimationBuilder(
+              tween: Tween<double>(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeOutCubic,
+              builder: (context, opacity, child) {
+                return Opacity(
+                  opacity: opacity,
+                  child: Transform.translate(
+                    offset: Offset(0, 50 * (1 - opacity)),
+                    child: child,
                   ),
-                ),
-              ],
+                );
+              },
+              child: Row(
+                children: [
+                  _buildStatCard('Receitas', _totalReceitas, AppColors.success,
+                      Icons.trending_up),
+                  const SizedBox(width: 12),
+                  _buildStatCard('Despesas', _totalDespesas, AppColors.error,
+                      Icons.trending_down),
+                  const SizedBox(width: 12),
+                  _buildStatCard(
+                    'Contas Pendentes',
+                    _totalContasPendentes,
+                    AppColors.warning,
+                    Icons.receipt,
+                    subtitle: '$_quantidadeContas conta(s)',
+                  ),
+                  const SizedBox(width: 12),
+                  _buildStatCard(
+                    'Patrimonio',
+                    _patrimonio,
+                    AppColors.primary,
+                    Icons.account_balance,
+                    subtitle: '$_metasAtivas meta(s) ativa(s)',
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 20),
-            _buildUltimasTransacoesSection(),
+            TweenAnimationBuilder(
+              tween: Tween<double>(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 800),
+              curve: Curves.easeOutCubic,
+              builder: (context, opacity, child) {
+                return Opacity(
+                  opacity: opacity,
+                  child: Transform.translate(
+                    offset: Offset(0, 50 * (1 - opacity)),
+                    child: child,
+                  ),
+                );
+              },
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 6,
+                    child: _buildExpensesSection(),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    flex: 4,
+                    child: Column(
+                      children: [
+                        _buildIncomeExpenseChart(),
+                        const SizedBox(height: 12),
+                        _buildStatsCard(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            TweenAnimationBuilder(
+              tween: Tween<double>(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 900),
+              curve: Curves.easeOutCubic,
+              builder: (context, opacity, child) {
+                return Opacity(
+                  opacity: opacity,
+                  child: Transform.translate(
+                    offset: Offset(0, 50 * (1 - opacity)),
+                    child: child,
+                  ),
+                );
+              },
+              child: _buildUltimasTransacoesSection(),
+            ),
           ],
         ),
       ),
@@ -741,7 +811,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('📊 Média de gastos/dia:',
+              Text('Media de gastos/dia:',
                   style: TextStyle(
                       fontSize: 11, color: AppColors.textSecondary(context))),
               AnimatedCounter(
@@ -759,7 +829,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('🏆 Maior gasto:',
+              Text('Maior gasto:',
                   style: TextStyle(
                       fontSize: 11, color: AppColors.textSecondary(context))),
               Expanded(
@@ -784,7 +854,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('💰 Taxa de economia:',
+              Text('Taxa de economia:',
                   style: TextStyle(
                       fontSize: 11, color: AppColors.textSecondary(context))),
               AnimatedCounter(
@@ -823,7 +893,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Icon(Icons.history, size: 16, color: AppColors.primary),
                   SizedBox(width: 8),
-                  Text('Últimas Transações',
+                  Text('Ultimas Transacoes',
                       style:
                           TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 ],
@@ -837,7 +907,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 child:
-                    const Text('Ver todas →', style: TextStyle(fontSize: 11)),
+                    const Text('Ver todas ->', style: TextStyle(fontSize: 11)),
               ),
             ],
           ),
@@ -846,7 +916,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Center(
               child: Padding(
                 padding: const EdgeInsets.all(32),
-                child: Text('Nenhuma transação recente',
+                child: Text('Nenhuma transacao recente',
                     style: TextStyle(
                         fontSize: 12, color: AppColors.textSecondary(context))),
               ),
@@ -865,7 +935,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final icone = isReceita ? Icons.arrow_upward : Icons.arrow_downward;
     final prefixo = isReceita ? '+' : '-';
     final valor = (transacao['valor'] as num).toDouble();
-    final data = DateTime.parse(transacao['data']);
+    final data = DateTime.parse(transacao['data'].toString());
     final categoria = transacao['categoria']?.toString() ?? 'Outros';
     final categoriaCor = AppCategories.getColor(categoria);
 
@@ -895,23 +965,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           fontWeight: FontWeight.w500,
                           color: AppColors.textPrimary(context))),
                   const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Container(
+                  Row(children: [
+                    Container(
                         width: 8,
                         height: 8,
                         decoration: BoxDecoration(
-                          color: categoriaCor,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(categoria,
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: AppColors.textSecondary(context))),
-                    ],
-                  ),
+                            color: categoriaCor, shape: BoxShape.circle)),
+                    const SizedBox(width: 4),
+                    Text(categoria,
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textSecondary(context))),
+                  ]),
                 ],
               ),
             ),

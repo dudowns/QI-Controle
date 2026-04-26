@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_categories.dart';
 import '../utils/formatters.dart';
+import '../services/theme_service.dart';
 
 class AppModals {
   // ========== 1. MODAL DE LANÇAMENTO ==========
@@ -12,6 +13,7 @@ class AppModals {
     Map<String, dynamic>? lancamento,
   }) async {
     final isEditing = lancamento != null;
+    final isDark = ThemeService().isDarkMode;
 
     final descricaoCtrl =
         TextEditingController(text: lancamento?['descricao'] ?? '');
@@ -46,7 +48,7 @@ class AppModals {
               width: MediaQuery.of(context).size.width - 40,
               constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
@@ -61,8 +63,12 @@ class AppModals {
                 children: [
                   _buildHeader(
                       isEditing ? 'Editar Lançamento' : 'Novo Lançamento',
-                      context),
-                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                      context,
+                      isDark: isDark),
+                  Divider(
+                      height: 1,
+                      color:
+                          isDark ? Colors.grey[800] : const Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(20),
@@ -78,6 +84,7 @@ class AppModals {
                                 icon: Icons.trending_up,
                                 selected: tipo == 'receita',
                                 onTap: () => setState(() => tipo = 'receita'),
+                                isDark: isDark,
                               )),
                               const SizedBox(width: 12),
                               Expanded(
@@ -87,24 +94,28 @@ class AppModals {
                                 icon: Icons.trending_down,
                                 selected: tipo == 'gasto',
                                 onTap: () => setState(() => tipo = 'gasto'),
+                                isDark: isDark,
                               )),
                             ],
                           ),
                           const SizedBox(height: 20),
-                          _buildTextField(descricaoCtrl, 'Descrição'),
+                          _buildTextField(descricaoCtrl, 'Descrição',
+                              isDark: isDark),
                           const SizedBox(height: 16),
                           _buildTextField(valorCtrl, 'Valor',
-                              prefix: 'R\$ ', isNumber: true),
+                              isDark: isDark, prefix: 'R\$ ', isNumber: true),
                           const SizedBox(height: 16),
                           _buildDropdownCategoria(categoria, tipo == 'receita',
-                              (value) => setState(() => categoria = value)),
+                              (value) => setState(() => categoria = value),
+                              isDark: isDark),
                           const SizedBox(height: 16),
                           _buildDatePicker(context, data,
-                              (date) => setState(() => data = date)),
+                              (date) => setState(() => data = date),
+                              isDark: isDark),
                           const SizedBox(height: 16),
                           _buildTextField(
                               observacaoCtrl, 'Observação (opcional)',
-                              maxLines: 2),
+                              isDark: isDark, maxLines: 2),
                           const SizedBox(height: 24),
                           _buildButtons(
                             context: context,
@@ -134,6 +145,7 @@ class AppModals {
                               Navigator.pop(context, resultado);
                             },
                             isEditing: isEditing,
+                            isDark: isDark,
                           ),
                         ],
                       ),
@@ -154,6 +166,7 @@ class AppModals {
     Map<String, dynamic>? investimento,
   }) async {
     final isEditing = investimento != null;
+    final isDark = ThemeService().isDarkMode;
 
     final tickerCtrl =
         TextEditingController(text: investimento?['ticker'] ?? '');
@@ -180,6 +193,11 @@ class AppModals {
     String tipoSelecionado = investimento?['tipo'] ?? 'ACAO';
     final List<String> tipos = ['ACAO', 'FII', 'CRIPTO', 'RENDA_FIXA'];
 
+    DateTime dataCompra =
+        investimento != null && investimento['data_compra'] != null
+            ? DateTime.parse(investimento['data_compra'])
+            : DateTime.now();
+
     return showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: true,
@@ -195,9 +213,9 @@ class AppModals {
             backgroundColor: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 550),
+              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
@@ -211,8 +229,12 @@ class AppModals {
                 children: [
                   _buildHeader(
                       isEditing ? 'Editar Investimento' : 'Novo Investimento',
-                      context),
-                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                      context,
+                      isDark: isDark),
+                  Divider(
+                      height: 1,
+                      color:
+                          isDark ? Colors.grey[800] : const Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(20),
@@ -220,23 +242,34 @@ class AppModals {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildTextField(tickerCtrl, 'Ticker',
-                              hint: 'Ex: PETR4, VISC11'),
+                              isDark: isDark, hint: 'Ex: PETR4, VISC11'),
                           const SizedBox(height: 16),
                           _buildDropdownTipos(
                               tipoSelecionado,
                               tipos,
                               (value) =>
-                                  setState(() => tipoSelecionado = value)),
+                                  setState(() => tipoSelecionado = value),
+                              isDark: isDark),
                           const SizedBox(height: 16),
                           _buildTextField(quantidadeCtrl, 'Quantidade',
-                              isNumber: true),
+                              isDark: isDark, isNumber: true),
                           const SizedBox(height: 16),
                           _buildTextField(precoMedioCtrl, 'Preço Médio',
-                              prefix: 'R\$ ', isNumber: true),
+                              isDark: isDark, prefix: 'R\$ ', isNumber: true),
                           const SizedBox(height: 16),
                           _buildTextField(
                               precoAtualCtrl, 'Preço Atual (opcional)',
-                              prefix: 'R\$ ', isNumber: true),
+                              isDark: isDark, prefix: 'R\$ ', isNumber: true),
+                          const SizedBox(height: 16),
+                          _buildDatePicker(
+                            context,
+                            dataCompra,
+                            (date) => setState(() => dataCompra = date),
+                            label: 'Data da Compra',
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now(),
+                            isDark: isDark,
+                          ),
                           const SizedBox(height: 24),
                           _buildButtons(
                             context: context,
@@ -260,6 +293,7 @@ class AppModals {
                                     ? double.parse(precoAtualCtrl.text
                                         .replaceAll(',', '.'))
                                     : null,
+                                'data_compra': dataCompra.toIso8601String(),
                               };
                               if (isEditing) {
                                 final id = investimento['id'];
@@ -270,6 +304,7 @@ class AppModals {
                               Navigator.pop(context, resultado);
                             },
                             isEditing: isEditing,
+                            isDark: isDark,
                           ),
                         ],
                       ),
@@ -291,6 +326,7 @@ class AppModals {
     required List<String> tickersDisponiveis,
   }) async {
     final isEditing = provento != null;
+    final isDark = ThemeService().isDarkMode;
 
     final tickerCtrl = TextEditingController(
         text: provento?['ticker'] ??
@@ -343,7 +379,7 @@ class AppModals {
               width: MediaQuery.of(context).size.width - 40,
               constraints: const BoxConstraints(maxWidth: 500, maxHeight: 650),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
@@ -356,8 +392,12 @@ class AppModals {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildHeader(
-                      isEditing ? 'Editar Provento' : 'Novo Provento', context),
-                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                      isEditing ? 'Editar Provento' : 'Novo Provento', context,
+                      isDark: isDark),
+                  Divider(
+                      height: 1,
+                      color:
+                          isDark ? Colors.grey[800] : const Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(20),
@@ -368,26 +408,28 @@ class AppModals {
                             _buildDropdownTickers(
                                 tickerCtrl,
                                 tickersDisponiveis,
-                                (value) => tickerCtrl.text = value ?? ''),
+                                (value) => tickerCtrl.text = value ?? '',
+                                isDark: isDark),
                           if (tickersDisponiveis.isEmpty)
                             _buildTextField(tickerCtrl, 'Ticker',
-                                hint: 'Ex: PETR4'),
+                                isDark: isDark, hint: 'Ex: PETR4'),
                           const SizedBox(height: 16),
                           _buildDropdownString(
                               'Tipo',
                               tipoProvento,
                               tiposProvento,
-                              (value) => setState(() => tipoProvento = value)),
+                              (value) => setState(() => tipoProvento = value),
+                              isDark: isDark),
                           const SizedBox(height: 16),
                           _buildTextField(valorCtrl, 'Valor por cota',
-                              prefix: 'R\$ ', isNumber: true),
+                              isDark: isDark, prefix: 'R\$ ', isNumber: true),
                           const SizedBox(height: 16),
                           _buildTextField(quantidadeCtrl, 'Quantidade',
-                              isNumber: true),
+                              isDark: isDark, isNumber: true),
                           const SizedBox(height: 16),
                           _buildDatePicker(context, dataPagamento,
                               (date) => setState(() => dataPagamento = date),
-                              label: 'Data de pagamento'),
+                              label: 'Data de pagamento', isDark: isDark),
                           const SizedBox(height: 8),
                           Row(
                             children: [
@@ -397,14 +439,18 @@ class AppModals {
                                     setState(() => temDataCom = value ?? false),
                                 activeColor: const Color(0xFF7B2CBF),
                               ),
-                              const Text('Possui data COM'),
+                              Text('Possui data COM',
+                                  style: TextStyle(
+                                      color: isDark
+                                          ? Colors.white
+                                          : const Color(0xFF333333))),
                             ],
                           ),
                           if (temDataCom) ...[
                             const SizedBox(height: 8),
                             _buildDatePicker(context, dataCom ?? DateTime.now(),
                                 (date) => setState(() => dataCom = date),
-                                label: 'Data COM'),
+                                label: 'Data COM', isDark: isDark),
                           ],
                           const SizedBox(height: 24),
                           _buildButtons(
@@ -440,6 +486,7 @@ class AppModals {
                               Navigator.pop(context, resultado);
                             },
                             isEditing: isEditing,
+                            isDark: isDark,
                           ),
                         ],
                       ),
@@ -460,6 +507,7 @@ class AppModals {
     Map<String, dynamic>? conta,
   }) async {
     final isEditing = conta != null;
+    final isDark = ThemeService().isDarkMode;
 
     final nomeCtrl = TextEditingController(text: conta?['nome'] ?? '');
     final valorCtrl = TextEditingController(
@@ -511,7 +559,7 @@ class AppModals {
               width: MediaQuery.of(context).size.width - 40,
               constraints: const BoxConstraints(maxWidth: 500, maxHeight: 650),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
@@ -524,8 +572,12 @@ class AppModals {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildHeader(
-                      isEditing ? 'Editar Conta' : 'Nova Conta', context),
-                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                      isEditing ? 'Editar Conta' : 'Nova Conta', context,
+                      isDark: isDark),
+                  Divider(
+                      height: 1,
+                      color:
+                          isDark ? Colors.grey[800] : const Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(20),
@@ -533,32 +585,36 @@ class AppModals {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildTextField(nomeCtrl, 'Nome da conta',
-                              hint: 'Ex: Netflix, Aluguel'),
+                              isDark: isDark, hint: 'Ex: Netflix, Aluguel'),
                           const SizedBox(height: 16),
                           _buildTextField(valorCtrl, 'Valor',
-                              prefix: 'R\$ ', isNumber: true),
+                              isDark: isDark, prefix: 'R\$ ', isNumber: true),
                           const SizedBox(height: 16),
                           _buildDropdownDias(diaVencimento, dias,
-                              (value) => setState(() => diaVencimento = value)),
+                              (value) => setState(() => diaVencimento = value),
+                              isDark: isDark),
                           const SizedBox(height: 16),
                           _buildDropdownString('Tipo', tipo, tipos,
-                              (value) => setState(() => tipo = value)),
+                              (value) => setState(() => tipo = value),
+                              isDark: isDark),
                           const SizedBox(height: 16),
                           _buildDropdownString(
                               'Categoria',
                               categoria,
                               categorias,
-                              (value) => setState(() => categoria = value)),
+                              (value) => setState(() => categoria = value),
+                              isDark: isDark),
                           const SizedBox(height: 16),
                           _buildDatePicker(context, dataInicio,
                               (date) => setState(() => dataInicio = date),
-                              label: 'Data de início'),
+                              label: 'Data de início', isDark: isDark),
                           if (tipo == 'parcelada') ...[
                             const SizedBox(height: 16),
                             _buildTextField(
                                 TextEditingController(
                                     text: parcelasTotal?.toString() ?? ''),
                                 'Total de parcelas',
+                                isDark: isDark,
                                 isNumber: true),
                           ],
                           const SizedBox(height: 24),
@@ -593,6 +649,7 @@ class AppModals {
                               Navigator.pop(context, resultado);
                             },
                             isEditing: isEditing,
+                            isDark: isDark,
                           ),
                         ],
                       ),
@@ -613,6 +670,7 @@ class AppModals {
     Map<String, dynamic>? meta,
   }) async {
     final isEditing = meta != null;
+    final isDark = ThemeService().isDarkMode;
 
     final tituloCtrl = TextEditingController(text: meta?['titulo'] ?? '');
     final descricaoCtrl = TextEditingController(text: meta?['descricao'] ?? '');
@@ -671,7 +729,7 @@ class AppModals {
               width: MediaQuery.of(context).size.width - 40,
               constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
@@ -683,18 +741,25 @@ class AppModals {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildHeader(
-                      isEditing ? 'Editar Meta' : 'Nova Meta', context),
-                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                  _buildHeader(isEditing ? 'Editar Meta' : 'Nova Meta', context,
+                      isDark: isDark),
+                  Divider(
+                      height: 1,
+                      color:
+                          isDark ? Colors.grey[800] : const Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Tipo da meta',
+                          Text('Tipo da meta',
                               style: TextStyle(
-                                  fontSize: 14, fontWeight: FontWeight.w600)),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? Colors.white
+                                      : const Color(0xFF1A1A1A))),
                           const SizedBox(height: 8),
                           _buildTipoMetaSelector(
                               opcoesTipo,
@@ -703,20 +768,23 @@ class AppModals {
                               (cor, icone) => setState(() {
                                     corSelecionada = cor;
                                     iconeSelecionado = icone;
-                                  })),
+                                  }),
+                              isDark: isDark),
                           const SizedBox(height: 20),
                           _buildTextField(tituloCtrl, 'Título',
-                              hint: 'Ex: Viagem para a praia'),
+                              isDark: isDark, hint: 'Ex: Viagem para a praia'),
                           const SizedBox(height: 16),
                           _buildTextField(descricaoCtrl, 'Descrição (opcional)',
-                              maxLines: 2),
+                              isDark: isDark, maxLines: 2),
                           const SizedBox(height: 16),
                           _buildTextField(valorCtrl, 'Valor da meta',
-                              prefix: 'R\$ ', isNumber: true),
+                              isDark: isDark, prefix: 'R\$ ', isNumber: true),
                           const SizedBox(height: 16),
                           _buildDatePicker(context, dataFim,
                               (date) => setState(() => dataFim = date),
-                              label: 'Data limite', firstDate: DateTime.now()),
+                              label: 'Data limite',
+                              firstDate: DateTime.now(),
+                              isDark: isDark),
                           const SizedBox(height: 24),
                           _buildButtons(
                             context: context,
@@ -752,6 +820,7 @@ class AppModals {
                               Navigator.pop(context, resultado);
                             },
                             isEditing: isEditing,
+                            isDark: isDark,
                           ),
                         ],
                       ),
@@ -771,6 +840,7 @@ class AppModals {
     required BuildContext context,
     required Map<String, dynamic> meta,
   }) async {
+    final isDark = ThemeService().isDarkMode;
     final valorAtual = (meta['valor_atual'] as num?)?.toDouble() ?? 0.0;
     final valorObjetivo = (meta['valor_objetivo'] as num?)?.toDouble() ?? 0.0;
     final valorRestante =
@@ -795,7 +865,7 @@ class AppModals {
               width: MediaQuery.of(context).size.width - 40,
               constraints: const BoxConstraints(maxWidth: 450, maxHeight: 480),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
@@ -807,8 +877,11 @@ class AppModals {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildHeader('Adicionar Depósito', context),
-                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                  _buildHeader('Adicionar Depósito', context, isDark: isDark),
+                  Divider(
+                      height: 1,
+                      color:
+                          isDark ? Colors.grey[800] : const Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(20),
@@ -833,7 +906,9 @@ class AppModals {
                                     children: [
                                       Text('Progresso atual:',
                                           style: TextStyle(
-                                              color: Colors.grey[600])),
+                                              color: isDark
+                                                  ? Colors.grey[400]
+                                                  : Colors.grey[600])),
                                       Text(Formatador.moeda(valorAtual),
                                           style: const TextStyle(
                                               fontWeight: FontWeight.bold)),
@@ -845,7 +920,9 @@ class AppModals {
                                     children: [
                                       Text('Falta:',
                                           style: TextStyle(
-                                              color: Colors.grey[600])),
+                                              color: isDark
+                                                  ? Colors.grey[400]
+                                                  : Colors.grey[600])),
                                       Text(Formatador.moeda(valorRestante),
                                           style: const TextStyle(
                                               fontWeight: FontWeight.bold,
@@ -857,11 +934,11 @@ class AppModals {
                           ),
                           const SizedBox(height: 20),
                           _buildTextField(valorCtrl, 'Valor do depósito',
-                              prefix: 'R\$ ', isNumber: true),
+                              isDark: isDark, prefix: 'R\$ ', isNumber: true),
                           const SizedBox(height: 16),
                           _buildTextField(
                               observacaoCtrl, 'Observação (opcional)',
-                              maxLines: 2),
+                              isDark: isDark, maxLines: 2),
                           const SizedBox(height: 24),
                           _buildButtons(
                             context: context,
@@ -887,6 +964,7 @@ class AppModals {
                                 'observacao': observacaoCtrl.text
                               });
                             },
+                            isDark: isDark,
                           ),
                         ],
                       ),
@@ -901,22 +979,24 @@ class AppModals {
     );
   }
 
-  // ========== COMPONENTES REUTILIZÁVEIS ==========
+  // ========== COMPONENTES REUTILIZÁVEIS ATUALIZADOS ==========
 
-  static Widget _buildHeader(String title, BuildContext context) {
+  static Widget _buildHeader(String title, BuildContext context,
+      {required bool isDark}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(title,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A1A))),
+                  color: isDark ? Colors.white : const Color(0xFF1A1A1A))),
           GestureDetector(
             onTap: () => Navigator.pop(context),
-            child: Icon(Icons.close, size: 20, color: Colors.grey[500]),
+            child: Icon(Icons.close,
+                size: 20, color: isDark ? Colors.grey[400] : Colors.grey[500]),
           ),
         ],
       ),
@@ -924,7 +1004,8 @@ class AppModals {
   }
 
   static Widget _buildTextField(TextEditingController controller, String label,
-      {String? hint,
+      {required bool isDark,
+      String? hint,
       String prefix = '',
       bool isNumber = false,
       int maxLines = 1}) {
@@ -932,20 +1013,43 @@ class AppModals {
       controller: controller,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
       maxLines: maxLines,
-      style: const TextStyle(fontSize: 15),
+      style: TextStyle(
+          fontSize: 15, color: isDark ? Colors.white : const Color(0xFF1A1A1A)),
       decoration: InputDecoration(
         hintText: hint ?? label,
+        hintStyle: TextStyle(
+            color: isDark ? Colors.grey[500] : const Color(0xFF999999)),
         prefixText: prefix.isEmpty ? null : prefix,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        prefixStyle: TextStyle(
+            color: isDark ? Colors.grey[400] : const Color(0xFF666666)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+              color: isDark ? Colors.grey[700]! : const Color(0xFFE0E0E0)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+              color: isDark ? Colors.grey[700]! : const Color(0xFFE0E0E0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xFF7B2CBF), width: 1.5),
+        ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        filled: true,
+        fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
       ),
     );
   }
 
   static Widget _buildDatePicker(
       BuildContext context, DateTime date, Function(DateTime) onChanged,
-      {String label = 'Data', DateTime? firstDate, DateTime? lastDate}) {
+      {String label = 'Data',
+      DateTime? firstDate,
+      DateTime? lastDate,
+      required bool isDark}) {
     return InkWell(
       onTap: () async {
         final picked = await showDatePicker(
@@ -953,21 +1057,41 @@ class AppModals {
           initialDate: date,
           firstDate: firstDate ?? DateTime(2020),
           lastDate: lastDate ?? DateTime.now().add(const Duration(days: 3650)),
+          locale: const Locale('pt', 'BR'),
         );
         if (picked != null) onChanged(picked);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[300]!),
+          border:
+              Border.all(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(Formatador.data(date),
-                style: const TextStyle(fontSize: 14, color: Color(0xFF333333))),
-            Icon(Icons.calendar_today, size: 18, color: Colors.grey[500]),
+            Row(
+              children: [
+                Icon(Icons.calendar_today,
+                    size: 16,
+                    color: isDark ? Colors.grey[400] : Colors.grey[500]),
+                const SizedBox(width: 12),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                const SizedBox(width: 8),
+                Text(
+                  Formatador.data(date),
+                  style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.white : const Color(0xFF333333)),
+                ),
+              ],
+            ),
+            Icon(Icons.arrow_drop_down,
+                size: 20, color: isDark ? Colors.grey[400] : Colors.grey[500]),
           ],
         ),
       ),
@@ -980,6 +1104,7 @@ class AppModals {
     required IconData icon,
     required bool selected,
     required VoidCallback onTap,
+    required bool isDark,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -988,10 +1113,12 @@ class AppModals {
         decoration: BoxDecoration(
           color: selected
               ? const Color(0xFF7B2CBF).withValues(alpha: 0.08)
-              : Colors.white,
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected ? const Color(0xFF7B2CBF) : Colors.grey[300]!,
+            color: selected
+                ? const Color(0xFF7B2CBF)
+                : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -1000,13 +1127,17 @@ class AppModals {
           children: [
             Icon(icon,
                 size: 18,
-                color: selected ? const Color(0xFF7B2CBF) : Colors.grey[600]),
+                color: selected
+                    ? const Color(0xFF7B2CBF)
+                    : (isDark ? Colors.grey[400] : Colors.grey[600])),
             const SizedBox(width: 6),
             Text(label,
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                  color: selected ? const Color(0xFF7B2CBF) : Colors.grey[600],
+                  color: selected
+                      ? const Color(0xFF7B2CBF)
+                      : (isDark ? Colors.grey[400] : Colors.grey[600]),
                 )),
           ],
         ),
@@ -1015,21 +1146,27 @@ class AppModals {
   }
 
   static Widget _buildDropdownCategoria(
-      String value, bool isReceita, Function(String) onChanged) {
+      String value, bool isReceita, Function(String) onChanged,
+      {required bool isDark}) {
     final categorias =
         isReceita ? AppCategories.receitas : AppCategories.gastos;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[300]!),
+        border:
+            Border.all(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
         borderRadius: BorderRadius.circular(10),
       ),
       child: DropdownButton<String>(
         value: value,
         isExpanded: true,
         underline: const SizedBox(),
-        icon: Icon(Icons.arrow_drop_down, color: Colors.grey[500]),
-        style: const TextStyle(fontSize: 14, color: Color(0xFF333333)),
+        icon: Icon(Icons.arrow_drop_down,
+            color: isDark ? Colors.grey[400] : Colors.grey[500]),
+        style: TextStyle(
+            fontSize: 14,
+            color: isDark ? Colors.white : const Color(0xFF333333)),
+        dropdownColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
         items: categorias.map((cat) {
           return DropdownMenuItem(
             value: cat,
@@ -1044,7 +1181,10 @@ class AppModals {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(cat),
+                Text(cat,
+                    style: TextStyle(
+                        color:
+                            isDark ? Colors.white : const Color(0xFF333333))),
               ],
             ),
           );
@@ -1055,23 +1195,31 @@ class AppModals {
   }
 
   static Widget _buildDropdownTipos(
-      String value, List<String> tipos, Function(String) onChanged) {
+      String value, List<String> tipos, Function(String) onChanged,
+      {required bool isDark}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[300]!),
+        border:
+            Border.all(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
         borderRadius: BorderRadius.circular(10),
       ),
       child: DropdownButton<String>(
         value: value,
         isExpanded: true,
         underline: const SizedBox(),
-        icon: Icon(Icons.arrow_drop_down, color: Colors.grey[500]),
-        style: const TextStyle(fontSize: 14, color: Color(0xFF333333)),
+        icon: Icon(Icons.arrow_drop_down,
+            color: isDark ? Colors.grey[400] : Colors.grey[500]),
+        style: TextStyle(
+            fontSize: 14,
+            color: isDark ? Colors.white : const Color(0xFF333333)),
+        dropdownColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
         items: tipos.map((tipo) {
           return DropdownMenuItem(
             value: tipo,
-            child: Text(TipoInvestimento.getNomeAmigavel(tipo)),
+            child: Text(TipoInvestimento.getNomeAmigavel(tipo),
+                style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF333333))),
           );
         }).toList(),
         onChanged: (value) => onChanged(value ?? 'ACAO'),
@@ -1080,30 +1228,42 @@ class AppModals {
   }
 
   static Widget _buildDropdownString(String label, String value,
-      List<String> items, Function(String) onChanged) {
+      List<String> items, Function(String) onChanged,
+      {required bool isDark}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF666666))),
+                color: isDark ? Colors.grey[400] : const Color(0xFF666666))),
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[300]!),
+            border: Border.all(
+                color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
             borderRadius: BorderRadius.circular(10),
           ),
           child: DropdownButton<String>(
             value: value,
             isExpanded: true,
             underline: const SizedBox(),
-            icon: Icon(Icons.arrow_drop_down, color: Colors.grey[500]),
-            style: const TextStyle(fontSize: 14, color: Color(0xFF333333)),
+            icon: Icon(Icons.arrow_drop_down,
+                color: isDark ? Colors.grey[400] : Colors.grey[500]),
+            style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.white : const Color(0xFF333333)),
+            dropdownColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
             items: items
-                .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+                .map((item) => DropdownMenuItem(
+                    value: item,
+                    child: Text(item,
+                        style: TextStyle(
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF333333)))))
                 .toList(),
             onChanged: (value) => onChanged(value ?? items.first),
           ),
@@ -1113,7 +1273,8 @@ class AppModals {
   }
 
   static Widget _buildDropdownDias(
-      int value, List<int> dias, Function(int) onChanged) {
+      int value, List<int> dias, Function(int) onChanged,
+      {required bool isDark}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1126,18 +1287,28 @@ class AppModals {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[300]!),
+            border: Border.all(
+                color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
             borderRadius: BorderRadius.circular(10),
           ),
           child: DropdownButton<int>(
             value: value,
             isExpanded: true,
             underline: const SizedBox(),
-            icon: Icon(Icons.arrow_drop_down, color: Colors.grey[500]),
-            style: const TextStyle(fontSize: 14, color: Color(0xFF333333)),
+            icon: Icon(Icons.arrow_drop_down,
+                color: isDark ? Colors.grey[400] : Colors.grey[500]),
+            style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.white : const Color(0xFF333333)),
+            dropdownColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
             items: dias
-                .map((dia) =>
-                    DropdownMenuItem(value: dia, child: Text(dia.toString())))
+                .map((dia) => DropdownMenuItem(
+                    value: dia,
+                    child: Text(dia.toString(),
+                        style: TextStyle(
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF333333)))))
                 .toList(),
             onChanged: (value) => onChanged(value ?? 1),
           ),
@@ -1147,7 +1318,8 @@ class AppModals {
   }
 
   static Widget _buildDropdownTickers(TextEditingController controller,
-      List<String> tickers, Function(String?) onChanged) {
+      List<String> tickers, Function(String?) onChanged,
+      {required bool isDark}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1160,7 +1332,8 @@ class AppModals {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[300]!),
+            border: Border.all(
+                color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
             borderRadius: BorderRadius.circular(10),
           ),
           child: DropdownButton<String>(
@@ -1168,11 +1341,20 @@ class AppModals {
             isExpanded: true,
             hint: const Text('Selecione um ativo'),
             underline: const SizedBox(),
-            icon: Icon(Icons.arrow_drop_down, color: Colors.grey[500]),
-            style: const TextStyle(fontSize: 14, color: Color(0xFF333333)),
+            icon: Icon(Icons.arrow_drop_down,
+                color: isDark ? Colors.grey[400] : Colors.grey[500]),
+            style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.white : const Color(0xFF333333)),
+            dropdownColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
             items: tickers
-                .map((ticker) =>
-                    DropdownMenuItem(value: ticker, child: Text(ticker)))
+                .map((ticker) => DropdownMenuItem(
+                    value: ticker,
+                    child: Text(ticker,
+                        style: TextStyle(
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF333333)))))
                 .toList(),
             onChanged: (value) {
               controller.text = value ?? '';
@@ -1188,7 +1370,8 @@ class AppModals {
       List<Map<String, dynamic>> opcoes,
       String corSelecionada,
       String iconeSelecionado,
-      Function(String, String) onChanged) {
+      Function(String, String) onChanged,
+      {required bool isDark}) {
     return SizedBox(
       height: 60,
       child: ListView.builder(
@@ -1205,11 +1388,12 @@ class AppModals {
               decoration: BoxDecoration(
                 color: isSelected
                     ? (opcao['color'] as Color).withValues(alpha: 0.2)
-                    : Colors.grey[100],
+                    : (isDark ? Colors.grey[800] : Colors.grey[100]),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color:
-                      isSelected ? opcao['color'] as Color : Colors.grey[300]!,
+                  color: isSelected
+                      ? opcao['color'] as Color
+                      : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
                   width: isSelected ? 2 : 1,
                 ),
               ),
@@ -1219,7 +1403,7 @@ class AppModals {
                   Icon(_getIconeParaTipo(opcao['icone']),
                       color: isSelected
                           ? opcao['color'] as Color
-                          : Colors.grey[600],
+                          : (isDark ? Colors.grey[400] : Colors.grey[600]),
                       size: 24),
                   const SizedBox(height: 4),
                   Text(
@@ -1228,7 +1412,7 @@ class AppModals {
                       fontSize: 10,
                       color: isSelected
                           ? opcao['color'] as Color
-                          : Colors.grey[600],
+                          : (isDark ? Colors.grey[400] : Colors.grey[600]),
                       fontWeight:
                           isSelected ? FontWeight.bold : FontWeight.normal,
                     ),
@@ -1247,6 +1431,7 @@ class AppModals {
     required VoidCallback onCancel,
     required VoidCallback onConfirm,
     bool isEditing = false,
+    required bool isDark,
   }) {
     return Row(
       children: [
@@ -1255,9 +1440,11 @@ class AppModals {
             onPressed: onCancel,
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              side: BorderSide(color: Colors.grey[400]!),
+              side: BorderSide(
+                  color: isDark ? Colors.grey[700]! : Colors.grey[400]!),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
+              foregroundColor: isDark ? Colors.grey[300] : null,
             ),
             child: const Text('Cancelar', style: TextStyle(fontSize: 14)),
           ),
@@ -1341,4 +1528,3 @@ class TipoInvestimento {
     }
   }
 }
-

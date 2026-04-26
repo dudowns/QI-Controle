@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
-import '../utils/date_helper.dart'; // 🔥 NOVO
 
 class NotificacoesScreen extends StatefulWidget {
   const NotificacoesScreen({super.key});
@@ -24,7 +23,7 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
   }
 
   String _formatarData(DateTime data) {
-    final now = DateHelper.agoraBrasilia(); // 🔥 Usar DateHelper
+    final now = DateTime.now();
     final difference = now.difference(data);
 
     if (difference.inDays == 0) {
@@ -32,13 +31,13 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
         if (difference.inMinutes == 0) {
           return 'Agora mesmo';
         }
-        return 'Há ${difference.inMinutes} min';
+        return 'Ha ${difference.inMinutes} min';
       }
-      return 'Há ${difference.inHours} h';
+      return 'Ha ${difference.inHours} h';
     } else if (difference.inDays == 1) {
       return 'Ontem';
     } else if (difference.inDays < 7) {
-      return 'Há ${difference.inDays} dias';
+      return 'Ha ${difference.inDays} dias';
     } else {
       return DateFormat('dd/MM/yyyy').format(data);
     }
@@ -50,7 +49,7 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notificações'),
+        title: const Text('Notificacoes'),
         backgroundColor: const Color(0xFF6A1B9A),
         foregroundColor: Colors.white,
         actions: [
@@ -74,9 +73,9 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
                 showDialog(
                   context: context,
                   builder: (context) => AlertDialog(
-                    title: const Text('Limpar notificações'),
+                    title: const Text('Limpar notificacoes'),
                     content:
-                        const Text('Deseja remover todas as notificações?'),
+                        const Text('Deseja remover todas as notificacoes?'),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context),
@@ -111,7 +110,7 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Nenhuma notificação',
+                    'Nenhuma notificacao',
                     style: TextStyle(
                       fontSize: 18,
                       color: Colors.grey[600],
@@ -120,7 +119,7 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'As notificações de proventos aparecerão aqui',
+                    'As notificacoes de proventos aparecerao aqui',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[500],
@@ -136,9 +135,11 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
                 final notif = notificacoes[index];
                 final bool lida = notif['lida'] ?? false;
                 final String ticker = notif['ticker'] ?? '';
-                final String titulo = notif['titulo'] ?? 'Notificação';
+                final String titulo = notif['titulo'] ?? 'Notificacao';
                 final String mensagem = notif['mensagem'] ?? '';
-                final DateTime data = notif['data'] ?? DateTime.now();
+                final DateTime data = notif['data'] is DateTime
+                    ? notif['data']
+                    : DateTime.parse(notif['data'].toString());
                 final int id = notif['id'] ?? 0;
 
                 return Container(
@@ -149,11 +150,11 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
                     border: Border.all(
                       color: lida
                           ? Colors.grey[300]!
-                          : const Color(0xFF6A1B9A).withValues(alpha:0.3),
+                          : const Color(0xFF6A1B9A).withValues(alpha: 0.3),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha:0.02),
+                        color: Colors.black.withValues(alpha: 0.02),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -166,8 +167,8 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
                       height: 48,
                       decoration: BoxDecoration(
                         color: ticker.contains('11')
-                            ? Colors.green.withValues(alpha:0.1)
-                            : const Color(0xFF6A1B9A).withValues(alpha:0.1),
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : const Color(0xFF6A1B9A).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -231,4 +232,3 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
     );
   }
 }
-

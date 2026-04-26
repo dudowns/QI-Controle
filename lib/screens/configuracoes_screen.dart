@@ -1,3 +1,4 @@
+// lib/screens/configuracoes_screen.dart
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../services/auth_service.dart';
@@ -12,7 +13,7 @@ class ConfiguracoesScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        title: const Text('Configurações'),
+        title: const Text('Configuracoes'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
       ),
@@ -33,7 +34,7 @@ class ConfiguracoesScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.palette),
               title: const Text('Tema'),
-              subtitle: const Text('Claro / Escuro / Automático'),
+              subtitle: const Text('Claro / Escuro / Automatico'),
               onTap: () {},
             ),
           ),
@@ -51,7 +52,7 @@ class ConfiguracoesScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.info),
               title: const Text('Sobre'),
-              subtitle: const Text('Versão 2.0'),
+              subtitle: const Text('Versao 2.0'),
               onTap: () {},
             ),
           ),
@@ -79,4 +80,3 @@ class ConfiguracoesScreen extends StatelessWidget {
     );
   }
 }
-

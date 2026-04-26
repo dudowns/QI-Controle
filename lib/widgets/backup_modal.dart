@@ -1,9 +1,8 @@
-// lib/widgets/backup_modal.dart
+﻿// lib/widgets/backup_modal.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/backup_service_plus.dart';
-import '../utils/date_helper.dart';
 import '../constants/app_colors.dart';
 import 'gradient_button.dart';
 import 'modern_card.dart';
@@ -53,13 +52,9 @@ class _BackupModalState extends State<BackupModal> {
   }
 
   String _formatarData(File file) {
-    final nome = file.path.split('\\').last;
-    final dataDoNome = DateHelper.dataDoNomeArquivo(nome);
-    if (dataDoNome != null) {
-      return DateFormat('dd/MM/yyyy HH:mm').format(dataDoNome);
-    }
+    final nome = file.path.split(RegExp(r'[\\/]')).last;
     final stat = file.statSync();
-    return DateHelper.formatarDataBrasil(stat.modified, comHora: true);
+    return DateFormat('dd/MM/yyyy HH:mm').format(stat.modified);
   }
 
   String _formatarTamanho(File file) {
@@ -80,7 +75,7 @@ class _BackupModalState extends State<BackupModal> {
             content: Row(children: [
               Icon(Icons.check_circle, color: Colors.white),
               SizedBox(width: 12),
-              Expanded(child: Text('✅ Backup realizado com sucesso!'))
+              Expanded(child: Text('Backup realizado com sucesso!'))
             ]),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
@@ -91,7 +86,7 @@ class _BackupModalState extends State<BackupModal> {
   }
 
   Future<void> _restaurarBackup(File backup) async {
-    final nome = backup.path.split('\\').last;
+    final nome = backup.path.split(RegExp(r'[\\/]')).last;
 
     final confirmar = await showDialog<bool>(
       context: context,
@@ -113,7 +108,7 @@ class _BackupModalState extends State<BackupModal> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Você está prestes a restaurar:'),
+              const Text('Voce esta prestes a restaurar:'),
               const SizedBox(height: 12),
               Container(
                   padding: const EdgeInsets.all(12),
@@ -149,7 +144,7 @@ class _BackupModalState extends State<BackupModal> {
                     Icon(Icons.warning_amber, color: Colors.red),
                     SizedBox(width: 12),
                     Expanded(
-                        child: Text('Todos os dados atuais serão SUBSTITUÍDOS!',
+                        child: Text('Todos os dados atuais serao SUBSTITUIDOS!',
                             style: TextStyle(color: Colors.red)))
                   ])),
             ]),
@@ -174,12 +169,12 @@ class _BackupModalState extends State<BackupModal> {
         await _carregarBackups();
         widget.onBackupRealizado?.call();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('✅ Backup restaurado com sucesso!'),
+            content: Text('Backup restaurado com sucesso!'),
             backgroundColor: Colors.green));
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Erro: $e'), backgroundColor: Colors.red));
+          SnackBar(content: Text('Erro: $e'), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => carregando = false);
     }
@@ -202,8 +197,8 @@ class _BackupModalState extends State<BackupModal> {
           const Text('Excluir Backup',
               style: TextStyle(fontWeight: FontWeight.bold))
         ]),
-        content:
-            Text('Deseja excluir o backup: ${backup.path.split('\\').last}?'),
+        content: Text(
+            'Deseja excluir o backup: ${backup.path.split(RegExp(r'[\\/]')).last}?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -219,8 +214,7 @@ class _BackupModalState extends State<BackupModal> {
       await backup.delete();
       await _carregarBackups();
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('🗑️ Backup excluído'),
-          backgroundColor: Colors.orange));
+          content: Text('Backup excluido'), backgroundColor: Colors.orange));
     }
   }
 
@@ -242,7 +236,7 @@ class _BackupModalState extends State<BackupModal> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildHeader('Backup e Restauração', context),
+          _buildHeader('Backup e Restauracao', context),
           const Divider(height: 1, color: Color(0xFFEEEEEE)),
           Expanded(
             child: carregando
@@ -305,7 +299,10 @@ class _BackupModalState extends State<BackupModal> {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                        Text(backup.path.split('\\').last,
+                                        Text(
+                                            backup.path
+                                                .split(RegExp(r'[\\/]'))
+                                                .last,
                                             style: const TextStyle(
                                                 fontWeight: FontWeight.bold)),
                                         Text(_formatarData(backup),
@@ -339,19 +336,16 @@ class _BackupModalState extends State<BackupModal> {
   Widget _buildHeader(String title, BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A1A))),
-          GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Icon(Icons.close, size: 20, color: Colors.grey[500])),
-        ],
-      ),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(title,
+            style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A1A))),
+        GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Icon(Icons.close, size: 20, color: Colors.grey[500])),
+      ]),
     );
   }
 }

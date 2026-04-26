@@ -1,3 +1,4 @@
+// lib/screens/forgot_password_screen.dart
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import '../services/auth_service.dart';
@@ -77,11 +78,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 constraints: const BoxConstraints(maxWidth: 450),
                 padding: const EdgeInsets.all(28),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha:0.95),
+                  color: Colors.white.withValues(alpha: 0.95),
                   borderRadius: BorderRadius.circular(32),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha:0.15),
+                      color: Colors.black.withValues(alpha: 0.15),
                       blurRadius: 30,
                       offset: const Offset(0, 15),
                       spreadRadius: 5,
@@ -102,7 +103,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF7B2CBF).withValues(alpha:0.4),
+                              color: const Color(0xFF7B2CBF)
+                                  .withValues(alpha: 0.4),
                               blurRadius: 20,
                               spreadRadius: 5,
                             ),
@@ -122,7 +124,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Digite seu e-mail para receber um código',
+                      'Digite seu e-mail para receber um codigo',
                       style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                     ),
                     const SizedBox(height: 32),
@@ -143,8 +145,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide:
-                              const BorderSide(color: Color(0xFF7B2CBF), width: 2),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF7B2CBF), width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
@@ -163,11 +165,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF7B2CBF),
                                 elevation: 3,
-                                shadowColor: const Color(0xFF7B2CBF).withValues(alpha:0.5),
+                                shadowColor: const Color(0xFF7B2CBF)
+                                    .withValues(alpha: 0.5),
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16)),
                               ),
-                              child: const Text('ENVIAR CÓDIGO',
+                              child: const Text('ENVIAR CODIGO',
                                   style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
@@ -190,4 +193,3 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 }
-

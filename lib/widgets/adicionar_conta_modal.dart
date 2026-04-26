@@ -1,4 +1,4 @@
-// lib/widgets/adicionar_conta_modal.dart
+﻿// lib/widgets/adicionar_conta_modal.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../repositories/conta_repository.dart';
@@ -49,7 +49,7 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
   bool _isLoading = false;
 
   final List<int> _dias = List.generate(31, (i) => i + 1);
-  List<String> get _categorias => _repository.getCategorias();
+  List<String> get _categorias => _repository.getCategorias().toSet().toList();
 
   @override
   void initState() {
@@ -121,7 +121,7 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                '✅ ${_nomeController.text} ${widget.conta != null ? 'atualizada' : 'adicionada'}!'),
+                '${_nomeController.text} ${widget.conta != null ? 'atualizada' : 'adicionada'}!'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
@@ -202,18 +202,14 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A1A),
-            ),
-          ),
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A))),
           GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Icon(Icons.close, size: 20, color: Colors.grey[500]),
-          ),
+              onTap: () => Navigator.pop(context),
+              child: Icon(Icons.close, size: 20, color: Colors.grey[500])),
         ],
       ),
     );
@@ -304,14 +300,14 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
                 size: 18,
                 color: isSelected ? const Color(0xFF7B2CBF) : Colors.grey[600]),
             const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected ? const Color(0xFF7B2CBF) : Colors.grey[600],
-              ),
-            ),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                    color: isSelected
+                        ? const Color(0xFF7B2CBF)
+                        : Colors.grey[600])),
           ],
         ),
       ),
@@ -378,6 +374,7 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
   }
 
   Widget _buildCategoriaSelector() {
+    final categorias = _categorias;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -394,12 +391,13 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
             borderRadius: BorderRadius.circular(10),
           ),
           child: DropdownButton<String>(
-            value: _categoria,
+            value:
+                categorias.contains(_categoria) ? _categoria : categorias.first,
             isExpanded: true,
             underline: const SizedBox(),
             icon: Icon(Icons.arrow_drop_down, color: Colors.grey[500]),
             style: const TextStyle(fontSize: 14, color: Color(0xFF333333)),
-            items: _categorias
+            items: categorias
                 .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
                 .toList(),
             onChanged: (v) => setState(() => _categoria = v!),
@@ -413,7 +411,7 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Data de início',
+        const Text('Data de inicio',
             style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -430,11 +428,9 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  DateFormat('dd/MM/yyyy').format(_dataInicio),
-                  style:
-                      const TextStyle(fontSize: 14, color: Color(0xFF333333)),
-                ),
+                Text(DateFormat('dd/MM/yyyy').format(_dataInicio),
+                    style: const TextStyle(
+                        fontSize: 14, color: Color(0xFF333333))),
                 Icon(Icons.calendar_today, size: 18, color: Colors.grey[500]),
               ],
             ),
@@ -464,7 +460,7 @@ class _AdicionarContaModalState extends State<AdicionarContaModal> {
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
           validator: (v) =>
-              v == null || v.isEmpty ? 'Digite o número de parcelas' : null,
+              v == null || v.isEmpty ? 'Digite o numero de parcelas' : null,
         ),
       ],
     );

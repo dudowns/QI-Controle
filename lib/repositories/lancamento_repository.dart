@@ -1,21 +1,19 @@
-// lib/repositories/lancamento_repository.dart
+﻿// lib/repositories/lancamento_repository.dart
 import '../database/db_helper.dart';
 import '../models/lancamento_model.dart';
 import '../services/sync_service.dart';
 import '../constants/app_categories.dart';
-import '../utils/result.dart';
-import '../utils/loading_mixin.dart'; // 🔥 NOVO
+import '../models/result_model.dart';
 
-class LancamentoRepository with LoadingMixin {
-  // 🔥 ADICIONAR MIXIN
+class LancamentoRepository {
   final DBHelper _dbHelper = DBHelper();
   final SyncService _syncService = SyncService();
 
   static const String tabelaLancamentos = DBHelper.tabelaLancamentos;
 
-  // ========== MÉTODOS CRUD COM SINCRONIZAÇÃO (VERSÃO LEGADO) ==========
+  // ========== METODOS CRUD COM SINCRONIZACAO (VERSAO LEGADO) ==========
 
-  /// Insere um novo lançamento (LEGADO - mantido para compatibilidade)
+  /// Insere um novo lancamento (LEGADO - mantido para compatibilidade)
   Future<int> insertLancamento(Map<String, dynamic> lancamento) async {
     lancamento['sync_status'] = 'pending';
     lancamento['updated_at'] = DateTime.now().toIso8601String();
@@ -25,7 +23,7 @@ class LancamentoRepository with LoadingMixin {
     return id;
   }
 
-  /// Insere um lançamento a partir do modelo (LEGADO)
+  /// Insere um lancamento a partir do modelo (LEGADO)
   Future<int> insertLancamentoModel(Lancamento lancamento) async {
     final json = lancamento.toJson();
     json['sync_status'] = 'pending';
@@ -36,178 +34,166 @@ class LancamentoRepository with LoadingMixin {
     return id;
   }
 
-  // ========== NOVOS MÉTODOS COM RESULT E LOADING (USANDO MIXIN) ==========
+  // ========== NOVOS METODOS COM RESULT ==========
 
-  /// Insere um lançamento com Result e Loading
+  /// Insere um lancamento com Result
   Future<Result<int>> insertLancamentoResult(Lancamento lancamento) async {
-    return await withLoadingResult(() async {
-      try {
-        final json = lancamento.toJson();
-        json['sync_status'] = 'pending';
-        json['updated_at'] = DateTime.now().toIso8601String();
+    try {
+      final json = lancamento.toJson();
+      json['sync_status'] = 'pending';
+      json['updated_at'] = DateTime.now().toIso8601String();
 
-        final id = await _dbHelper.insertLancamento(json);
-        _syncService.syncNow();
-        return Result.success(id);
-      } catch (e) {
-        return Result.failure(
-            '❌ Erro ao adicionar lançamento: ${lancamento.descricao}\n$e');
-      }
-    });
+      final id = await _dbHelper.insertLancamento(json);
+      _syncService.syncNow();
+      return Result.success(id);
+    } catch (e) {
+      return Result.failure(
+          'Erro ao adicionar lancamento: ${lancamento.descricao}\n$e');
+    }
   }
 
-  /// Atualiza um lançamento com Result e Loading
+  /// Atualiza um lancamento com Result
   Future<Result<int>> updateLancamentoResult(Lancamento lancamento) async {
-    return await withLoadingResult(() async {
-      try {
-        if (lancamento.id == null) {
-          return Result.failure('ID do lançamento não pode ser nulo');
-        }
-
-        final json = lancamento.toJson();
-        json['sync_status'] = 'pending';
-        json['updated_at'] = DateTime.now().toIso8601String();
-
-        final result = await _dbHelper.updateLancamento(json);
-        _syncService.syncNow();
-        return Result.success(result);
-      } catch (e) {
-        return Result.failure(
-            '❌ Erro ao atualizar lançamento: ${lancamento.descricao}\n$e');
+    try {
+      if (lancamento.id == null) {
+        return Result.failure('ID do lancamento nao pode ser nulo');
       }
-    });
+
+      final json = lancamento.toJson();
+      json['sync_status'] = 'pending';
+      json['updated_at'] = DateTime.now().toIso8601String();
+
+      final result = await _dbHelper.updateLancamento(json);
+      _syncService.syncNow();
+      return Result.success(result);
+    } catch (e) {
+      return Result.failure(
+          'Erro ao atualizar lancamento: ${lancamento.descricao}\n$e');
+    }
   }
 
-  /// Deleta um lançamento com Result e Loading
+  /// Deleta um lancamento com Result
   Future<Result<int>> deleteLancamentoResult(int id) async {
-    return await withLoadingResult(() async {
-      try {
-        final lancamento = await getLancamentoById(id);
-        final remoteId = lancamento?['remote_id'] as String?;
+    try {
+      final lancamento = await getLancamentoById(id);
+      final remoteId = lancamento?['remote_id'] as String?;
 
-        final result = await _dbHelper.deleteLancamento(id);
+      final result = await _dbHelper.deleteLancamento(id);
 
-        if (remoteId != null && remoteId.isNotEmpty) {
-          await _syncService.deleteAndSync('lancamentos', id, remoteId);
-        }
-
-        return Result.success(result);
-      } catch (e) {
-        return Result.failure('❌ Erro ao excluir lançamento ID: $id\n$e');
+      if (remoteId != null && remoteId.isNotEmpty) {
+        await _syncService.deleteAndSync('lancamentos', id, remoteId);
       }
-    });
+
+      return Result.success(result);
+    } catch (e) {
+      return Result.failure('Erro ao excluir lancamento ID: $id\n$e');
+    }
   }
 
-  /// Busca todos os lançamentos como modelos com Result e Loading
+  /// Busca todos os lancamentos como modelos com Result
   Future<Result<List<Lancamento>>> getAllLancamentosModelResult() async {
-    return await withLoadingResult(() async {
-      try {
-        final dados = await _dbHelper.getAllLancamentos();
-        final lancamentos =
-            dados.map((json) => Lancamento.fromJson(json)).toList();
-        return Result.success(lancamentos);
-      } catch (e) {
-        return Result.failure('❌ Erro ao carregar lançamentos: $e');
-      }
-    });
+    try {
+      final dados = await _dbHelper.getAllLancamentos();
+      final lancamentos =
+          dados.map((json) => Lancamento.fromJson(json)).toList();
+      return Result.success(lancamentos);
+    } catch (e) {
+      return Result.failure('Erro ao carregar lancamentos: $e');
+    }
   }
 
-  /// Busca lançamentos por período com Result e Loading
+  /// Busca lancamentos por periodo com Result
   Future<Result<List<Lancamento>>> getLancamentosByPeriodoResult(
     DateTime inicio,
     DateTime fim,
   ) async {
-    return await withLoadingResult(() async {
-      try {
-        final db = await _dbHelper.database;
-        final resultados = await db.query(
-          tabelaLancamentos,
-          where: 'date(data) BETWEEN date(?) AND date(?)',
-          whereArgs: [inicio.toIso8601String(), fim.toIso8601String()],
-          orderBy: 'data DESC',
-        );
-        final lancamentos =
-            resultados.map((json) => Lancamento.fromJson(json)).toList();
-        return Result.success(lancamentos);
-      } catch (e) {
-        return Result.failure('❌ Erro ao buscar lançamentos do período: $e');
-      }
-    });
+    try {
+      final db = await _dbHelper.database;
+      final resultados = await db.query(
+        tabelaLancamentos,
+        where: 'date(data) BETWEEN date(?) AND date(?)',
+        whereArgs: [inicio.toIso8601String(), fim.toIso8601String()],
+        orderBy: 'data DESC',
+      );
+      final lancamentos =
+          resultados.map((json) => Lancamento.fromJson(json)).toList();
+      return Result.success(lancamentos);
+    } catch (e) {
+      return Result.failure('Erro ao buscar lancamentos do periodo: $e');
+    }
   }
 
-  /// Busca resumo do mês com Result e Loading
+  /// Busca resumo do mes com Result
   Future<Result<Map<String, dynamic>>> getResumoDoMesResult(
       DateTime mes) async {
-    return await withLoadingResult(() async {
-      try {
-        final primeiroDia = DateTime(mes.year, mes.month, 1);
-        final ultimoDia = DateTime(mes.year, mes.month + 1, 0);
+    try {
+      final primeiroDia = DateTime(mes.year, mes.month, 1);
+      final ultimoDia = DateTime(mes.year, mes.month + 1, 0);
 
-        final result =
-            await getLancamentosByPeriodoResult(primeiroDia, ultimoDia);
+      final result =
+          await getLancamentosByPeriodoResult(primeiroDia, ultimoDia);
 
-        if (result.isFailure) {
-          return Result.failure(result.error);
-        }
-
-        final lancamentos = result.data;
-        double receitas = 0;
-        double despesas = 0;
-        final Map<String, double> gastosPorCategoria = {};
-
-        for (var l in lancamentos) {
-          if (l.tipo == TipoLancamento.receita) {
-            receitas += l.valor;
-          } else {
-            despesas += l.valor;
-            gastosPorCategoria[l.categoria] =
-                (gastosPorCategoria[l.categoria] ?? 0) + l.valor;
-          }
-        }
-
-        final categoriasOrdenadas = Map.fromEntries(
-            gastosPorCategoria.entries.toList()
-              ..sort((a, b) => b.value.compareTo(a.value)));
-
-        return Result.success({
-          'receitas': receitas,
-          'despesas': despesas,
-          'saldo': receitas - despesas,
-          'totalLancamentos': lancamentos.length,
-          'gastosPorCategoria': categoriasOrdenadas,
-        });
-      } catch (e) {
-        return Result.failure('❌ Erro ao calcular resumo do mês: $e');
+      if (result.isFailure) {
+        return Result.failure(result.error);
       }
-    });
+
+      final lancamentos = result.data;
+      double receitas = 0;
+      double despesas = 0;
+      final Map<String, double> gastosPorCategoria = {};
+
+      for (var l in lancamentos) {
+        if (l.tipo == TipoLancamento.receita) {
+          receitas += l.valor;
+        } else {
+          despesas += l.valor;
+          gastosPorCategoria[l.categoria] =
+              (gastosPorCategoria[l.categoria] ?? 0) + l.valor;
+        }
+      }
+
+      final categoriasOrdenadas = Map.fromEntries(
+          gastosPorCategoria.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value)));
+
+      return Result.success({
+        'receitas': receitas,
+        'despesas': despesas,
+        'saldo': receitas - despesas,
+        'totalLancamentos': lancamentos.length,
+        'gastosPorCategoria': categoriasOrdenadas,
+      });
+    } catch (e) {
+      return Result.failure('Erro ao calcular resumo do mes: $e');
+    }
   }
 
-  // ========== MÉTODOS DE BUSCA (LEGADO - mantidos) ==========
+  // ========== METODOS DE BUSCA (LEGADO - mantidos) ==========
 
-  /// Busca todos os lançamentos (LEGADO)
+  /// Busca todos os lancamentos (LEGADO)
   Future<List<Map<String, dynamic>>> getAllLancamentos() async {
     return await _dbHelper.getAllLancamentos();
   }
 
-  /// Busca lançamentos como modelos (LEGADO)
+  /// Busca lancamentos como modelos (LEGADO)
   Future<List<Lancamento>> getAllLancamentosModel() async {
     final dados = await _dbHelper.getAllLancamentos();
     return dados.map((json) => Lancamento.fromJson(json)).toList();
   }
 
-  /// Busca um lançamento pelo ID
+  /// Busca um lancamento pelo ID
   Future<Map<String, dynamic>?> getLancamentoById(int id) async {
     return await _dbHelper.getLancamentoById(id);
   }
 
-  /// Busca um lançamento como modelo
+  /// Busca um lancamento como modelo
   Future<Lancamento?> getLancamentoModelById(int id) async {
     final dados = await _dbHelper.getLancamentoById(id);
     if (dados == null) return null;
     return Lancamento.fromJson(dados);
   }
 
-  /// Busca lançamentos por período (LEGADO)
+  /// Busca lancamentos por periodo (LEGADO)
   Future<List<Lancamento>> getLancamentosByPeriodo(
     DateTime inicio,
     DateTime fim,
@@ -222,7 +208,7 @@ class LancamentoRepository with LoadingMixin {
     return resultados.map((json) => Lancamento.fromJson(json)).toList();
   }
 
-  /// Busca lançamentos por tipo
+  /// Busca lancamentos por tipo
   Future<List<Lancamento>> getLancamentosByTipo(TipoLancamento tipo) async {
     final db = await _dbHelper.database;
     final resultados = await db.query(
@@ -234,7 +220,7 @@ class LancamentoRepository with LoadingMixin {
     return resultados.map((json) => Lancamento.fromJson(json)).toList();
   }
 
-  /// Busca lançamentos por categoria
+  /// Busca lancamentos por categoria
   Future<List<Lancamento>> getLancamentosByCategoria(String categoria) async {
     final db = await _dbHelper.database;
     final resultados = await db.query(
@@ -246,7 +232,7 @@ class LancamentoRepository with LoadingMixin {
     return resultados.map((json) => Lancamento.fromJson(json)).toList();
   }
 
-  /// Busca lançamentos paginados
+  /// Busca lancamentos paginados
   Future<List<Map<String, dynamic>>> getLancamentosPaginados({
     required int pagina,
     int porPagina = 20,
@@ -267,9 +253,9 @@ class LancamentoRepository with LoadingMixin {
     );
   }
 
-  // ========== MÉTODOS DE ESTATÍSTICAS (LEGADO) ==========
+  // ========== METODOS DE ESTATISTICAS (LEGADO) ==========
 
-  /// Calcula resumo do mês (LEGADO)
+  /// Calcula resumo do mes (LEGADO)
   Future<Map<String, dynamic>> getResumoDoMes(DateTime mes) async {
     final primeiroDia = DateTime(mes.year, mes.month, 1);
     final ultimoDia = DateTime(mes.year, mes.month + 1, 0);
@@ -303,7 +289,7 @@ class LancamentoRepository with LoadingMixin {
     };
   }
 
-  /// Calcula estatísticas gerais
+  /// Calcula estatisticas gerais
   Future<Map<String, dynamic>> getEstatisticasGerais() async {
     final lancamentos = await getAllLancamentosModel();
 
@@ -334,7 +320,7 @@ class LancamentoRepository with LoadingMixin {
     };
   }
 
-  /// Insere vários lançamentos em lote
+  /// Insere varios lancamentos em lote
   Future<void> insertLancamentosEmLote(
       List<Map<String, dynamic>> lancamentos) async {
     for (var l in lancamentos) {
@@ -345,12 +331,12 @@ class LancamentoRepository with LoadingMixin {
     _syncService.syncNow();
   }
 
-  /// Deleta vários lançamentos em lote
+  /// Deleta varios lancamentos em lote
   Future<void> deleteEmLote(List<int> ids) async {
     await _dbHelper.deleteEmLote(tabelaLancamentos, ids);
   }
 
-  // ========== MÉTODOS PARA CATEGORIAS ==========
+  // ========== METODOS PARA CATEGORIAS ==========
 
   /// Retorna lista de categorias de gastos
   List<String> getCategoriasGastos() {

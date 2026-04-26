@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../database/db_helper.dart';
 import '../constants/app_colors.dart';
-import '../constants/app_categories.dart'; // 🔥 NOVO!
+import '../constants/app_categories.dart';
 import '../utils/formatters.dart';
 
 class NovaTransacaoScreen extends StatefulWidget {
@@ -25,9 +25,6 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
   DateTime _dataSelecionada = DateTime.now();
   double _valor = 0.0;
 
-  final List<String> _tipos = ['receita', 'gasto'];
-
-  // 🔥 Listas dinâmicas baseadas no tipo
   List<String> get _categoriasDisponiveis {
     return _tipoSelecionado == 'receita'
         ? AppCategories.receitas
@@ -76,7 +73,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '✅ ${_tipoSelecionado == 'receita' ? 'Receita' : 'Gasto'} de ${Formatador.moeda(_valor)} adicionado!',
+                '${_tipoSelecionado == 'receita' ? 'Receita' : 'Gasto'} de ${Formatador.moeda(_valor)} adicionado!',
               ),
               backgroundColor: _tipoSelecionado == 'receita'
                   ? AppColors.success
@@ -103,7 +100,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nova Transação'),
+        title: const Text('Nova Transacao'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
       ),
@@ -114,14 +111,13 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Tipo (Receita/Gasto)
               const Text(
                 'Tipo',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Row(
-                children: _tipos.map((tipo) {
+                children: ['receita', 'gasto'].map((tipo) {
                   return Expanded(
                     child: Container(
                       margin: EdgeInsets.only(
@@ -130,7 +126,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
                       ),
                       child: FilterChip(
                         label: Text(
-                          tipo == 'receita' ? '💰 Receita' : '💸 Gasto',
+                          tipo == 'receita' ? 'Receita' : 'Gasto',
                           style: TextStyle(
                             color: _tipoSelecionado == tipo
                                 ? Colors.white
@@ -145,8 +141,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
                         onSelected: (selected) {
                           setState(() {
                             _tipoSelecionado = tipo;
-                            _categoriaSelecionada =
-                                'Outros'; // Reset ao mudar tipo
+                            _categoriaSelecionada = 'Outros';
                           });
                         },
                       ),
@@ -154,29 +149,23 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
                   );
                 }).toList(),
               ),
-
               const SizedBox(height: 20),
-
-              // Descrição
               TextFormField(
                 controller: _descricaoController,
                 decoration: const InputDecoration(
-                  labelText: 'Descrição',
-                  hintText: 'Ex: Salário, Mercado, etc',
+                  labelText: 'Descricao',
+                  hintText: 'Ex: Salario, Mercado, etc',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.description),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Digite uma descrição';
+                    return 'Digite uma descricao';
                   }
                   return null;
                 },
               ),
-
               const SizedBox(height: 16),
-
-              // Valor
               TextFormField(
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
@@ -191,7 +180,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
                   }
                   final val = double.tryParse(value.replaceAll(',', '.'));
                   if (val == null || val <= 0) {
-                    return 'Digite um valor válido';
+                    return 'Digite um valor valido';
                   }
                   return null;
                 },
@@ -199,12 +188,9 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
                   _valor = double.parse(value!.replaceAll(',', '.'));
                 },
               ),
-
               const SizedBox(height: 16),
-
-              // 🔥 Categoria - DINÂMICA por tipo!
               DropdownButtonFormField<String>(
-                initialValue: _categoriaSelecionada,
+                value: _categoriaSelecionada, // ✅ CORRIGIDO
                 decoration: const InputDecoration(
                   labelText: 'Categoria',
                   border: OutlineInputBorder(),
@@ -241,10 +227,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
                   return null;
                 },
               ),
-
               const SizedBox(height: 16),
-
-              // Data
               InkWell(
                 onTap: _selecionarData,
                 child: InputDecorator(
@@ -262,24 +245,18 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 16),
-
-              // Observação (opcional)
               TextFormField(
                 controller: _observacaoController,
                 decoration: const InputDecoration(
-                  labelText: 'Observação (opcional)',
+                  labelText: 'Observacao (opcional)',
                   hintText: 'Detalhes adicionais...',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.note),
                 ),
                 maxLines: 3,
               ),
-
               const SizedBox(height: 32),
-
-              // Botão Salvar
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -308,4 +285,3 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
     );
   }
 }
-

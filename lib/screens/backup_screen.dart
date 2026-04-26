@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/backup_service_plus.dart';
-import '../utils/date_helper.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_sizes.dart';
 import '../widgets/gradient_button.dart';
@@ -35,13 +34,23 @@ class _BackupScreenState extends State<BackupScreen> {
   }
 
   String _formatarData(File file) {
-    final nome = file.path.split('\\').last;
-    final dataDoNome = DateHelper.dataDoNomeArquivo(nome);
+    final nome = file.path.split(RegExp(r'[\\/]')).last;
+    final dataDoNome = _dataDoNomeArquivo(nome);
     if (dataDoNome != null) {
       return DateFormat('dd/MM/yyyy HH:mm').format(dataDoNome);
     }
     final stat = file.statSync();
-    return DateHelper.formatarDataBrasil(stat.modified, comHora: true);
+    return DateFormat('dd/MM/yyyy HH:mm').format(stat.modified);
+  }
+
+  DateTime? _dataDoNomeArquivo(String nomeArquivo) {
+    final regex = RegExp(r'backup_(\d+)\.json');
+    final match = regex.firstMatch(nomeArquivo);
+    if (match != null) {
+      final timestamp = int.parse(match.group(1)!);
+      return DateTime.fromMillisecondsSinceEpoch(timestamp);
+    }
+    return null;
   }
 
   String _formatarTamanho(File file) {
@@ -51,7 +60,7 @@ class _BackupScreenState extends State<BackupScreen> {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
-  // 🟢 FUNÇÃO PARA FAZER BACKUP
+  // 🟢 FUNCAO PARA FAZER BACKUP
   Future<void> _fazerBackup() async {
     final caminho = await _backupService.salvarBackupEmArquivo();
     if (caminho != null && context.mounted) {
@@ -74,7 +83,7 @@ class _BackupScreenState extends State<BackupScreen> {
     }
   }
 
-  // 🟢 FUNÇÃO PARA RESTAURAR BACKUP
+  // 🟢 FUNCAO PARA RESTAURAR BACKUP
   Future<void> _restaurarBackupSelecionado() async {
     if (backups.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -119,7 +128,7 @@ class _BackupScreenState extends State<BackupScreen> {
             itemCount: backups.length,
             itemBuilder: (context, index) {
               final backup = backups[index];
-              final nome = backup.path.split('\\').last;
+              final nome = backup.path.split(RegExp(r'[\\/]')).last;
               final isMaisRecente = index == 0;
 
               return ListTile(
@@ -127,8 +136,8 @@ class _BackupScreenState extends State<BackupScreen> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: isMaisRecente
-                        ? AppColors.primary.withValues(alpha:0.1)
-                        : AppColors.muted(context).withValues(alpha:0.1),
+                        ? AppColors.primary.withValues(alpha: 0.1)
+                        : AppColors.muted(context).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -170,9 +179,9 @@ class _BackupScreenState extends State<BackupScreen> {
     );
   }
 
-  // 🟢 CONFIRMAR RESTAURAÇÃO
+  // 🟢 CONFIRMAR RESTAURACAO
   Future<void> _confirmarRestauracao(File backup) async {
-    final nome = backup.path.split('\\').last;
+    final nome = backup.path.split(RegExp(r'[\\/]')).last;
 
     final confirmar = await showDialog<bool>(
       context: context,
@@ -183,7 +192,7 @@ class _BackupScreenState extends State<BackupScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha:0.1),
+                color: Colors.orange.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.restore, color: Colors.orange),
@@ -203,23 +212,23 @@ class _BackupScreenState extends State<BackupScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Você está prestes a restaurar:',
+              'Voce esta prestes a restaurar:',
               style: TextStyle(color: AppColors.textSecondary(context)),
             ),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha:0.05),
+                color: Colors.orange.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.withValues(alpha:0.3)),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha:0.1),
+                      color: Colors.orange.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.backup, color: Colors.orange),
@@ -264,9 +273,9 @@ class _BackupScreenState extends State<BackupScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha:0.05),
+                color: Colors.red.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.withValues(alpha:0.2)),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
               ),
               child: const Row(
                 children: [
@@ -274,7 +283,7 @@ class _BackupScreenState extends State<BackupScreen> {
                   SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Todos os dados atuais serão SUBSTITUÍDOS!',
+                      'Todos os dados atuais serao SUBSTITUIDOS!',
                       style: TextStyle(
                         color: Colors.red,
                         fontWeight: FontWeight.w500,
@@ -362,9 +371,9 @@ class _BackupScreenState extends State<BackupScreen> {
     }
   }
 
-  // 🟢 FUNÇÃO PARA EXCLUIR BACKUP
+  // 🟢 FUNCAO PARA EXCLUIR BACKUP
   Future<void> _excluirBackup(File backup) async {
-    final nome = backup.path.split('\\').last;
+    final nome = backup.path.split(RegExp(r'[\\/]')).last;
 
     final confirmar = await showDialog<bool>(
       context: context,
@@ -375,7 +384,7 @@ class _BackupScreenState extends State<BackupScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha:0.1),
+                color: Colors.red.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.delete, color: Colors.red),
@@ -398,7 +407,7 @@ class _BackupScreenState extends State<BackupScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.muted(context).withValues(alpha:0.1),
+                color: AppColors.muted(context).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -449,7 +458,7 @@ class _BackupScreenState extends State<BackupScreen> {
               children: [
                 Icon(Icons.delete, color: Colors.white),
                 SizedBox(width: 12),
-                Expanded(child: Text('🗑️ Backup excluído')),
+                Expanded(child: Text('🗑️ Backup excluido')),
               ],
             ),
             backgroundColor: Colors.orange,
@@ -468,7 +477,7 @@ class _BackupScreenState extends State<BackupScreen> {
           children: [
             Icon(Icons.backup, color: Colors.white),
             SizedBox(width: 12),
-            Text('Backup e Restauração'),
+            Text('Backup e Restauracao'),
           ],
         ),
         backgroundColor: AppColors.primary,
@@ -509,7 +518,6 @@ class _BackupScreenState extends State<BackupScreen> {
               )
             : Column(
                 children: [
-                  // 🟢 CARD COM DOIS BOTÕES: FAZER BACKUP E RESTAURAR
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: ModernCard(
@@ -522,7 +530,8 @@ class _BackupScreenState extends State<BackupScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(alpha:0.1),
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: const Icon(
@@ -547,7 +556,7 @@ class _BackupScreenState extends State<BackupScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'Faça backup e restaure quando precisar',
+                                        'Faca backup e restaure quando precisar',
                                         style: TextStyle(
                                           fontSize: 12,
                                           color:
@@ -560,8 +569,6 @@ class _BackupScreenState extends State<BackupScreen> {
                               ],
                             ),
                             const SizedBox(height: 16),
-
-                            // 🟢 BOTÃO FAZER BACKUP
                             SizedBox(
                               width: double.infinity,
                               child: GradientButton(
@@ -570,10 +577,7 @@ class _BackupScreenState extends State<BackupScreen> {
                                 onPressed: _fazerBackup,
                               ),
                             ),
-
                             const SizedBox(height: 12),
-
-                            // 🟢 BOTÃO RESTAURAR BACKUP
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
@@ -603,8 +607,6 @@ class _BackupScreenState extends State<BackupScreen> {
                       ),
                     ),
                   ),
-
-                  // Lista de backups
                   Expanded(
                     child: backups.isEmpty
                         ? Center(
@@ -616,7 +618,7 @@ class _BackupScreenState extends State<BackupScreen> {
                                   height: 120,
                                   decoration: BoxDecoration(
                                     color: AppColors.muted(context)
-                                        .withValues(alpha:0.1),
+                                        .withValues(alpha: 0.1),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(
@@ -636,7 +638,7 @@ class _BackupScreenState extends State<BackupScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Clique em "FAZER BACKUP AGORA" para começar',
+                                  'Clique em "FAZER BACKUP AGORA" para comecar',
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: AppColors.textSecondary(context),
@@ -650,7 +652,8 @@ class _BackupScreenState extends State<BackupScreen> {
                             itemCount: backups.length,
                             itemBuilder: (context, index) {
                               final backup = backups[index];
-                              final nome = backup.path.split('\\').last;
+                              final nome =
+                                  backup.path.split(RegExp(r'[\\/]')).last;
                               final isMaisRecente = index == 0;
 
                               return Container(
@@ -660,7 +663,6 @@ class _BackupScreenState extends State<BackupScreen> {
                                     padding: const EdgeInsets.all(16),
                                     child: Row(
                                       children: [
-                                        // Ícone principal
                                         Container(
                                           width: 50,
                                           height: 50,
@@ -676,7 +678,7 @@ class _BackupScreenState extends State<BackupScreen> {
                                             color: isMaisRecente
                                                 ? null
                                                 : AppColors.muted(context)
-                                                    .withValues(alpha:0.1),
+                                                    .withValues(alpha: 0.1),
                                             borderRadius:
                                                 BorderRadius.circular(12),
                                           ),
@@ -691,8 +693,6 @@ class _BackupScreenState extends State<BackupScreen> {
                                           ),
                                         ),
                                         const SizedBox(width: 16),
-
-                                        // Informações
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment:
@@ -727,7 +727,8 @@ class _BackupScreenState extends State<BackupScreen> {
                                                       ),
                                                       decoration: BoxDecoration(
                                                         color: AppColors.primary
-                                                            .withValues(alpha:0.1),
+                                                            .withValues(
+                                                                alpha: 0.1),
                                                         borderRadius:
                                                             BorderRadius
                                                                 .circular(12),
@@ -784,20 +785,16 @@ class _BackupScreenState extends State<BackupScreen> {
                                             ],
                                           ),
                                         ),
-
-                                        // Botão EXCLUIR
                                         Container(
                                           decoration: BoxDecoration(
-                                            color: Colors.red.withValues(alpha:0.1),
+                                            color: Colors.red
+                                                .withValues(alpha: 0.1),
                                             borderRadius:
                                                 BorderRadius.circular(8),
                                           ),
                                           child: IconButton(
-                                            icon: const Icon(
-                                              Icons.delete,
-                                              color: Colors.red,
-                                              size: 22,
-                                            ),
+                                            icon: const Icon(Icons.delete,
+                                                color: Colors.red, size: 22),
                                             onPressed: () =>
                                                 _excluirBackup(backup),
                                             tooltip: 'Excluir backup',
@@ -817,4 +814,3 @@ class _BackupScreenState extends State<BackupScreen> {
     );
   }
 }
-

@@ -1,3 +1,4 @@
+﻿// lib/repositories/investimento_repository.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/investimento_model.dart';
 import '../database/db_helper.dart';
@@ -47,10 +48,11 @@ class InvestimentoRepository {
           .eq('id', investimento.id ?? '');
     } catch (e) {
       if (investimento.id != null) {
+        // ✅ CORRIGIDO: int.parse() removido (UUIDs sao Strings)
         await _dbHelper.update(
           DBHelper.tabelaInvestimentos,
           investimento.toJson(),
-          int.parse(investimento.id!),
+          investimento.id!,
         );
       }
     }
@@ -60,7 +62,8 @@ class InvestimentoRepository {
     try {
       await _supabase.from('investimentos').delete().eq('id', id);
     } catch (e) {
-      await _dbHelper.delete(DBHelper.tabelaInvestimentos, int.parse(id));
+      // ✅ CORRIGIDO: int.parse() removido (UUIDs sao Strings)
+      await _dbHelper.delete(DBHelper.tabelaInvestimentos, id);
     }
   }
 }

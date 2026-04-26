@@ -1,19 +1,38 @@
-// lib/repositories/conta_repository.dart
+﻿// lib/repositories/conta_repository.dart
 import '../database/db_helper.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/conta_model.dart';
 import '../services/sync_service.dart';
-import '../utils/result.dart';
-import '../utils/loading_mixin.dart';
+import '../models/result_model.dart';
 import '../services/logger_service.dart';
 
-class ContaRepository with LoadingMixin {
+class ContaRepository {
   final DBHelper _dbHelper = DBHelper();
   final SyncService _syncService = SyncService();
+  final _supabase = Supabase.instance.client;
 
   static const String tabelaContas = DBHelper.tabelaContas;
   static const String tabelaPagamentos = DBHelper.tabelaPagamentos;
 
-  // ========== MÉTODOS LEGADO ==========
+  // METODO PARA ACESSAR O DATABASE
+  Future<Database> getDatabase() async {
+    return await _dbHelper.database;
+  }
+
+  // METODO PARA BUSCAR ULTIMOS PAGAMENTOS
+  Future<List<Map<String, dynamic>>> getUltimosPagamentos(
+      {int limit = 5}) async {
+    final db = await _dbHelper.database;
+    return await db.query(
+      tabelaPagamentos,
+      where: 'status = 1',
+      orderBy: 'data_pagamento DESC',
+      limit: limit,
+    );
+  }
+
+  // ========== METODOS LEGADO ==========
 
   Future<int> adicionarConta(Map<String, dynamic> conta) async {
     conta['sync_status'] = 'pending';
@@ -35,24 +54,188 @@ class ContaRepository with LoadingMixin {
     return resultados.map((json) => Conta.fromJson(json)).toList();
   }
 
-  Future<Conta?> getContaById(int id) async {
+  // Buscar conta por ID (String - UUID)
+  Future<Conta?> getContaByIdString(String id) async {
     final db = await _dbHelper.database;
     final resultados = await db.query(
       tabelaContas,
-      where: 'id = ?',
-      whereArgs: [id],
+      where: 'id = ? OR remote_id = ?',
+      whereArgs: [id, id],
     );
     if (resultados.isEmpty) return null;
     return Conta.fromJson(resultados.first);
   }
 
+  // Mantido para compatibilidade
+  Future<Conta?> getContaById(int id) async {
+    return await getContaByIdString(id.toString());
+  }
+
+  // CORRIGIDO: Buscar do Supabase se o banco local estiver vazio
   Future<List<Map<String, dynamic>>> getPagamentosDoMes(
       int ano, int mes) async {
-    return await _dbHelper.getPagamentosDoMes(ano, mes);
+    // Primeiro tenta buscar do banco local
+    final local = await _dbHelper.getPagamentosDoMes(ano, mes);
+
+    // Se tiver dados locais, retorna eles
+    if (local.isNotEmpty) {
+      LoggerService.info('Usando dados locais: ${local.length} pagamentos');
+      return local;
+    }
+
+    // Se nao tiver dados locais, busca do Supabase
+    LoggerService.info('Banco local vazio, buscando do Supabase...');
+    final supabaseData = await _getPagamentosDoMesSupabase(ano, mes);
+
+    // Salvar no banco local para proximas vezes
+    if (supabaseData.isNotEmpty) {
+      final db = await _dbHelper.database;
+      final userId = _supabase.auth.currentUser?.id;
+
+      for (var p in supabaseData) {
+        try {
+          await db.insert(
+            tabelaPagamentos,
+            {
+              'id': p['id'],
+              'remote_id': p['remote_id'],
+              'conta_id': p['conta_id'],
+              'user_id': userId,
+              'ano_mes': p['ano_mes'],
+              'valor': p['valor'],
+              'data_pagamento': p['data_pagamento'],
+              'status': p['status'],
+              'lancamento_id': p['lancamento_id'],
+              'sync_status': 'synced',
+            },
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+        } catch (e) {
+          LoggerService.error('Erro ao inserir pagamento: $e');
+        }
+      }
+      LoggerService.info('${supabaseData.length} pagamentos salvos localmente');
+    }
+
+    return supabaseData;
+  }
+
+  // CORRIGIDO: Buscar pagamentos diretamente do Supabase (IDs como String)
+  Future<List<Map<String, dynamic>>> _getPagamentosDoMesSupabase(
+      int ano, int mes) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return [];
+
+      final anoMes = ano * 100 + mes;
+
+      // Buscar pagamentos com JOIN nas contas
+      final response = await _supabase
+          .from('pagamentos_mensais')
+          .select(
+              '*, contas!inner(nome, dia_vencimento, categoria, tipo, parcelas_total, parcelas_pagas)')
+          .eq('user_id', user.id)
+          .eq('ano_mes', anoMes)
+          .order('status', ascending: true);
+
+      LoggerService.info('Supabase retornou ${response.length} pagamentos');
+
+      // Mapear os resultados (IDs como String)
+      final List<Map<String, dynamic>> resultados = response.map((p) {
+        final conta = p['contas'] as Map<String, dynamic>? ?? {};
+        return {
+          'id': p['id']?.toString() ?? '',
+          'remote_id': p['remote_id']?.toString(),
+          'conta_id': p['conta_id']?.toString() ?? '',
+          'ano_mes': p['ano_mes'] as int? ?? 0,
+          'valor': (p['valor'] as num?)?.toDouble() ?? 0.0,
+          'data_pagamento': p['data_pagamento'],
+          'status': p['status'] as int? ?? 0,
+          'lancamento_id': p['lancamento_id']?.toString(),
+          'conta_nome': conta['nome'] ?? 'Conta Removida',
+          'dia_vencimento': conta['dia_vencimento'] as int? ?? 1,
+          'categoria': conta['categoria'] ?? 'Outros',
+          'conta_tipo': conta['tipo'] ?? 'mensal',
+          'parcelas_total': conta['parcelas_total'] as int?,
+          'parcelas_pagas': conta['parcelas_pagas'] as int?,
+        };
+      }).toList();
+
+      // Ordenar manualmente: pendentes primeiro, depois por dia_vencimento
+      resultados.sort((a, b) {
+        final statusA = a['status'] as int? ?? 0;
+        final statusB = b['status'] as int? ?? 0;
+
+        if (statusA != statusB) {
+          return statusA.compareTo(statusB);
+        }
+
+        final diaA = a['dia_vencimento'] as int? ?? 1;
+        final diaB = b['dia_vencimento'] as int? ?? 1;
+        return diaA.compareTo(diaB);
+      });
+
+      return resultados;
+    } catch (e) {
+      LoggerService.error('Erro ao buscar pagamentos do Supabase: $e');
+      return [];
+    }
   }
 
   Future<Map<String, dynamic>> getResumoContasDoMes(int ano, int mes) async {
-    return await _dbHelper.getResumoContasDoMes(ano, mes);
+    // Primeiro tenta do banco local
+    final local = await _dbHelper.getResumoContasDoMes(ano, mes);
+
+    // Se tiver dados, retorna
+    if (local['totalContas'] > 0) {
+      return local;
+    }
+
+    // Se nao tiver, calcula a partir dos pagamentos buscados do Supabase
+    final pagamentos = await getPagamentosDoMes(ano, mes);
+
+    double totalPendente = 0;
+    double totalPago = 0;
+    int qtdPendente = 0;
+    int qtdPago = 0;
+    int qtdAtrasado = 0;
+
+    final hoje = DateTime.now();
+
+    for (var p in pagamentos) {
+      final status = p['status'] as int? ?? 0;
+      final valor = (p['valor'] as num?)?.toDouble() ?? 0.0;
+
+      if (status == 1) {
+        totalPago += valor;
+        qtdPago++;
+      } else {
+        totalPendente += valor;
+        qtdPendente++;
+
+        // Verificar se esta atrasado
+        final anoMes = p['ano_mes'] as int? ?? 0;
+        if (anoMes > 0) {
+          final anoParc = anoMes ~/ 100;
+          final mesParc = anoMes % 100;
+          final dia = p['dia_vencimento'] as int? ?? 1;
+          final dataVencimento = DateTime(anoParc, mesParc, dia);
+
+          if (dataVencimento.isBefore(hoje)) {
+            qtdAtrasado++;
+          }
+        }
+      }
+    }
+
+    return {
+      'totalPendente': totalPendente,
+      'totalPago': totalPago,
+      'qtdPendente': qtdPendente,
+      'qtdPago': qtdPago,
+      'qtdAtrasado': qtdAtrasado,
+      'totalContas': pagamentos.length,
+    };
   }
 
   Future<bool> pagarConta(int pagamentoId) async {
@@ -74,292 +257,287 @@ class ContaRepository with LoadingMixin {
     return result;
   }
 
-  // ========== MÉTODOS COM INTEGRAÇÃO COM LANÇAMENTOS ==========
+  // ========== METODOS COM INTEGRACAO COM LANCAMENTOS ==========
 
-  /// Paga uma conta e cria um lançamento automaticamente
   Future<Result<bool>> pagarContaComLancamento(int pagamentoId) async {
-    return await withLoadingResult(() async {
-      try {
-        final db = await _dbHelper.database;
-
-        final pagamento = await db.query(
-          tabelaPagamentos,
-          where: 'id = ?',
-          whereArgs: [pagamentoId],
-        );
-
-        if (pagamento.isEmpty) {
-          return Result.failure('Pagamento não encontrado');
-        }
-
-        final pagamentoData = pagamento.first;
-        final contaId = pagamentoData['conta_id'] as int;
-
-        final conta = await db.query(
-          tabelaContas,
-          where: 'id = ?',
-          whereArgs: [contaId],
-        );
-
-        if (conta.isEmpty) {
-          return Result.failure('Conta não encontrada');
-        }
-
-        final contaData = conta.first;
-        final dataPagamento = DateTime.now();
-
-        // Marcar a conta como paga
-        final pagou = await _dbHelper.pagarConta(pagamentoId);
-
-        if (pagou) {
-          // Criar lançamento
-          final lancamento = {
-            'descricao': contaData['nome'],
-            'valor': pagamentoData['valor'],
-            'tipo': 'gasto',
-            'categoria': contaData['categoria'] ?? 'Outros',
-            'data': dataPagamento.toIso8601String(),
-            'observacao': 'Pago automaticamente - Conta do Mês',
-            'sync_status': 'pending',
-            'updated_at': DateTime.now().toIso8601String(),
-          };
-
-          // Inserir lançamento e pegar o ID
-          final lancamentoId = await _dbHelper.insertLancamento(lancamento);
-
-          // Salvar o ID do lançamento na tabela de pagamentos
-          await db.update(
-            tabelaPagamentos,
-            {
-              'lancamento_id': lancamentoId,
-              'updated_at': DateTime.now().toIso8601String(),
-              'sync_status': 'pending',
-            },
-            where: 'id = ?',
-            whereArgs: [pagamentoId],
-          );
-
-          _syncService.syncNow();
-
-          return Result.success(true);
-        }
-
-        return Result.success(false);
-      } catch (e) {
-        return Result.failure('❌ Erro ao pagar conta: $e');
-      }
-    });
+    return await pagarContaComLancamentoString(pagamentoId.toString());
   }
 
-  /// Desfaz um pagamento (remove o lançamento e marca a conta como pendente)
+  // NOVO: Pagar conta com ID String
+  Future<Result<bool>> pagarContaComLancamentoString(String pagamentoId) async {
+    try {
+      final db = await _dbHelper.database;
+
+      final pagamento = await db.query(
+        tabelaPagamentos,
+        where: 'id = ? OR remote_id = ?',
+        whereArgs: [pagamentoId, pagamentoId],
+      );
+
+      if (pagamento.isEmpty) {
+        return Result.failure('Pagamento nao encontrado');
+      }
+
+      final pagamentoData = pagamento.first;
+      final contaId = pagamentoData['conta_id']?.toString() ?? '';
+
+      final conta = await db.query(
+        tabelaContas,
+        where: 'id = ? OR remote_id = ?',
+        whereArgs: [contaId, contaId],
+      );
+
+      if (conta.isEmpty) {
+        return Result.failure('Conta nao encontrada');
+      }
+
+      final contaData = conta.first;
+      final dataPagamento = DateTime.now();
+
+      // Atualizar status para pago (1)
+      await db.update(
+        tabelaPagamentos,
+        {
+          'status': 1,
+          'data_pagamento': dataPagamento.toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+          'sync_status': 'pending',
+        },
+        where: 'id = ? OR remote_id = ?',
+        whereArgs: [pagamentoId, pagamentoId],
+      );
+
+      // Criar lancamento
+      final lancamento = {
+        'descricao': contaData['nome'],
+        'valor': pagamentoData['valor'],
+        'tipo': 'gasto',
+        'categoria': contaData['categoria'] ?? 'Outros',
+        'data': dataPagamento.toIso8601String(),
+        'observacao': 'Pago automaticamente - Conta do Mes',
+        'sync_status': 'pending',
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      final lancamentoId = await _dbHelper.insertLancamento(lancamento);
+
+      await db.update(
+        tabelaPagamentos,
+        {
+          'lancamento_id': lancamentoId.toString(),
+          'updated_at': DateTime.now().toIso8601String(),
+          'sync_status': 'pending',
+        },
+        where: 'id = ? OR remote_id = ?',
+        whereArgs: [pagamentoId, pagamentoId],
+      );
+
+      _syncService.syncNow();
+
+      return Result.success(true);
+    } catch (e) {
+      return Result.failure('Erro ao pagar conta: $e');
+    }
+  }
+
   Future<Result<bool>> desfazerPagamento(int pagamentoId) async {
-    return await withLoadingResult(() async {
-      try {
-        final db = await _dbHelper.database;
-
-        // Buscar o pagamento
-        final pagamento = await db.query(
-          tabelaPagamentos,
-          where: 'id = ?',
-          whereArgs: [pagamentoId],
-        );
-
-        if (pagamento.isEmpty) {
-          return Result.failure('Pagamento não encontrado');
-        }
-
-        final pagamentoData = pagamento.first;
-
-        if (pagamentoData['status'] != 1) {
-          return Result.failure('Este pagamento não está pago');
-        }
-
-        // Pegar o ID do lançamento diretamente
-        final lancamentoId = pagamentoData['lancamento_id'] as int?;
-
-        if (lancamentoId != null) {
-          // Deletar o lançamento pelo ID
-          await db.delete(
-            DBHelper.tabelaLancamentos,
-            where: 'id = ?',
-            whereArgs: [lancamentoId],
-          );
-          LoggerService.info('🗑️ Lançamento deletado: ID $lancamentoId');
-        } else {
-          LoggerService.info(
-              '⚠️ Nenhum lancamento_id encontrado para este pagamento');
-        }
-
-        // Marcar a conta como pendente
-        await db.update(
-          tabelaPagamentos,
-          {
-            'status': 0,
-            'data_pagamento': null,
-            'lancamento_id': null,
-            'updated_at': DateTime.now().toIso8601String(),
-            'sync_status': 'pending',
-          },
-          where: 'id = ?',
-          whereArgs: [pagamentoId],
-        );
-
-        _syncService.syncNow();
-
-        return Result.success(true);
-      } catch (e) {
-        LoggerService.error('❌ Erro ao desfazer pagamento: $e');
-        return Result.failure('❌ Erro ao desfazer pagamento: $e');
-      }
-    });
+    return await desfazerPagamentoString(pagamentoId.toString());
   }
 
-  // ========== MÉTODOS COM RESULT ==========
+  // NOVO: Desfazer pagamento com ID String
+  Future<Result<bool>> desfazerPagamentoString(String pagamentoId) async {
+    try {
+      final db = await _dbHelper.database;
+
+      final pagamento = await db.query(
+        tabelaPagamentos,
+        where: 'id = ? OR remote_id = ?',
+        whereArgs: [pagamentoId, pagamentoId],
+      );
+
+      if (pagamento.isEmpty) {
+        return Result.failure('Pagamento nao encontrado');
+      }
+
+      final pagamentoData = pagamento.first;
+
+      if (pagamentoData['status'] != 1) {
+        return Result.failure('Este pagamento nao esta pago');
+      }
+
+      final lancamentoId = pagamentoData['lancamento_id']?.toString();
+
+      if (lancamentoId != null && lancamentoId.isNotEmpty) {
+        await db.delete(
+          DBHelper.tabelaLancamentos,
+          where: 'id = ? OR remote_id = ?',
+          whereArgs: [lancamentoId, lancamentoId],
+        );
+        LoggerService.info('Lancamento deletado: $lancamentoId');
+      }
+
+      await db.update(
+        tabelaPagamentos,
+        {
+          'status': 0,
+          'data_pagamento': null,
+          'lancamento_id': null,
+          'updated_at': DateTime.now().toIso8601String(),
+          'sync_status': 'pending',
+        },
+        where: 'id = ? OR remote_id = ?',
+        whereArgs: [pagamentoId, pagamentoId],
+      );
+
+      _syncService.syncNow();
+
+      return Result.success(true);
+    } catch (e) {
+      LoggerService.error('Erro ao desfazer pagamento: $e');
+      return Result.failure('Erro ao desfazer pagamento: $e');
+    }
+  }
+
+  // NOVO: Deletar conta com ID String
+  Future<void> deletarContaString(String contaId) async {
+    final db = await _dbHelper.database;
+
+    // Primeiro deletar pagamentos associados
+    await db.delete(
+      tabelaPagamentos,
+      where: 'conta_id = ?',
+      whereArgs: [contaId],
+    );
+
+    // Depois deletar a conta
+    await db.delete(
+      tabelaContas,
+      where: 'id = ? OR remote_id = ?',
+      whereArgs: [contaId, contaId],
+    );
+
+    _syncService.syncNow();
+  }
+
+  // ========== METODOS COM RESULT ==========
 
   Future<Result<List<Conta>>> getContasAtivasResult() async {
-    return await withLoadingResult(() async {
-      try {
-        final db = await _dbHelper.database;
-        final resultados = await db.query(
-          tabelaContas,
-          where: 'ativa = ?',
-          whereArgs: [1],
-          orderBy: 'nome ASC',
-        );
-        final contas = resultados.map((json) => Conta.fromJson(json)).toList();
-        return Result.success(contas);
-      } catch (e) {
-        return Result.failure('❌ Erro ao carregar contas: $e');
-      }
-    });
+    try {
+      final db = await _dbHelper.database;
+      final resultados = await db.query(
+        tabelaContas,
+        where: 'ativa = ?',
+        whereArgs: [1],
+        orderBy: 'nome ASC',
+      );
+      final contas = resultados.map((json) => Conta.fromJson(json)).toList();
+      return Result.success(contas);
+    } catch (e) {
+      return Result.failure('Erro ao carregar contas: $e');
+    }
   }
 
   Future<Result<Conta?>> getContaByIdResult(int id) async {
-    return await withLoadingResult(() async {
-      try {
-        final db = await _dbHelper.database;
-        final resultados = await db.query(
-          tabelaContas,
-          where: 'id = ?',
-          whereArgs: [id],
-        );
-        if (resultados.isEmpty) return Result.success(null);
-        return Result.success(Conta.fromJson(resultados.first));
-      } catch (e) {
-        return Result.failure('❌ Erro ao buscar conta ID: $id\n$e');
-      }
-    });
+    try {
+      final conta = await getContaByIdString(id.toString());
+      return Result.success(conta);
+    } catch (e) {
+      return Result.failure('Erro ao buscar conta ID: $id\n$e');
+    }
   }
 
   Future<Result<int>> adicionarContaResult(Map<String, dynamic> conta) async {
-    return await withLoadingResult(() async {
-      try {
-        conta['sync_status'] = 'pending';
-        conta['updated_at'] = DateTime.now().toIso8601String();
+    try {
+      conta['sync_status'] = 'pending';
+      conta['updated_at'] = DateTime.now().toIso8601String();
 
-        final id = await _dbHelper.adicionarContaComUserId(conta);
-        _syncService.syncNow();
-        return Result.success(id);
-      } catch (e) {
-        return Result.failure(
-            '❌ Erro ao adicionar conta: ${conta['nome']}\n$e');
-      }
-    });
+      final id = await _dbHelper.adicionarContaComUserId(conta);
+      _syncService.syncNow();
+      return Result.success(id);
+    } catch (e) {
+      return Result.failure('Erro ao adicionar conta: ${conta['nome']}\n$e');
+    }
   }
 
   Future<Result<int>> atualizarContaResult(Map<String, dynamic> conta) async {
-    return await withLoadingResult(() async {
-      try {
-        final id = conta['id'];
-        conta.remove('id');
-        conta['sync_status'] = 'pending';
-        conta['updated_at'] = DateTime.now().toIso8601String();
+    try {
+      final id = conta['id'];
+      conta.remove('id');
+      conta['sync_status'] = 'pending';
+      conta['updated_at'] = DateTime.now().toIso8601String();
 
-        final result = await _dbHelper.update(tabelaContas, conta, id);
-        _syncService.syncNow();
-        return Result.success(result);
-      } catch (e) {
-        return Result.failure(
-            '❌ Erro ao atualizar conta: ${conta['nome']}\n$e');
-      }
-    });
+      final result = await _dbHelper.update(tabelaContas, conta, id);
+      _syncService.syncNow();
+      return Result.success(result);
+    } catch (e) {
+      return Result.failure('Erro ao atualizar conta: ${conta['nome']}\n$e');
+    }
   }
 
   Future<Result<int>> deletarContaResult(int id) async {
-    return await withLoadingResult(() async {
-      try {
-        final result = await _dbHelper.deletarConta(id);
-        _syncService.syncNow();
-        return Result.success(result);
-      } catch (e) {
-        return Result.failure('❌ Erro ao excluir conta ID: $id\n$e');
-      }
-    });
+    try {
+      await deletarContaString(id.toString());
+      _syncService.syncNow();
+      return Result.success(1);
+    } catch (e) {
+      return Result.failure('Erro ao excluir conta ID: $id\n$e');
+    }
   }
 
   Future<Result<bool>> pagarContaResult(int pagamentoId) async {
-    return await withLoadingResult(() async {
-      try {
-        final result = await _dbHelper.pagarConta(pagamentoId);
-        _syncService.syncNow();
-        return Result.success(result);
-      } catch (e) {
-        return Result.failure('❌ Erro ao pagar conta ID: $pagamentoId\n$e');
-      }
-    });
+    try {
+      final result = await _dbHelper.pagarConta(pagamentoId);
+      _syncService.syncNow();
+      return Result.success(result);
+    } catch (e) {
+      return Result.failure('Erro ao pagar conta ID: $pagamentoId\n$e');
+    }
   }
 
   Future<Result<List<Map<String, dynamic>>>> getPagamentosDoMesResult(
-    int ano,
-    int mes,
-  ) async {
-    return await withLoadingResult(() async {
-      try {
-        final pagamentos = await _dbHelper.getPagamentosDoMes(ano, mes);
-        return Result.success(pagamentos);
-      } catch (e) {
-        return Result.failure('❌ Erro ao carregar pagamentos: $e');
-      }
-    });
+      int ano, int mes) async {
+    try {
+      final pagamentos = await getPagamentosDoMes(ano, mes);
+      return Result.success(pagamentos);
+    } catch (e) {
+      return Result.failure('Erro ao carregar pagamentos: $e');
+    }
   }
 
   Future<Result<Map<String, dynamic>>> getResumoContasDoMesResult(
-    int ano,
-    int mes,
-  ) async {
-    return await withLoadingResult(() async {
-      try {
-        final resumo = await _dbHelper.getResumoContasDoMes(ano, mes);
-        return Result.success(resumo);
-      } catch (e) {
-        return Result.failure('❌ Erro ao carregar resumo: $e');
-      }
-    });
+      int ano, int mes) async {
+    try {
+      final resumo = await getResumoContasDoMes(ano, mes);
+      return Result.success(resumo);
+    } catch (e) {
+      return Result.failure('Erro ao carregar resumo: $e');
+    }
   }
 
-  // ========== MÉTODOS AUXILIARES ==========
+  // ========== METODOS AUXILIARES ==========
 
   List<String> getCategorias() {
     return [
       'Transporte',
-      'Alimentação',
+      'Alimentacao',
       'Moradia',
       'Lazer',
-      'Saúde',
-      'Educação',
-      'Cartão',
+      'Saude',
+      'Educacao',
+      'Cartao',
       'Investimentos',
       'Cuidados Pessoais',
-      'Empréstimo',
-      'Água',
+      'Emprestimo',
+      'Agua',
       'Luz',
       'Internet',
       'Telefone',
       'IPVA',
       'IPTU',
       'Financiamento',
-      'Cartão de Crédito',
+      'Cartao de Credito',
       'Outros',
     ];
   }
 }
+

@@ -2,10 +2,10 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../database/db_helper.dart';
 import '../services/logger_service.dart';
-import '../utils/date_helper.dart';
+import '../utils/formatters.dart'; // ✅ Usar formatters.dart (unificado)
 
 class BackupServicePlus {
   static final BackupServicePlus _instance = BackupServicePlus._internal();
@@ -13,6 +13,28 @@ class BackupServicePlus {
   BackupServicePlus._internal();
 
   final DBHelper db = DBHelper();
+
+  // 🔥 NOVO: Método helper para obter o caminho do backup
+  Future<String> _getBackupPath() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final backupDir = Directory('${directory.path}/backups');
+
+    if (!await backupDir.exists()) {
+      await backupDir.create(recursive: true);
+      LoggerService.info('📁 Pasta de backup criada: ${backupDir.path}');
+    }
+
+    return backupDir.path;
+  }
+
+  // 🔥 NOVO: Método helper para formatar data (substitui DateHelper)
+  String _formatarData(DateTime data) {
+    return '${data.day.toString().padLeft(2, '0')}/'
+        '${data.month.toString().padLeft(2, '0')}/'
+        '${data.year} '
+        '${data.hour.toString().padLeft(2, '0')}:'
+        '${data.minute.toString().padLeft(2, '0')}';
+  }
 
   // ========== BACKUP DOS DADOS ==========
   Future<Map<String, dynamic>> exportarTodosDados() async {
@@ -102,7 +124,7 @@ class BackupServicePlus {
       final dados = {
         'metadata': {
           'versao': '3.0',
-          'data_exportacao': DateHelper.agoraBrasilia().toIso8601String(),
+          'data_exportacao': DateTime.now().toIso8601String(), // ✅ Simplificado
           'total_lancamentos': lancamentos.length,
           'total_investimentos': investimentos.length,
           'total_proventos': proventos.length,
@@ -133,17 +155,16 @@ class BackupServicePlus {
     final contas = await database.query(DBHelper.tabelaContas);
     final pagamentos = await database.query(DBHelper.tabelaPagamentos);
 
-    final Map<int, List<Map<String, dynamic>>> pagamentosPorConta = {};
+    // ✅ CORRIGIDO: conta_id agora é String (UUID)
+    final Map<String, List<Map<String, dynamic>>> pagamentosPorConta = {};
     for (var p in pagamentos) {
-      final contaId = p['conta_id'] as int;
-      if (!pagamentosPorConta.containsKey(contaId)) {
-        pagamentosPorConta[contaId] = [];
-      }
+      final contaId = p['conta_id']?.toString() ?? '';
+      pagamentosPorConta.putIfAbsent(contaId, () => []);
       pagamentosPorConta[contaId]!.add(p);
     }
 
     return contas.map((conta) {
-      final contaId = conta['id'] as int;
+      final contaId = conta['id']?.toString() ?? '';
       return {
         ...conta,
         'pagamentos': pagamentosPorConta[contaId] ?? [],
@@ -151,22 +172,15 @@ class BackupServicePlus {
     }).toList();
   }
 
+  // 🔥 CORRIGIDO: Usa caminho dinâmico em vez de hardcoded
   Future<String?> salvarBackupEmArquivo() async {
     try {
       final dados = await exportarTodosDados();
+      final backupPath = await _getBackupPath(); // ✅ Dinâmico!
 
       const fileName = 'backup_financeiro.json';
+      final file = File('$backupPath/$fileName'); // ✅ Usa / em vez de \\
 
-      const String oneDrivePath =
-          'C:\\Users\\anaep\\OneDrive\\BackupsAppFinanceiro';
-      final backupDir = Directory(oneDrivePath);
-
-      if (!await backupDir.exists()) {
-        await backupDir.create(recursive: true);
-        LoggerService.info('📁 Pasta criada: $oneDrivePath');
-      }
-
-      final file = File('${backupDir.path}\\$fileName');
       final jsonString = jsonEncode(dados);
       await file.writeAsString(jsonString, encoding: utf8);
 
@@ -178,11 +192,11 @@ class BackupServicePlus {
     }
   }
 
+  // 🔥 CORRIGIDO: Usa caminho dinâmico
   Future<bool> backupExiste() async {
     try {
-      const String oneDrivePath =
-          'C:\\Users\\anaep\\OneDrive\\BackupsAppFinanceiro';
-      final file = File('$oneDrivePath\\backup_financeiro.json');
+      final backupPath = await _getBackupPath(); // ✅ Dinâmico!
+      final file = File('$backupPath/backup_financeiro.json');
       return await file.exists();
     } catch (e) {
       LoggerService.error('❌ Erro ao verificar backup', e);
@@ -190,11 +204,11 @@ class BackupServicePlus {
     }
   }
 
+  // 🔥 CORRIGIDO: Usa caminho dinâmico
   Future<Map<String, dynamic>?> getInfoBackup() async {
     try {
-      const String oneDrivePath =
-          'C:\\Users\\anaep\\OneDrive\\BackupsAppFinanceiro';
-      final file = File('$oneDrivePath\\backup_financeiro.json');
+      final backupPath = await _getBackupPath(); // ✅ Dinâmico!
+      final file = File('$backupPath/backup_financeiro.json');
 
       if (!await file.exists()) {
         return null;
@@ -215,12 +229,13 @@ class BackupServicePlus {
     }
   }
 
+  // 🔥 CORRIGIDO: Aceita qualquer caminho de arquivo
   Future<bool> restaurarBackup(String caminhoArquivo,
       {bool limparAntes = false}) async {
     try {
       final file = File(caminhoArquivo);
       if (!await file.exists()) {
-        LoggerService.error('❌ Arquivo não encontrado');
+        LoggerService.error('❌ Arquivo não encontrado: $caminhoArquivo');
         return false;
       }
 
@@ -308,7 +323,7 @@ class BackupServicePlus {
               for (var p in pagamentos) {
                 final pagamento = Map<String, dynamic>.from(p);
                 pagamento.remove('id');
-                pagamento['conta_id'] = contaId;
+                pagamento['conta_id'] = contaId.toString(); // ✅ String
                 await database.insert(DBHelper.tabelaPagamentos, pagamento);
               }
             }
@@ -329,25 +344,88 @@ class BackupServicePlus {
     }
   }
 
+  // 🔥 CORRIGIDO: Usa caminho dinâmico
   Future<List<File>> listarBackups() async {
     try {
-      const String oneDrivePath =
-          'C:\\Users\\anaep\\OneDrive\\BackupsAppFinanceiro';
-      final backupDir = Directory(oneDrivePath);
+      final backupPath = await _getBackupPath(); // ✅ Dinâmico!
+      final backupDir = Directory(backupPath);
 
       if (!await backupDir.exists()) {
         return [];
       }
 
-      final file = File('$oneDrivePath\\backup_financeiro.json');
+      final file = File('$backupPath/backup_financeiro.json');
       if (await file.exists()) {
         return [file];
       }
 
-      return [];
+      // 🔥 NOVO: Lista TODOS os arquivos .json na pasta de backup
+      final files = await backupDir
+          .list()
+          .where((entity) => entity is File && entity.path.endsWith('.json'))
+          .map((entity) => entity as File)
+          .toList();
+
+      // Ordenar por data de modificação (mais recente primeiro)
+      files
+          .sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+
+      return files;
     } catch (e) {
       LoggerService.error('❌ Erro ao listar backups', e);
       return [];
+    }
+  }
+
+  // 🔥 NOVO: Método para exportar backup com nome personalizado
+  Future<String?> salvarBackupComNome(String nome) async {
+    try {
+      final dados = await exportarTodosDados();
+      final backupPath = await _getBackupPath();
+
+      final fileName =
+          'backup_${nome}_${DateTime.now().millisecondsSinceEpoch}.json';
+      final file = File('$backupPath/$fileName');
+
+      final jsonString = jsonEncode(dados);
+      await file.writeAsString(jsonString, encoding: utf8);
+
+      LoggerService.success('✅ Backup salvo em: ${file.path}');
+      return file.path;
+    } catch (e) {
+      LoggerService.error('❌ Erro ao salvar backup', e);
+      return null;
+    }
+  }
+
+  // 🔥 NOVO: Método para excluir backup específico
+  Future<bool> excluirBackup(String caminhoArquivo) async {
+    try {
+      final file = File(caminhoArquivo);
+      if (await file.exists()) {
+        await file.delete();
+        LoggerService.info('🗑️ Backup excluído: $caminhoArquivo');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      LoggerService.error('❌ Erro ao excluir backup', e);
+      return false;
+    }
+  }
+
+  // 🔥 NOVO: Obter tamanho total dos backups
+  Future<int> getTamanhoTotalBackups() async {
+    try {
+      final backups = await listarBackups();
+      int tamanhoTotal = 0;
+      for (var backup in backups) {
+        tamanhoTotal += await backup.length();
+      }
+      return tamanhoTotal;
+    } catch (e) {
+      LoggerService.error('❌ Erro ao calcular tamanho dos backups', e);
+      return 0;
     }
   }
 
@@ -392,4 +470,3 @@ class BackupServicePlus {
     }
   }
 }
-
