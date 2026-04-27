@@ -1,6 +1,5 @@
-// lib/screens/dashboard.dart
+﻿// lib/screens/dashboard.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../database/db_helper.dart';
@@ -79,14 +78,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     try {
       final metricas = await _dashboardService.getMetricasRapidas();
-
       _totalReceitas = metricas['receitas_mes'] ?? 0;
       _totalDespesas = metricas['despesas_mes'] ?? 0;
       _metasAtivas = metricas['metas_ativas'] ?? 0;
-      _quantidadeContas = metricas['contas_pendentes'] ?? 0;
+
+      // ✅ BUSCA CONTAS PENDENTES DO MÊS SELECIONADO
+      final contasPendentes = await _dashboardService.getContasPendentesPorMes(
+        _mesSelecionado.year,
+        _mesSelecionado.month,
+      );
+      _totalContasPendentes = contasPendentes['valor_total'] ?? 0.0;
+      _quantidadeContas = contasPendentes['quantidade'] ?? 0;
 
       _lancamentos = await _dbHelper.getAllLancamentos();
-      _investimentos = await _dbHelper.getAllInvestimentos();
+
+      // ✅ CALCULA PATRIMÔNIO A PARTIR DAS TRANSAÇÕES
+      final db = await _dbHelper.database;
+      final transacoes = await db.query('transacoes', orderBy: 'data ASC');
+
+      final Map<String, Map<String, dynamic>> agrupados = {};
+      for (var tx in transacoes) {
+        final ticker = tx['ticker']?.toString().toUpperCase() ?? '';
+        if (ticker.isEmpty) continue;
+
+        final tipo = tx['tipo_transacao']?.toString() ?? 'COMPRA';
+        final quantidade = (tx['quantidade'] as num?)?.toDouble() ?? 0;
+        final preco = (tx['preco_unitario'] as num?)?.toDouble() ?? 0;
+        final taxa = (tx['taxa'] as num?)?.toDouble() ?? 0;
+
+        if (!agrupados.containsKey(ticker)) {
+          if (tipo == 'COMPRA') {
+            agrupados[ticker] = {
+              'ticker': ticker,
+              'quantidade': quantidade,
+              'preco_medio': preco,
+              'preco_atual': preco,
+            };
+          }
+        } else {
+          final existente = agrupados[ticker]!;
+          if (tipo == 'COMPRA') {
+            final novaQtd = (existente['quantidade'] as double) + quantidade;
+            final valorAntigo = (existente['quantidade'] as double) *
+                (existente['preco_medio'] as double);
+            final valorNovo = (quantidade * preco) + taxa;
+            existente['quantidade'] = novaQtd;
+            existente['preco_medio'] = (valorAntigo + valorNovo) / novaQtd;
+            existente['preco_atual'] = existente['preco_medio'];
+          } else if (tipo == 'VENDA') {
+            final novaQtd = (existente['quantidade'] as double) - quantidade;
+            if (novaQtd <= 0.001) {
+              agrupados.remove(ticker);
+            } else {
+              existente['quantidade'] = novaQtd;
+            }
+          }
+        }
+      }
+
+      _investimentos = agrupados.values.toList();
+
       _metas = await _dbHelper.getAllMetas();
       _contas = await _dbHelper.getPagamentosDoMes(
           _mesSelecionado.year, _mesSelecionado.month);
@@ -126,23 +177,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _totalDespesas = despesas;
     _saldo = receitas - despesas;
 
-    double totalPendente = 0;
-    int quantidadePendente = 0;
-    for (var conta in _contas) {
-      final status = conta['status'] as int;
-      if (status == 0) {
-        totalPendente += (conta['valor'] as num).toDouble();
-        quantidadePendente++;
-      }
-    }
-    _totalContasPendentes = totalPendente;
-    _quantidadeContas = quantidadePendente;
-
+    // ✅ Calcula patrimônio total
     double patrimonio = 0;
     for (var investimento in _investimentos) {
-      final quantidade = (investimento['quantidade'] as num).toDouble();
+      final quantidade = (investimento['quantidade'] as num?)?.toDouble() ?? 0;
       final precoAtual = (investimento['preco_atual'] as num?)?.toDouble() ??
-          (investimento['preco_medio'] as num).toDouble();
+          (investimento['preco_medio'] as num?)?.toDouble() ??
+          0;
       patrimonio += quantidade * precoAtual;
     }
     _patrimonio = patrimonio;
@@ -923,7 +964,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             )
           else
             ..._ultimosLancamentos
-                .map((transacao) => _buildTransacaoItem(transacao)),
+                .map((transacao) => Material(
+                      color: Colors.transparent,
+                      child: _buildTransacaoItem(transacao),
+                    ))
+                .toList(),
         ],
       ),
     );

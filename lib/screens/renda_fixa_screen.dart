@@ -1,6 +1,5 @@
-// lib/screens/renda_fixa_screen.dart
+﻿// lib/screens/renda_fixa_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../database/db_helper.dart';
 import '../models/renda_fixa_model.dart';
@@ -582,3 +581,4 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
     }
   }
 }
+

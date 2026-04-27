@@ -1,4 +1,4 @@
-// lib/screens/novo_provento_dialog.dart
+﻿// lib/screens/novo_provento_dialog.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../database/db_helper.dart';
@@ -134,7 +134,7 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _tipoProvento, // ✅ CORRIGIDO: initialValue -> value
+                value: _tipoProvento, // âœ… CORRIGIDO: initialValue -> value
                 items: _tiposProvento.map((tipo) {
                   return DropdownMenuItem(value: tipo, child: Text(tipo));
                 }).toList(),
@@ -250,3 +250,4 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
     );
   }
 }
+

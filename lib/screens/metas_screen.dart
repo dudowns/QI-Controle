@@ -1,4 +1,4 @@
-// lib/screens/metas_screen.dart
+﻿// lib/screens/metas_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../database/db_helper.dart';
@@ -70,7 +70,7 @@ class _MetasScreenState extends State<MetasScreen> {
         TextEditingController(text: meta?['valor_atual']?.toString() ?? '');
     final dataFimController = TextEditingController();
     String cor = meta?['cor'] ?? '#4CAF50';
-    String icone = meta?['icone'] ?? '🎯';
+    String icone = meta?['icone'] ?? 'ðŸŽ¯';
     DateTime? dataInicio;
     DateTime? dataFim;
 
@@ -195,7 +195,7 @@ class _MetasScreenState extends State<MetasScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: cor, // ✅ CORRIGIDO: initialValue -> value
+                    value: cor, // âœ… CORRIGIDO: initialValue -> value
                     decoration: const InputDecoration(
                       labelText: 'Cor',
                       border: OutlineInputBorder(),
@@ -685,3 +685,4 @@ class _MetasScreenState extends State<MetasScreen> {
     );
   }
 }
+

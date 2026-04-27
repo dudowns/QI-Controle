@@ -1,4 +1,4 @@
-// lib/screens/nova_transacao.dart
+﻿// lib/screens/nova_transacao.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../database/db_helper.dart';
@@ -190,7 +190,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _categoriaSelecionada, // ✅ CORRIGIDO
+                value: _categoriaSelecionada, // âœ… CORRIGIDO
                 decoration: const InputDecoration(
                   labelText: 'Categoria',
                   border: OutlineInputBorder(),
@@ -285,3 +285,4 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
     );
   }
 }
+

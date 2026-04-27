@@ -149,21 +149,7 @@ class SyncManager {
         final existing = await db.query('transacoes',
             where: 'remote_id = ?', whereArgs: [remote['id']]);
 
-        if (existing.isEmpty) {
-          await db.insert('transacoes', {
-            'remote_id': remote['id'],
-            'user_id': remote['user_id'],
-            'ticker': remote['ticker'],
-            'tipo_investimento': remote['tipo_investimento'],
-            'tipo_transacao': remote['tipo_transacao'],
-            'quantidade': remote['quantidade'],
-            'preco_unitario': remote['preco_unitario'],
-            'taxa': remote['taxa'],
-            'total': remote['total'],
-            'data': remote['data'],
-            'sync_status': 'synced',
-          });
-        } else {
+        if (existing.isNotEmpty) {
           await db.update(
               'transacoes',
               {
@@ -179,6 +165,37 @@ class SyncManager {
               },
               where: 'remote_id = ?',
               whereArgs: [remote['id']]);
+        } else {
+          final duplicata = await db.query('transacoes',
+              where:
+                  'ticker = ? AND quantidade = ? AND preco_unitario = ? AND data = ? AND user_id = ? AND remote_id IS NULL',
+              whereArgs: [
+                remote['ticker'],
+                remote['quantidade'],
+                remote['preco_unitario'],
+                remote['data'],
+                user.id
+              ]);
+
+          if (duplicata.isNotEmpty) {
+            await db.update('transacoes',
+                {'remote_id': remote['id'], 'sync_status': 'synced'},
+                where: 'id = ?', whereArgs: [duplicata.first['id']]);
+          } else {
+            await db.insert('transacoes', {
+              'remote_id': remote['id'],
+              'user_id': remote['user_id'],
+              'ticker': remote['ticker'],
+              'tipo_investimento': remote['tipo_investimento'],
+              'tipo_transacao': remote['tipo_transacao'],
+              'quantidade': remote['quantidade'],
+              'preco_unitario': remote['preco_unitario'],
+              'taxa': remote['taxa'],
+              'total': remote['total'],
+              'data': remote['data'],
+              'sync_status': 'synced',
+            });
+          }
         }
       }
     } catch (e) {
@@ -200,9 +217,6 @@ class SyncManager {
     );
 
     if (pending.isEmpty) return;
-
-    LoggerService.info(
-        'Processando ${pending.length} investimentos pendentes...');
 
     for (var localData in pending) {
       final syncStatus = localData['sync_status'] as String? ?? 'pending';
@@ -266,19 +280,7 @@ class SyncManager {
         final existing = await db.query(DBHelper.tabelaInvestimentos,
             where: 'remote_id = ?', whereArgs: [remote['id']]);
 
-        if (existing.isEmpty) {
-          await db.insert(DBHelper.tabelaInvestimentos, {
-            'remote_id': remote['id'],
-            'user_id': remote['user_id'],
-            'ticker': remote['ticker'],
-            'tipo': remote['tipo'],
-            'quantidade': remote['quantidade'],
-            'preco_medio': remote['preco_medio'],
-            'preco_atual': remote['preco_atual'],
-            'data_compra': remote['data_compra'],
-            'sync_status': 'synced',
-          });
-        } else {
+        if (existing.isNotEmpty) {
           await db.update(
               DBHelper.tabelaInvestimentos,
               {
@@ -292,6 +294,18 @@ class SyncManager {
               },
               where: 'remote_id = ?',
               whereArgs: [remote['id']]);
+        } else {
+          await db.insert(DBHelper.tabelaInvestimentos, {
+            'remote_id': remote['id'],
+            'user_id': remote['user_id'],
+            'ticker': remote['ticker'],
+            'tipo': remote['tipo'],
+            'quantidade': remote['quantidade'],
+            'preco_medio': remote['preco_medio'],
+            'preco_atual': remote['preco_atual'],
+            'data_compra': remote['data_compra'],
+            'sync_status': 'synced',
+          });
         }
       }
     } catch (e) {
@@ -328,7 +342,6 @@ class SyncManager {
         } else {
           String dataStr = localData['data'].toString();
           if (dataStr.contains('T')) dataStr = dataStr.split('T')[0];
-
           String tipoOriginal = localData['tipo'].toString();
           String tipoCorreto = tipoOriginal == 'gasto'
               ? 'despesa'
@@ -387,19 +400,7 @@ class SyncManager {
         final existing = await db.query(DBHelper.tabelaLancamentos,
             where: 'remote_id = ?', whereArgs: [remote['id']]);
 
-        if (existing.isEmpty) {
-          await db.insert(DBHelper.tabelaLancamentos, {
-            'remote_id': remote['id'],
-            'user_id': remote['user_id'],
-            'descricao': remote['descricao'],
-            'valor': remote['valor'],
-            'tipo': remote['tipo'],
-            'categoria': remote['categoria'],
-            'data': remote['data'],
-            'observacao': remote['observacao'],
-            'sync_status': 'synced',
-          });
-        } else {
+        if (existing.isNotEmpty) {
           await db.update(
               DBHelper.tabelaLancamentos,
               {
@@ -413,6 +414,34 @@ class SyncManager {
               },
               where: 'remote_id = ?',
               whereArgs: [remote['id']]);
+        } else {
+          final duplicata = await db.query(DBHelper.tabelaLancamentos,
+              where:
+                  'descricao = ? AND valor = ? AND data = ? AND user_id = ? AND remote_id IS NULL',
+              whereArgs: [
+                remote['descricao'],
+                remote['valor'],
+                remote['data'],
+                user.id
+              ]);
+
+          if (duplicata.isNotEmpty) {
+            await db.update(DBHelper.tabelaLancamentos,
+                {'remote_id': remote['id'], 'sync_status': 'synced'},
+                where: 'id = ?', whereArgs: [duplicata.first['id']]);
+          } else {
+            await db.insert(DBHelper.tabelaLancamentos, {
+              'remote_id': remote['id'],
+              'user_id': remote['user_id'],
+              'descricao': remote['descricao'],
+              'valor': remote['valor'],
+              'tipo': remote['tipo'],
+              'categoria': remote['categoria'],
+              'data': remote['data'],
+              'observacao': remote['observacao'],
+              'sync_status': 'synced',
+            });
+          }
         }
       }
     } catch (e) {
@@ -492,20 +521,7 @@ class SyncManager {
         final existing = await db.query(DBHelper.tabelaMetas,
             where: 'remote_id = ?', whereArgs: [remote['id']]);
 
-        if (existing.isEmpty) {
-          await db.insert(DBHelper.tabelaMetas, {
-            'remote_id': remote['id'],
-            'user_id': remote['user_id'],
-            'titulo': remote['titulo'],
-            'descricao': remote['descricao'],
-            'valor_objetivo': remote['valor_objetivo'],
-            'valor_atual': remote['valor_atual'],
-            'data_inicio': remote['data_inicio'],
-            'data_fim': remote['data_fim'],
-            'concluida': remote['concluida'] ? 1 : 0,
-            'sync_status': 'synced',
-          });
-        } else {
+        if (existing.isNotEmpty) {
           await db.update(
               DBHelper.tabelaMetas,
               {
@@ -520,6 +536,19 @@ class SyncManager {
               },
               where: 'remote_id = ?',
               whereArgs: [remote['id']]);
+        } else {
+          await db.insert(DBHelper.tabelaMetas, {
+            'remote_id': remote['id'],
+            'user_id': remote['user_id'],
+            'titulo': remote['titulo'],
+            'descricao': remote['descricao'],
+            'valor_objetivo': remote['valor_objetivo'],
+            'valor_atual': remote['valor_atual'],
+            'data_inicio': remote['data_inicio'],
+            'data_fim': remote['data_fim'],
+            'concluida': remote['concluida'] ? 1 : 0,
+            'sync_status': 'synced',
+          });
         }
       }
     } catch (e) {
@@ -603,20 +632,7 @@ class SyncManager {
         final existing = await db.query(DBHelper.tabelaProventos,
             where: 'remote_id = ?', whereArgs: [remote['id']]);
 
-        if (existing.isEmpty) {
-          await db.insert(DBHelper.tabelaProventos, {
-            'remote_id': remote['id'],
-            'user_id': remote['user_id'],
-            'ticker': remote['ticker'],
-            'tipo_provento': remote['tipo_provento'],
-            'valor_por_cota': remote['valor_por_cota'],
-            'quantidade': remote['quantidade'],
-            'data_pagamento': remote['data_pagamento'],
-            'data_com': remote['data_com'],
-            'total_recebido': remote['total_recebido'],
-            'sync_status': 'synced',
-          });
-        } else {
+        if (existing.isNotEmpty) {
           await db.update(
               DBHelper.tabelaProventos,
               {
@@ -631,6 +647,19 @@ class SyncManager {
               },
               where: 'remote_id = ?',
               whereArgs: [remote['id']]);
+        } else {
+          await db.insert(DBHelper.tabelaProventos, {
+            'remote_id': remote['id'],
+            'user_id': remote['user_id'],
+            'ticker': remote['ticker'],
+            'tipo_provento': remote['tipo_provento'],
+            'valor_por_cota': remote['valor_por_cota'],
+            'quantidade': remote['quantidade'],
+            'data_pagamento': remote['data_pagamento'],
+            'data_com': remote['data_com'],
+            'total_recebido': remote['total_recebido'],
+            'sync_status': 'synced',
+          });
         }
       }
     } catch (e) {
@@ -715,20 +744,7 @@ class SyncManager {
         final existing = await db.query(DBHelper.tabelaRendaFixa,
             where: 'remote_id = ?', whereArgs: [remote['id']]);
 
-        if (existing.isEmpty) {
-          await db.insert(DBHelper.tabelaRendaFixa, {
-            'remote_id': remote['id'],
-            'user_id': remote['user_id'],
-            'nome': remote['nome'],
-            'tipo_renda': remote['tipo_renda'],
-            'valor': remote['valor'],
-            'taxa': remote['taxa'],
-            'data_aplicacao': remote['data_aplicacao'],
-            'data_vencimento': remote['data_vencimento'],
-            'status': remote['status'],
-            'sync_status': 'synced',
-          });
-        } else {
+        if (existing.isNotEmpty) {
           await db.update(
               DBHelper.tabelaRendaFixa,
               {
@@ -743,6 +759,19 @@ class SyncManager {
               },
               where: 'remote_id = ?',
               whereArgs: [remote['id']]);
+        } else {
+          await db.insert(DBHelper.tabelaRendaFixa, {
+            'remote_id': remote['id'],
+            'user_id': remote['user_id'],
+            'nome': remote['nome'],
+            'tipo_renda': remote['tipo_renda'],
+            'valor': remote['valor'],
+            'taxa': remote['taxa'],
+            'data_aplicacao': remote['data_aplicacao'],
+            'data_vencimento': remote['data_vencimento'],
+            'status': remote['status'],
+            'sync_status': 'synced',
+          });
         }
       }
     } catch (e) {
@@ -825,23 +854,7 @@ class SyncManager {
         final existing = await db.query(DBHelper.tabelaContas,
             where: 'remote_id = ?', whereArgs: [remote['id']]);
 
-        if (existing.isEmpty) {
-          await db.insert(DBHelper.tabelaContas, {
-            'remote_id': remote['id'],
-            'user_id': remote['user_id'],
-            'nome': remote['nome'],
-            'valor': remote['valor'],
-            'dia_vencimento': remote['dia_vencimento'],
-            'tipo': remote['tipo'],
-            'categoria': remote['categoria'],
-            'ativa': remote['ativa'],
-            'parcelas_total': remote['parcelas_total'],
-            'parcelas_pagas': remote['parcelas_pagas'],
-            'data_inicio': remote['data_inicio'],
-            'data_fim': remote['data_fim'],
-            'sync_status': 'synced',
-          });
-        } else {
+        if (existing.isNotEmpty) {
           await db.update(
               DBHelper.tabelaContas,
               {
@@ -859,6 +872,22 @@ class SyncManager {
               },
               where: 'remote_id = ?',
               whereArgs: [remote['id']]);
+        } else {
+          await db.insert(DBHelper.tabelaContas, {
+            'remote_id': remote['id'],
+            'user_id': remote['user_id'],
+            'nome': remote['nome'],
+            'valor': remote['valor'],
+            'dia_vencimento': remote['dia_vencimento'],
+            'tipo': remote['tipo'],
+            'categoria': remote['categoria'],
+            'ativa': remote['ativa'],
+            'parcelas_total': remote['parcelas_total'],
+            'parcelas_pagas': remote['parcelas_pagas'],
+            'data_inicio': remote['data_inicio'],
+            'data_fim': remote['data_fim'],
+            'sync_status': 'synced',
+          });
         }
       }
     } catch (e) {
@@ -866,7 +895,7 @@ class SyncManager {
     }
   }
 
-  // ========== SINCRONIZACAO DE PAGAMENTOS (CORRIGIDO) ==========
+  // ========== SINCRONIZACAO DE PAGAMENTOS (VALIDACAO REMOVIDA) ==========
 
   Future<void> syncPendingPagamentos() async {
     final db = await dbHelper.database;
@@ -884,20 +913,6 @@ class SyncManager {
     for (var localData in pending) {
       final syncStatus = localData['sync_status'] as String? ?? 'pending';
       final remoteId = localData['remote_id']?.toString();
-
-      // ✅ CORRIGIDO: Pular pagamentos com conta_id que nao e UUID valido
-      final contaIdRaw = localData['conta_id']?.toString() ?? '';
-      if (contaIdRaw.isNotEmpty &&
-          contaIdRaw.length < 10 &&
-          !contaIdRaw.contains('-')) {
-        await db.update(
-          DBHelper.tabelaPagamentos,
-          {'sync_status': 'skipped'},
-          where: 'id = ?',
-          whereArgs: [localData['id']],
-        );
-        continue;
-      }
 
       try {
         if (syncStatus == 'deleted') {

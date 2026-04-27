@@ -15,6 +15,17 @@ class ContaRepository {
   static const String tabelaContas = DBHelper.tabelaContas;
   static const String tabelaPagamentos = DBHelper.tabelaPagamentos;
 
+  // ✅ FLAG PARA EVITAR CHAMADAS SIMULTÂNEAS
+  bool _isLoadingPagamentos = false;
+
+  // ✅ CACHE EM MEMÓRIA PARA EVITAR BUSCAS REPETIDAS
+  final Map<String, List<Map<String, dynamic>>> _cachePaginacao = {};
+  List<Map<String, dynamic>> _cachedPagamentos = [];
+
+  // ✅ CONTROLE DE TEMPO DO CACHE (5 minutos)
+  static const Duration _cacheDuration = Duration(minutes: 5);
+  DateTime? _lastCacheTime;
+
   // METODO PARA ACESSAR O DATABASE
   Future<Database> getDatabase() async {
     return await _dbHelper.database;
@@ -39,6 +50,10 @@ class ContaRepository {
     conta['updated_at'] = DateTime.now().toIso8601String();
 
     final id = await _dbHelper.adicionarContaComUserId(conta);
+
+    // ✅ LIMPA CACHE AO ADICIONAR NOVA CONTA
+    _limparCache();
+
     _syncService.syncNow();
     return id;
   }
@@ -71,53 +86,99 @@ class ContaRepository {
     return await getContaByIdString(id.toString());
   }
 
-  // CORRIGIDO: Buscar do Supabase se o banco local estiver vazio
+  // ✅ MÉTODO PARA LIMPAR CACHE
+  void _limparCache() {
+    _cachePaginacao.clear();
+    _cachedPagamentos.clear();
+    _lastCacheTime = null;
+    _dbHelper.limparCacheCompleto();
+    LoggerService.info('🗑️ Cache limpo');
+  }
+
+  // ✅ CORRIGIDO: Com cache em memória e controle de concorrência
   Future<List<Map<String, dynamic>>> getPagamentosDoMes(
       int ano, int mes) async {
-    // Primeiro tenta buscar do banco local
-    final local = await _dbHelper.getPagamentosDoMes(ano, mes);
-
-    // Se tiver dados locais, retorna eles
-    if (local.isNotEmpty) {
-      LoggerService.info('Usando dados locais: ${local.length} pagamentos');
-      return local;
+    // ✅ EVITA CHAMADAS SIMULTÂNEAS
+    if (_isLoadingPagamentos) {
+      LoggerService.info(
+          '⚠️ Carregamento de pagamentos já em andamento, retornando cache...');
+      return _cachedPagamentos;
     }
 
-    // Se nao tiver dados locais, busca do Supabase
-    LoggerService.info('Banco local vazio, buscando do Supabase...');
-    final supabaseData = await _getPagamentosDoMesSupabase(ano, mes);
+    _isLoadingPagamentos = true;
 
-    // Salvar no banco local para proximas vezes
-    if (supabaseData.isNotEmpty) {
-      final db = await _dbHelper.database;
-      final userId = _supabase.auth.currentUser?.id;
+    try {
+      final cacheKey = '${ano}_$mes';
 
-      for (var p in supabaseData) {
-        try {
-          await db.insert(
-            tabelaPagamentos,
-            {
-              'id': p['id'],
-              'remote_id': p['remote_id'],
-              'conta_id': p['conta_id'],
-              'user_id': userId,
-              'ano_mes': p['ano_mes'],
-              'valor': p['valor'],
-              'data_pagamento': p['data_pagamento'],
-              'status': p['status'],
-              'lancamento_id': p['lancamento_id'],
-              'sync_status': 'synced',
-            },
-            conflictAlgorithm: ConflictAlgorithm.ignore,
-          );
-        } catch (e) {
-          LoggerService.error('Erro ao inserir pagamento: $e');
-        }
+      // ✅ VERIFICA CACHE EM MEMÓRIA (VÁLIDO POR 5 MINUTOS)
+      if (_cachePaginacao.containsKey(cacheKey) &&
+          _lastCacheTime != null &&
+          DateTime.now().difference(_lastCacheTime!) < _cacheDuration) {
+        LoggerService.info('✅ Usando cache em memória para $cacheKey');
+        _cachedPagamentos = _cachePaginacao[cacheKey]!;
+        return _cachedPagamentos;
       }
-      LoggerService.info('${supabaseData.length} pagamentos salvos localmente');
-    }
 
-    return supabaseData;
+      // Primeiro tenta buscar do banco local
+      final local = await _dbHelper.getPagamentosDoMes(ano, mes);
+
+      // Se tiver dados locais, retorna eles
+      if (local.isNotEmpty) {
+        LoggerService.info('✅ Usando dados locais: ${local.length} pagamentos');
+        _cachePaginacao[cacheKey] = local;
+        _cachedPagamentos = local;
+        _lastCacheTime = DateTime.now();
+        return local;
+      }
+
+      // Se nao tiver dados locais, busca do Supabase
+      LoggerService.info('☁️ Banco local vazio, buscando do Supabase...');
+      final supabaseData = await _getPagamentosDoMesSupabase(ano, mes);
+
+      // Salvar no banco local para proximas vezes
+      if (supabaseData.isNotEmpty) {
+        final db = await _dbHelper.database;
+        final userId = _supabase.auth.currentUser?.id;
+
+        for (var p in supabaseData) {
+          try {
+            await db.insert(
+              tabelaPagamentos,
+              {
+                'id': p['id'],
+                'remote_id': p['remote_id'],
+                'conta_id': p['conta_id'],
+                'user_id': userId,
+                'ano_mes': p['ano_mes'],
+                'valor': p['valor'],
+                'data_pagamento': p['data_pagamento'],
+                'status': p['status'],
+                'lancamento_id': p['lancamento_id'],
+                'sync_status': 'synced',
+              },
+              conflictAlgorithm: ConflictAlgorithm.ignore,
+            );
+          } catch (e) {
+            LoggerService.error('Erro ao inserir pagamento: $e');
+          }
+        }
+        LoggerService.info(
+            '💾 ${supabaseData.length} pagamentos salvos localmente');
+
+        // ✅ FORÇA LIMPEZA DO CACHE DO DB HELPER PARA VER OS NOVOS DADOS
+        _dbHelper.limparCacheCompleto();
+      }
+
+      // ✅ SALVA NO CACHE EM MEMÓRIA
+      _cachePaginacao[cacheKey] = supabaseData;
+      _cachedPagamentos = supabaseData;
+      _lastCacheTime = DateTime.now();
+
+      return supabaseData;
+    } finally {
+      // ✅ GARANTE QUE A FLAG SEJA LIBERADA MESMO EM CASO DE ERRO
+      _isLoadingPagamentos = false;
+    }
   }
 
   // CORRIGIDO: Buscar pagamentos diretamente do Supabase (IDs como String)
@@ -239,11 +300,17 @@ class ContaRepository {
   }
 
   Future<bool> pagarConta(int pagamentoId) async {
-    return await _dbHelper.pagarConta(pagamentoId);
+    final result = await _dbHelper.pagarConta(pagamentoId);
+    // ✅ LIMPA CACHE AO PAGAR CONTA
+    _limparCache();
+    return result;
   }
 
   Future<int> deletarConta(int contaId) async {
-    return await _dbHelper.deletarConta(contaId);
+    final result = await _dbHelper.deletarConta(contaId);
+    // ✅ LIMPA CACHE AO DELETAR CONTA
+    _limparCache();
+    return result;
   }
 
   Future<int> atualizarConta(Map<String, dynamic> conta) async {
@@ -253,6 +320,8 @@ class ContaRepository {
     conta['updated_at'] = DateTime.now().toIso8601String();
 
     final result = await _dbHelper.update(tabelaContas, conta, id);
+    // ✅ LIMPA CACHE AO ATUALIZAR CONTA
+    _limparCache();
     _syncService.syncNow();
     return result;
   }
@@ -332,6 +401,9 @@ class ContaRepository {
         whereArgs: [pagamentoId, pagamentoId],
       );
 
+      // ✅ LIMPA CACHE APÓS PAGAR
+      _limparCache();
+
       _syncService.syncNow();
 
       return Result.success(true);
@@ -389,6 +461,9 @@ class ContaRepository {
         whereArgs: [pagamentoId, pagamentoId],
       );
 
+      // ✅ LIMPA CACHE APÓS DESFAZER
+      _limparCache();
+
       _syncService.syncNow();
 
       return Result.success(true);
@@ -415,6 +490,9 @@ class ContaRepository {
       where: 'id = ? OR remote_id = ?',
       whereArgs: [contaId, contaId],
     );
+
+    // ✅ LIMPA CACHE APÓS DELETAR
+    _limparCache();
 
     _syncService.syncNow();
   }
@@ -452,6 +530,7 @@ class ContaRepository {
       conta['updated_at'] = DateTime.now().toIso8601String();
 
       final id = await _dbHelper.adicionarContaComUserId(conta);
+      _limparCache();
       _syncService.syncNow();
       return Result.success(id);
     } catch (e) {
@@ -467,6 +546,7 @@ class ContaRepository {
       conta['updated_at'] = DateTime.now().toIso8601String();
 
       final result = await _dbHelper.update(tabelaContas, conta, id);
+      _limparCache();
       _syncService.syncNow();
       return Result.success(result);
     } catch (e) {
@@ -487,6 +567,7 @@ class ContaRepository {
   Future<Result<bool>> pagarContaResult(int pagamentoId) async {
     try {
       final result = await _dbHelper.pagarConta(pagamentoId);
+      _limparCache();
       _syncService.syncNow();
       return Result.success(result);
     } catch (e) {
@@ -540,4 +621,3 @@ class ContaRepository {
     ];
   }
 }
-

@@ -1,6 +1,7 @@
 ﻿// lib/screens/investimentos.dart
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../database/db_helper.dart';
 import '../models/investimento_model.dart';
 import '../models/renda_fixa_model.dart';
@@ -10,6 +11,7 @@ import '../utils/formatters.dart';
 import '../widgets/adicionar_investimento_modal.dart';
 import '../widgets/toast.dart';
 import '../services/logger_service.dart';
+import 'package:sqflite/sqflite.dart';
 import 'transacoes_screen.dart';
 
 class InvestimentosScreen extends StatefulWidget {
@@ -21,6 +23,7 @@ class InvestimentosScreen extends StatefulWidget {
 
 class _InvestimentosScreenState extends State<InvestimentosScreen> {
   final DBHelper _dbHelper = DBHelper();
+  final _supabase = Supabase.instance.client;
 
   List<Investimento> _investimentos = [];
   List<Investimento> _investimentosFiltrados = [];
@@ -29,6 +32,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
   bool _isLoading = true;
   bool _carregandoTransacoes = false;
   bool _atualizandoCotacoes = false;
+  bool _sincronizando = false;
   int _visualizacaoAtual = 0;
   String _filtroAtivo = 'Todos';
 
@@ -51,6 +55,80 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
     super.initState();
     _carregarDados();
     _carregarUltimasTransacoes();
+    _sincronizarComSupabase();
+  }
+
+  // ✅ NOVO: Sincronizar com Supabase
+  Future<void> _sincronizarComSupabase() async {
+    if (_sincronizando) return;
+    _sincronizando = true;
+
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+
+      LoggerService.info('🔄 Sincronizando investimentos com Supabase...');
+
+      // ✅ Busca sem filtro user_id (pois estão null)
+      final response = await _supabase.from('investments').select();
+
+      if (response == null || response.isEmpty) {
+        LoggerService.info('📭 Nenhum investimento no Supabase');
+        return;
+      }
+
+      final db = await _dbHelper.database;
+
+      for (var inv in response) {
+        try {
+          // ✅ Verifica se já existe pelo remote_id
+          final existente = await db.query(
+            'transacoes',
+            where: 'remote_id = ?',
+            whereArgs: [inv['id']?.toString()],
+          );
+
+          if (existente.isNotEmpty) {
+            LoggerService.info('⏭️ ${inv['ticker']} já existe, pulando...');
+            continue;
+          }
+
+          await db.insert(
+            'transacoes',
+            {
+              'ticker': inv['ticker']?.toString() ?? '',
+              'tipo_investimento': inv['tipo']?.toString() ?? 'ACAO',
+              'tipo_transacao': inv['tipo_transacao']?.toString() == 'compra'
+                  ? 'COMPRA'
+                  : 'VENDA',
+              'quantidade':
+                  double.tryParse(inv['quantidade']?.toString() ?? '0') ?? 0,
+              'preco_unitario':
+                  double.tryParse(inv['preco_medio']?.toString() ?? '0') ?? 0,
+              'taxa': 0.0,
+              'total': (double.tryParse(inv['quantidade']?.toString() ?? '0') ??
+                      0) *
+                  (double.tryParse(inv['preco_medio']?.toString() ?? '0') ?? 0),
+              'data': inv['data_compra']?.toString() ??
+                  inv['created_at']?.toString() ??
+                  DateTime.now().toIso8601String(),
+              'user_id': userId,
+              'remote_id': inv['id']?.toString(),
+              'sync_status': 'synced',
+            },
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+        } catch (e) {
+          LoggerService.error('Erro ao inserir: $e');
+        }
+      }
+      LoggerService.info('✅ ${response.length} investimentos sincronizados!');
+      await _carregarDados();
+      await _carregarUltimasTransacoes();
+    } catch (e) {
+      LoggerService.error('Erro ao sincronizar: $e');
+    } finally {
+      _sincronizando = false;
+    }
   }
 
   Future<void> _carregarDados() async {
@@ -169,8 +247,6 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
     if (_atualizandoCotacoes) return;
     setState(() => _atualizandoCotacoes = true);
     try {
-      // TODO: Implementar integracao com API de cotacoes (B3/Yahoo Finance)
-      // Por enquanto, apenas simula a atualizacao
       await Future.delayed(const Duration(seconds: 1));
       _calcularTotais();
       if (mounted) {
@@ -299,7 +375,11 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
     try {
       final db = await _dbHelper.database;
       final total = investimento.quantidade * investimento.precoMedio;
-      await db.insert('transacoes', {
+
+      final userId = _supabase.auth.currentUser?.id;
+
+      // Insere no banco local
+      final localId = await db.insert('transacoes', {
         'ticker': investimento.ticker,
         'tipo_investimento': investimento.tipo,
         'tipo_transacao': tipoTransacao,
@@ -308,14 +388,38 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
         'taxa': 0.0,
         'total': total,
         'data': dataTransacao.toIso8601String(),
+        'user_id': userId,
         'sync_status': 'pending',
       });
+
+      // ✅ LIMPA CACHE DO DB HELPER
+      _dbHelper.limparCacheCompleto();
+
+      // ✅ Sincroniza com Supabase
+      try {
+        await _supabase.from('investments').insert({
+          'ticker': investimento.ticker,
+          'tipo': investimento.tipo,
+          'tipo_transacao': tipoTransacao.toLowerCase(),
+          'quantidade': investimento.quantidade.toStringAsFixed(8),
+          'preco_medio': investimento.precoMedio.toStringAsFixed(8),
+          'preco_atual': investimento.precoMedio.toStringAsFixed(8),
+          'data_compra': dataTransacao.toIso8601String().split('T')[0],
+          'user_id': userId,
+        });
+        LoggerService.info('✅ Investimento sincronizado com Supabase');
+      } catch (e) {
+        LoggerService.error('Erro ao sincronizar com Supabase: $e');
+      }
+
+      // ✅ Recarrega tudo
       await _carregarDados();
       await _carregarUltimasTransacoes();
+
       if (mounted) {
         Toast.success(context,
             '${investimento.ticker} ${tipoTransacao == 'COMPRA' ? 'adicionado' : 'vendido'}!');
-        _atualizarPrecos();
+        setState(() {}); // ✅ Força rebuild
       }
     } catch (e) {
       LoggerService.error('Erro: $e');
@@ -368,11 +472,32 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                 fontWeight: FontWeight.bold,
                 color: AppColors.textPrimary(context))),
         Row(children: [
+          _buildBotaoSincronizar(),
+          const SizedBox(width: 8),
           _buildBotaoAtualizarCotacoes(),
           const SizedBox(width: 8),
           _buildBotaoAdicionar(),
         ]),
       ]),
+    );
+  }
+
+  Widget _buildBotaoSincronizar() {
+    return Container(
+      decoration: BoxDecoration(
+          color: AppColors.info.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20)),
+      child: IconButton(
+        icon: _sincronizando
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: AppColors.info))
+            : const Icon(Icons.cloud_sync, color: AppColors.info),
+        onPressed: _sincronizando ? null : _sincronizarComSupabase,
+        tooltip: 'Sincronizar com Supabase',
+      ),
     );
   }
 

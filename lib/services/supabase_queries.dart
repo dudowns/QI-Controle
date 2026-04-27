@@ -1,7 +1,6 @@
-import '../services/logger_service.dart';
 // lib/services/supabase_queries.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/foundation.dart';
+import 'logger_service.dart';
 
 class SupabaseQueries {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -10,7 +9,7 @@ class SupabaseQueries {
   // VIEWS
   // ============================================
 
-  /// Resumo do mês via VIEW
+  /// Resumo do mes via VIEW
   Future<Map<String, dynamic>?> getResumoMensalView(DateTime data) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -50,7 +49,7 @@ class SupabaseQueries {
     }
   }
 
-  /// Próximos proventos
+  /// Proximos proventos
   Future<List<Map<String, dynamic>>> getProximosProventos() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -70,7 +69,7 @@ class SupabaseQueries {
   }
 
   // ============================================
-  // FUNÇÕES SQL (CORRIGIDAS)
+  // FUNCOES SQL
   // ============================================
 
   /// Rentabilidade da carteira
@@ -84,7 +83,6 @@ class SupabaseQueries {
         params: {'p_user_id': userId},
       );
 
-      // 🔥 CORREÇÃO: verificar se é lista e pegar primeiro
       if (result == null) return {};
       if (result is List && result.isNotEmpty) {
         return Map<String, dynamic>.from(result[0]);
@@ -99,7 +97,7 @@ class SupabaseQueries {
     }
   }
 
-  /// Saldo por período
+  /// Saldo por periodo
   Future<List<Map<String, dynamic>>> getSaldoPeriodo({
     required DateTime dataInicio,
     required DateTime dataFim,
@@ -118,9 +116,7 @@ class SupabaseQueries {
       );
 
       if (result == null) return [];
-      if (result is List) {
-        return List<Map<String, dynamic>>.from(result);
-      }
+      if (result is List) return List<Map<String, dynamic>>.from(result);
       return [];
     } catch (e) {
       LoggerService.info('Erro getSaldoPeriodo: $e');
@@ -128,7 +124,7 @@ class SupabaseQueries {
     }
   }
 
-  /// Total de proventos por período
+  /// Total de proventos por periodo
   Future<List<Map<String, dynamic>>> getTotalProventos({
     required DateTime dataInicio,
     required DateTime dataFim,
@@ -147,9 +143,7 @@ class SupabaseQueries {
       );
 
       if (result == null) return [];
-      if (result is List) {
-        return List<Map<String, dynamic>>.from(result);
-      }
+      if (result is List) return List<Map<String, dynamic>>.from(result);
       return [];
     } catch (e) {
       LoggerService.info('Erro getTotalProventos: $e');
@@ -157,7 +151,7 @@ class SupabaseQueries {
     }
   }
 
-  /// Evolução do patrimônio
+  /// Evolucao do patrimonio
   Future<List<Map<String, dynamic>>> getEvolucaoPatrimonio(int ano) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -169,9 +163,7 @@ class SupabaseQueries {
       );
 
       if (result == null) return [];
-      if (result is List) {
-        return List<Map<String, dynamic>>.from(result);
-      }
+      if (result is List) return List<Map<String, dynamic>>.from(result);
       return [];
     } catch (e) {
       LoggerService.info('Erro getEvolucaoPatrimonio: $e');
@@ -179,7 +171,7 @@ class SupabaseQueries {
     }
   }
 
-  /// Evolução mensal (receitas/despesas) - CORRIGIDO
+  /// Evolucao mensal (receitas/despesas)
   Future<List<Map<String, dynamic>>> getEvolucaoMensal(int ano) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -190,15 +182,9 @@ class SupabaseQueries {
         params: {'p_user_id': userId, 'p_ano': ano},
       );
 
-      // 🔥 CORREÇÃO: resultado pode vir como List ou Map
       if (result == null) return [];
-      if (result is List) {
-        return List<Map<String, dynamic>>.from(result);
-      }
-      // Se for um único objeto, converte para lista
-      if (result is Map) {
-        return [Map<String, dynamic>.from(result)];
-      }
+      if (result is List) return List<Map<String, dynamic>>.from(result);
+      if (result is Map) return [Map<String, dynamic>.from(result)];
       return [];
     } catch (e) {
       LoggerService.info('Erro getEvolucaoMensal: $e');
@@ -206,7 +192,7 @@ class SupabaseQueries {
     }
   }
 
-  /// Resumo do mês (função RPC) - CORRIGIDO
+  /// Resumo do mes (funcao RPC)
   Future<Map<String, dynamic>> getResumoMes(DateTime data) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -220,14 +206,10 @@ class SupabaseQueries {
         },
       );
 
-      // 🔥 CORREÇÃO: resultado pode vir como List ou Map
       if (result == null) return {};
-      if (result is List && result.isNotEmpty) {
+      if (result is List && result.isNotEmpty)
         return Map<String, dynamic>.from(result[0]);
-      }
-      if (result is Map) {
-        return Map<String, dynamic>.from(result);
-      }
+      if (result is Map) return Map<String, dynamic>.from(result);
       return {};
     } catch (e) {
       LoggerService.info('Erro getResumoMes: $e');
@@ -235,7 +217,7 @@ class SupabaseQueries {
     }
   }
 
-  /// Gastos por categoria com percentual - CORRIGIDO
+  /// Gastos por categoria com percentual
   Future<List<Map<String, dynamic>>> getGastosCategoriaPeriodo({
     required DateTime dataInicio,
     required DateTime dataFim,
@@ -253,14 +235,9 @@ class SupabaseQueries {
         },
       );
 
-      // 🔥 CORREÇÃO: tratar diferentes tipos de retorno
       if (result == null) return [];
-      if (result is List) {
-        return List<Map<String, dynamic>>.from(result);
-      }
-      if (result is Map) {
-        return [Map<String, dynamic>.from(result)];
-      }
+      if (result is List) return List<Map<String, dynamic>>.from(result);
+      if (result is Map) return [Map<String, dynamic>.from(result)];
       return [];
     } catch (e) {
       LoggerService.info('Erro getGastosCategoriaPeriodo: $e');
@@ -268,4 +245,3 @@ class SupabaseQueries {
     }
   }
 }
-
