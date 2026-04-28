@@ -1,6 +1,7 @@
 // lib/screens/lancamentos.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../database/db_helper.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_categories.dart';
@@ -104,12 +105,15 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
         }
       }
       if (tipo == 'receita') {
-        if (tipoLancamento == 'receita' || tipoLancamento == 'receitas')
+        if (tipoLancamento == 'receita' || tipoLancamento == 'receitas') {
           total += valor;
+        }
       } else {
         if (tipoLancamento == 'gasto' ||
             tipoLancamento == 'despesa' ||
-            tipoLancamento == 'despesas') total += valor;
+            tipoLancamento == 'despesas') {
+          total += valor;
+        }
       }
     }
     return total;
@@ -128,6 +132,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
 
   Future<void> _carregarDados() async {
     if (!mounted) return;
+    _dbHelper.limparCacheCompleto();
     setState(() => _isLoading = true);
     try {
       _lancamentos = await _dbHelper.getAllLancamentos();
@@ -171,6 +176,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
   Future<void> _salvarLancamento(Map<String, dynamic> lancamento) async {
     try {
       await _dbHelper.insertLancamento(lancamento);
+      _dbHelper.limparCacheCompleto();
       await _carregarDados();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -190,6 +196,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
   Future<void> _atualizarLancamento(Map<String, dynamic> lancamento) async {
     try {
       await _dbHelper.updateLancamento(lancamento);
+      _dbHelper.limparCacheCompleto();
       await _carregarDados();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -206,6 +213,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     }
   }
 
+  // ✅ CORRIGIDO: Apaga do Supabase também
   Future<void> _excluirLancamento(int id, String descricao) async {
     final confirmar = await showDialog<bool>(
       context: context,
@@ -227,8 +235,38 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     );
     if (confirmar == true) {
       try {
+        final db = await _dbHelper.database;
+
+        // ✅ Busca o remote_id antes de apagar
+        final lancamentos = await db.query(
+          'lancamentos',
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+
+        // ✅ Apaga do Supabase primeiro (se tiver remote_id válido)
+        if (lancamentos.isNotEmpty) {
+          final remoteId = lancamentos.first['remote_id']?.toString();
+          if (remoteId != null &&
+              remoteId.isNotEmpty &&
+              remoteId.contains('-')) {
+            try {
+              await Supabase.instance.client
+                  .from('lancamentos')
+                  .delete()
+                  .eq('id', remoteId);
+              LoggerService.info('✅ Apagado do Supabase: $descricao');
+            } catch (e) {
+              LoggerService.error('Erro ao apagar do Supabase: $e');
+            }
+          }
+        }
+
+        // Depois apaga do banco local
         await _dbHelper.deleteLancamento(id);
+        _dbHelper.limparCacheCompleto();
         await _carregarDados();
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text('$descricao excluido!'),

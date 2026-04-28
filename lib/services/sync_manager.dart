@@ -32,8 +32,8 @@ class SyncManager {
 
     try {
       await syncPendingLancamentos();
-      await syncPendingInvestimentos();
-      await syncPendingTransacoes();
+      // await syncPendingInvestimentos(); // ❌ DESLIGADO
+      // await syncPendingTransacoes();    // ❌ DESLIGADO
       await syncPendingMetas();
       await syncPendingProventos();
       await syncPendingRendaFixa();
@@ -41,8 +41,8 @@ class SyncManager {
       await syncPendingPagamentos();
 
       await fetchRemoteLancamentos();
-      await fetchRemoteInvestimentos();
-      await fetchRemoteTransacoes();
+      // await fetchRemoteInvestimentos(); // ❌ DESLIGADO
+      // await fetchRemoteTransacoes();    // ❌ DESLIGADO
       await fetchRemoteMetas();
       await fetchRemoteProventos();
       await fetchRemoteRendaFixa();
@@ -59,258 +59,21 @@ class SyncManager {
   // ========== SINCRONIZACAO DE TRANSACOES ==========
 
   Future<void> syncPendingTransacoes() async {
-    final db = await dbHelper.database;
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-
-    final pending = await db.query(
-      'transacoes',
-      where: '(sync_status = ? OR sync_status = ?) AND user_id = ?',
-      whereArgs: ['pending', 'deleted', user.id],
-    );
-
-    if (pending.isEmpty) return;
-
-    LoggerService.info('Processando ${pending.length} transacoes pendentes...');
-
-    for (var localData in pending) {
-      final syncStatus = localData['sync_status'] as String? ?? 'pending';
-      final remoteId = localData['remote_id']?.toString();
-
-      try {
-        if (syncStatus == 'deleted') {
-          if (remoteId != null && remoteId.isNotEmpty) {
-            await supabase.from('transacoes').delete().eq('id', remoteId);
-          }
-          await db.delete('transacoes',
-              where: 'id = ?', whereArgs: [localData['id']]);
-        } else {
-          final quantidade =
-              (localData['quantidade'] as num?)?.toDouble() ?? 0.0;
-          final precoUnitario =
-              (localData['preco_unitario'] as num?)?.toDouble() ?? 0.0;
-          final taxa = (localData['taxa'] as num?)?.toDouble() ?? 0.0;
-          final total = (quantidade * precoUnitario) + taxa;
-
-          final remoteData = {
-            'ticker': localData['ticker']?.toString().toUpperCase() ?? '',
-            'tipo_investimento':
-                localData['tipo_investimento']?.toString() ?? 'ACAO',
-            'tipo_transacao':
-                localData['tipo_transacao']?.toString() ?? 'COMPRA',
-            'quantidade': quantidade,
-            'preco_unitario': precoUnitario,
-            'taxa': taxa,
-            'total': total,
-            'data': localData['data']?.toString() ??
-                DateTime.now().toIso8601String(),
-            'user_id': user.id,
-          };
-
-          if (remoteId != null && remoteId.isNotEmpty) {
-            await supabase
-                .from('transacoes')
-                .update(remoteData)
-                .eq('id', remoteId);
-            await db.update('transacoes', {'sync_status': 'synced'},
-                where: 'id = ?', whereArgs: [localData['id']]);
-          } else {
-            final response = await supabase
-                .from('transacoes')
-                .insert(remoteData)
-                .select()
-                .single();
-            await db.update('transacoes',
-                {'remote_id': response['id'], 'sync_status': 'synced'},
-                where: 'id = ?', whereArgs: [localData['id']]);
-          }
-        }
-      } catch (e) {
-        LoggerService.error('Erro ao sincronizar transacao: $e');
-      }
-    }
+    return; // ❌ DESLIGADO PERMANENTEMENTE
   }
 
   Future<void> fetchRemoteTransacoes() async {
-    final db = await dbHelper.database;
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-
-    LoggerService.info('Buscando transacoes do servidor...');
-
-    try {
-      final remoteTransacoes = await supabase
-          .from('transacoes')
-          .select()
-          .eq('user_id', user.id)
-          .order('data', ascending: false);
-
-      for (var remote in remoteTransacoes) {
-        final existing = await db.query('transacoes',
-            where: 'remote_id = ?', whereArgs: [remote['id']]);
-
-        if (existing.isNotEmpty) {
-          await db.update(
-              'transacoes',
-              {
-                'ticker': remote['ticker'],
-                'tipo_investimento': remote['tipo_investimento'],
-                'tipo_transacao': remote['tipo_transacao'],
-                'quantidade': remote['quantidade'],
-                'preco_unitario': remote['preco_unitario'],
-                'taxa': remote['taxa'],
-                'total': remote['total'],
-                'data': remote['data'],
-                'sync_status': 'synced',
-              },
-              where: 'remote_id = ?',
-              whereArgs: [remote['id']]);
-        } else {
-          final duplicata = await db.query('transacoes',
-              where:
-                  'ticker = ? AND quantidade = ? AND preco_unitario = ? AND data = ? AND user_id = ? AND remote_id IS NULL',
-              whereArgs: [
-                remote['ticker'],
-                remote['quantidade'],
-                remote['preco_unitario'],
-                remote['data'],
-                user.id
-              ]);
-
-          if (duplicata.isNotEmpty) {
-            await db.update('transacoes',
-                {'remote_id': remote['id'], 'sync_status': 'synced'},
-                where: 'id = ?', whereArgs: [duplicata.first['id']]);
-          } else {
-            await db.insert('transacoes', {
-              'remote_id': remote['id'],
-              'user_id': remote['user_id'],
-              'ticker': remote['ticker'],
-              'tipo_investimento': remote['tipo_investimento'],
-              'tipo_transacao': remote['tipo_transacao'],
-              'quantidade': remote['quantidade'],
-              'preco_unitario': remote['preco_unitario'],
-              'taxa': remote['taxa'],
-              'total': remote['total'],
-              'data': remote['data'],
-              'sync_status': 'synced',
-            });
-          }
-        }
-      }
-    } catch (e) {
-      LoggerService.error('Erro ao buscar transacoes: $e');
-    }
+    return; // ❌ DESLIGADO PERMANENTEMENTE
   }
 
   // ========== SINCRONIZACAO DE INVESTIMENTOS ==========
 
   Future<void> syncPendingInvestimentos() async {
-    final db = await dbHelper.database;
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-
-    final pending = await db.query(
-      DBHelper.tabelaInvestimentos,
-      where: '(sync_status = ? OR sync_status = ?) AND user_id = ?',
-      whereArgs: ['pending', 'deleted', user.id],
-    );
-
-    if (pending.isEmpty) return;
-
-    for (var localData in pending) {
-      final syncStatus = localData['sync_status'] as String? ?? 'pending';
-      final remoteId = localData['remote_id']?.toString();
-
-      try {
-        if (syncStatus == 'deleted') {
-          if (remoteId != null && remoteId.isNotEmpty) {
-            await supabase.from('investimentos').delete().eq('id', remoteId);
-          }
-          await db.delete(DBHelper.tabelaInvestimentos,
-              where: 'id = ?', whereArgs: [localData['id']]);
-        } else {
-          final remoteData = {
-            'ticker': localData['ticker']?.toString().toUpperCase() ?? '',
-            'tipo': localData['tipo']?.toString() ?? 'ACAO',
-            'quantidade': (localData['quantidade'] as num?)?.toDouble() ?? 0.0,
-            'preco_medio':
-                (localData['preco_medio'] as num?)?.toDouble() ?? 0.0,
-            'preco_atual':
-                (localData['preco_atual'] as num?)?.toDouble() ?? 0.0,
-            'data_compra': localData['data_compra']?.toString(),
-            'user_id': user.id,
-          };
-
-          if (remoteId != null && remoteId.isNotEmpty) {
-            await supabase
-                .from('investimentos')
-                .update(remoteData)
-                .eq('id', remoteId);
-            await db.update(
-                DBHelper.tabelaInvestimentos, {'sync_status': 'synced'},
-                where: 'id = ?', whereArgs: [localData['id']]);
-          } else {
-            final response = await supabase
-                .from('investimentos')
-                .insert(remoteData)
-                .select()
-                .single();
-            await db.update(DBHelper.tabelaInvestimentos,
-                {'remote_id': response['id'], 'sync_status': 'synced'},
-                where: 'id = ?', whereArgs: [localData['id']]);
-          }
-        }
-      } catch (e) {
-        LoggerService.error('Erro ao sincronizar investimento: $e');
-      }
-    }
+    return; // ❌ DESLIGADO PERMANENTEMENTE
   }
 
   Future<void> fetchRemoteInvestimentos() async {
-    final db = await dbHelper.database;
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-
-    try {
-      final remoteInvestimentos =
-          await supabase.from('investimentos').select().eq('user_id', user.id);
-
-      for (var remote in remoteInvestimentos) {
-        final existing = await db.query(DBHelper.tabelaInvestimentos,
-            where: 'remote_id = ?', whereArgs: [remote['id']]);
-
-        if (existing.isNotEmpty) {
-          await db.update(
-              DBHelper.tabelaInvestimentos,
-              {
-                'ticker': remote['ticker'],
-                'tipo': remote['tipo'],
-                'quantidade': remote['quantidade'],
-                'preco_medio': remote['preco_medio'],
-                'preco_atual': remote['preco_atual'],
-                'data_compra': remote['data_compra'],
-                'sync_status': 'synced',
-              },
-              where: 'remote_id = ?',
-              whereArgs: [remote['id']]);
-        } else {
-          await db.insert(DBHelper.tabelaInvestimentos, {
-            'remote_id': remote['id'],
-            'user_id': remote['user_id'],
-            'ticker': remote['ticker'],
-            'tipo': remote['tipo'],
-            'quantidade': remote['quantidade'],
-            'preco_medio': remote['preco_medio'],
-            'preco_atual': remote['preco_atual'],
-            'data_compra': remote['data_compra'],
-            'sync_status': 'synced',
-          });
-        }
-      }
-    } catch (e) {
-      LoggerService.error('Erro ao buscar investimentos: $e');
-    }
+    return; // ❌ DESLIGADO PERMANENTEMENTE
   }
 
   // ========== SINCRONIZACAO DE LANCAMENTOS ==========
@@ -328,6 +91,9 @@ class SyncManager {
 
     if (pending.isEmpty) return;
 
+    LoggerService.info(
+        'Processando ${pending.length} lancamentos pendentes...');
+
     for (var localData in pending) {
       final syncStatus = localData['sync_status'] as String? ?? 'pending';
       final remoteId = localData['remote_id']?.toString();
@@ -336,6 +102,7 @@ class SyncManager {
         if (syncStatus == 'deleted') {
           if (remoteId != null && remoteId.isNotEmpty) {
             await supabase.from('lancamentos').delete().eq('id', remoteId);
+            LoggerService.info('Lancamento deletado do servidor: $remoteId');
           }
           await db.delete(DBHelper.tabelaLancamentos,
               where: 'id = ?', whereArgs: [localData['id']]);
@@ -355,6 +122,7 @@ class SyncManager {
             'data': dataStr,
             'user_id': user.id,
             'observacao': localData['observacao'] ?? '',
+            'updated_at': DateTime.now().toIso8601String(),
           };
 
           if (remoteId != null && remoteId.isNotEmpty) {
@@ -389,7 +157,20 @@ class SyncManager {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
+    LoggerService.info('Buscando lancamentos do servidor...');
+
     try {
+      final localDeleted = await db.query(
+        DBHelper.tabelaLancamentos,
+        where: 'sync_status = ? AND user_id = ?',
+        whereArgs: ['deleted', user.id],
+      );
+
+      final deletedRemoteIds = localDeleted
+          .map((e) => e['remote_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .toList();
+
       final remoteLancamentos = await supabase
           .from('lancamentos')
           .select()
@@ -397,23 +178,28 @@ class SyncManager {
           .order('criado_em', ascending: false);
 
       for (var remote in remoteLancamentos) {
+        if (deletedRemoteIds.contains(remote['id'])) continue;
+
         final existing = await db.query(DBHelper.tabelaLancamentos,
             where: 'remote_id = ?', whereArgs: [remote['id']]);
 
         if (existing.isNotEmpty) {
-          await db.update(
-              DBHelper.tabelaLancamentos,
-              {
-                'descricao': remote['descricao'],
-                'valor': remote['valor'],
-                'tipo': remote['tipo'],
-                'categoria': remote['categoria'],
-                'data': remote['data'],
-                'observacao': remote['observacao'],
-                'sync_status': 'synced',
-              },
-              where: 'remote_id = ?',
-              whereArgs: [remote['id']]);
+          final localSyncStatus = existing.first['sync_status'] as String?;
+          if (localSyncStatus != 'pending') {
+            await db.update(
+                DBHelper.tabelaLancamentos,
+                {
+                  'descricao': remote['descricao'],
+                  'valor': remote['valor'],
+                  'tipo': remote['tipo'],
+                  'categoria': remote['categoria'],
+                  'data': remote['data'],
+                  'observacao': remote['observacao'],
+                  'sync_status': 'synced',
+                },
+                where: 'remote_id = ?',
+                whereArgs: [remote['id']]);
+          }
         } else {
           final duplicata = await db.query(DBHelper.tabelaLancamentos,
               where:
@@ -464,6 +250,8 @@ class SyncManager {
 
     if (pending.isEmpty) return;
 
+    LoggerService.info('Processando ${pending.length} metas pendentes...');
+
     for (var localData in pending) {
       final syncStatus = localData['sync_status'] as String? ?? 'pending';
       final remoteId = localData['remote_id']?.toString();
@@ -472,6 +260,7 @@ class SyncManager {
         if (syncStatus == 'deleted') {
           if (remoteId != null && remoteId.isNotEmpty) {
             await supabase.from('metas').delete().eq('id', remoteId);
+            LoggerService.info('Meta deletada do servidor: $remoteId');
           }
           await db.delete(DBHelper.tabelaMetas,
               where: 'id = ?', whereArgs: [localData['id']]);
@@ -485,6 +274,7 @@ class SyncManager {
             'data_fim': localData['data_fim']?.toString().split('T')[0],
             'concluida': localData['concluida'] == 1,
             'user_id': user.id,
+            'updated_at': DateTime.now().toIso8601String(),
           };
 
           if (remoteId != null && remoteId.isNotEmpty) {
@@ -504,6 +294,8 @@ class SyncManager {
         }
       } catch (e) {
         LoggerService.error('Erro ao sincronizar meta: $e');
+        await db.update(DBHelper.tabelaMetas, {'sync_status': 'failed'},
+            where: 'id = ?', whereArgs: [localData['id']]);
       }
     }
   }
@@ -513,29 +305,47 @@ class SyncManager {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
+    LoggerService.info('Buscando metas do servidor...');
+
     try {
+      final localDeleted = await db.query(
+        DBHelper.tabelaMetas,
+        where: 'sync_status = ? AND user_id = ?',
+        whereArgs: ['deleted', user.id],
+      );
+
+      final deletedRemoteIds = localDeleted
+          .map((e) => e['remote_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .toList();
+
       final remoteMetas =
           await supabase.from('metas').select().eq('user_id', user.id);
 
       for (var remote in remoteMetas) {
+        if (deletedRemoteIds.contains(remote['id'])) continue;
+
         final existing = await db.query(DBHelper.tabelaMetas,
             where: 'remote_id = ?', whereArgs: [remote['id']]);
 
         if (existing.isNotEmpty) {
-          await db.update(
-              DBHelper.tabelaMetas,
-              {
-                'titulo': remote['titulo'],
-                'descricao': remote['descricao'],
-                'valor_objetivo': remote['valor_objetivo'],
-                'valor_atual': remote['valor_atual'],
-                'data_inicio': remote['data_inicio'],
-                'data_fim': remote['data_fim'],
-                'concluida': remote['concluida'] ? 1 : 0,
-                'sync_status': 'synced',
-              },
-              where: 'remote_id = ?',
-              whereArgs: [remote['id']]);
+          final localSyncStatus = existing.first['sync_status'] as String?;
+          if (localSyncStatus != 'pending') {
+            await db.update(
+                DBHelper.tabelaMetas,
+                {
+                  'titulo': remote['titulo'],
+                  'descricao': remote['descricao'],
+                  'valor_objetivo': remote['valor_objetivo'],
+                  'valor_atual': remote['valor_atual'],
+                  'data_inicio': remote['data_inicio'],
+                  'data_fim': remote['data_fim'],
+                  'concluida': remote['concluida'] ? 1 : 0,
+                  'sync_status': 'synced',
+                },
+                where: 'remote_id = ?',
+                whereArgs: [remote['id']]);
+          }
         } else {
           await db.insert(DBHelper.tabelaMetas, {
             'remote_id': remote['id'],
@@ -571,6 +381,8 @@ class SyncManager {
 
     if (pending.isEmpty) return;
 
+    LoggerService.info('Processando ${pending.length} proventos pendentes...');
+
     for (var localData in pending) {
       final syncStatus = localData['sync_status'] as String? ?? 'pending';
       final remoteId = localData['remote_id']?.toString();
@@ -579,6 +391,7 @@ class SyncManager {
         if (syncStatus == 'deleted') {
           if (remoteId != null && remoteId.isNotEmpty) {
             await supabase.from('proventos').delete().eq('id', remoteId);
+            LoggerService.info('Provento deletado do servidor: $remoteId');
           }
           await db.delete(DBHelper.tabelaProventos,
               where: 'id = ?', whereArgs: [localData['id']]);
@@ -593,6 +406,7 @@ class SyncManager {
             'data_com': localData['data_com']?.toString().split('T')[0],
             'total_recebido': localData['total_recebido'],
             'user_id': user.id,
+            'updated_at': DateTime.now().toIso8601String(),
           };
 
           if (remoteId != null && remoteId.isNotEmpty) {
@@ -615,6 +429,8 @@ class SyncManager {
         }
       } catch (e) {
         LoggerService.error('Erro ao sincronizar provento: $e');
+        await db.update(DBHelper.tabelaProventos, {'sync_status': 'failed'},
+            where: 'id = ?', whereArgs: [localData['id']]);
       }
     }
   }
@@ -624,29 +440,47 @@ class SyncManager {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
+    LoggerService.info('Buscando proventos do servidor...');
+
     try {
+      final localDeleted = await db.query(
+        DBHelper.tabelaProventos,
+        where: 'sync_status = ? AND user_id = ?',
+        whereArgs: ['deleted', user.id],
+      );
+
+      final deletedRemoteIds = localDeleted
+          .map((e) => e['remote_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .toList();
+
       final remoteProventos =
           await supabase.from('proventos').select().eq('user_id', user.id);
 
       for (var remote in remoteProventos) {
+        if (deletedRemoteIds.contains(remote['id'])) continue;
+
         final existing = await db.query(DBHelper.tabelaProventos,
             where: 'remote_id = ?', whereArgs: [remote['id']]);
 
         if (existing.isNotEmpty) {
-          await db.update(
-              DBHelper.tabelaProventos,
-              {
-                'ticker': remote['ticker'],
-                'tipo_provento': remote['tipo_provento'],
-                'valor_por_cota': remote['valor_por_cota'],
-                'quantidade': remote['quantidade'],
-                'data_pagamento': remote['data_pagamento'],
-                'data_com': remote['data_com'],
-                'total_recebido': remote['total_recebido'],
-                'sync_status': 'synced',
-              },
-              where: 'remote_id = ?',
-              whereArgs: [remote['id']]);
+          final localSyncStatus = existing.first['sync_status'] as String?;
+          if (localSyncStatus != 'pending') {
+            await db.update(
+                DBHelper.tabelaProventos,
+                {
+                  'ticker': remote['ticker'],
+                  'tipo_provento': remote['tipo_provento'],
+                  'valor_por_cota': remote['valor_por_cota'],
+                  'quantidade': remote['quantidade'],
+                  'data_pagamento': remote['data_pagamento'],
+                  'data_com': remote['data_com'],
+                  'total_recebido': remote['total_recebido'],
+                  'sync_status': 'synced',
+                },
+                where: 'remote_id = ?',
+                whereArgs: [remote['id']]);
+          }
         } else {
           await db.insert(DBHelper.tabelaProventos, {
             'remote_id': remote['id'],
@@ -682,6 +516,9 @@ class SyncManager {
 
     if (pending.isEmpty) return;
 
+    LoggerService.info(
+        'Processando ${pending.length} itens de renda fixa pendentes...');
+
     for (var localData in pending) {
       final syncStatus = localData['sync_status'] as String? ?? 'pending';
       final remoteId = localData['remote_id']?.toString();
@@ -690,6 +527,7 @@ class SyncManager {
         if (syncStatus == 'deleted') {
           if (remoteId != null && remoteId.isNotEmpty) {
             await supabase.from('renda_fixa').delete().eq('id', remoteId);
+            LoggerService.info('Renda fixa deletada do servidor: $remoteId');
           }
           await db.delete(DBHelper.tabelaRendaFixa,
               where: 'id = ?', whereArgs: [localData['id']]);
@@ -705,6 +543,7 @@ class SyncManager {
                 localData['data_vencimento']?.toString().split('T')[0],
             'status': localData['status'],
             'user_id': user.id,
+            'updated_at': DateTime.now().toIso8601String(),
           };
 
           if (remoteId != null && remoteId.isNotEmpty) {
@@ -727,6 +566,8 @@ class SyncManager {
         }
       } catch (e) {
         LoggerService.error('Erro ao sincronizar renda fixa: $e');
+        await db.update(DBHelper.tabelaRendaFixa, {'sync_status': 'failed'},
+            where: 'id = ?', whereArgs: [localData['id']]);
       }
     }
   }
@@ -736,29 +577,47 @@ class SyncManager {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
+    LoggerService.info('Buscando renda fixa do servidor...');
+
     try {
+      final localDeleted = await db.query(
+        DBHelper.tabelaRendaFixa,
+        where: 'sync_status = ? AND user_id = ?',
+        whereArgs: ['deleted', user.id],
+      );
+
+      final deletedRemoteIds = localDeleted
+          .map((e) => e['remote_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .toList();
+
       final remoteRendaFixa =
           await supabase.from('renda_fixa').select().eq('user_id', user.id);
 
       for (var remote in remoteRendaFixa) {
+        if (deletedRemoteIds.contains(remote['id'])) continue;
+
         final existing = await db.query(DBHelper.tabelaRendaFixa,
             where: 'remote_id = ?', whereArgs: [remote['id']]);
 
         if (existing.isNotEmpty) {
-          await db.update(
-              DBHelper.tabelaRendaFixa,
-              {
-                'nome': remote['nome'],
-                'tipo_renda': remote['tipo_renda'],
-                'valor': remote['valor'],
-                'taxa': remote['taxa'],
-                'data_aplicacao': remote['data_aplicacao'],
-                'data_vencimento': remote['data_vencimento'],
-                'status': remote['status'],
-                'sync_status': 'synced',
-              },
-              where: 'remote_id = ?',
-              whereArgs: [remote['id']]);
+          final localSyncStatus = existing.first['sync_status'] as String?;
+          if (localSyncStatus != 'pending') {
+            await db.update(
+                DBHelper.tabelaRendaFixa,
+                {
+                  'nome': remote['nome'],
+                  'tipo_renda': remote['tipo_renda'],
+                  'valor': remote['valor'],
+                  'taxa': remote['taxa'],
+                  'data_aplicacao': remote['data_aplicacao'],
+                  'data_vencimento': remote['data_vencimento'],
+                  'status': remote['status'],
+                  'sync_status': 'synced',
+                },
+                where: 'remote_id = ?',
+                whereArgs: [remote['id']]);
+          }
         } else {
           await db.insert(DBHelper.tabelaRendaFixa, {
             'remote_id': remote['id'],
@@ -794,6 +653,8 @@ class SyncManager {
 
     if (pending.isEmpty) return;
 
+    LoggerService.info('Processando ${pending.length} contas pendentes...');
+
     for (var localData in pending) {
       final syncStatus = localData['sync_status'] as String? ?? 'pending';
       final remoteId = localData['remote_id']?.toString();
@@ -802,6 +663,7 @@ class SyncManager {
         if (syncStatus == 'deleted') {
           if (remoteId != null && remoteId.isNotEmpty) {
             await supabase.from('contas').delete().eq('id', remoteId);
+            LoggerService.info('Conta deletada do servidor: $remoteId');
           }
           await db.delete(DBHelper.tabelaContas,
               where: 'id = ?', whereArgs: [localData['id']]);
@@ -818,6 +680,7 @@ class SyncManager {
             'data_inicio': localData['data_inicio']?.toString().split('T')[0],
             'data_fim': localData['data_fim']?.toString().split('T')[0],
             'user_id': user.id,
+            'updated_at': DateTime.now().toIso8601String(),
           };
 
           if (remoteId != null && remoteId.isNotEmpty) {
@@ -837,6 +700,8 @@ class SyncManager {
         }
       } catch (e) {
         LoggerService.error('Erro ao sincronizar conta: $e');
+        await db.update(DBHelper.tabelaContas, {'sync_status': 'failed'},
+            where: 'id = ?', whereArgs: [localData['id']]);
       }
     }
   }
@@ -846,32 +711,50 @@ class SyncManager {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
+    LoggerService.info('Buscando contas do servidor...');
+
     try {
+      final localDeleted = await db.query(
+        DBHelper.tabelaContas,
+        where: 'sync_status = ? AND user_id = ?',
+        whereArgs: ['deleted', user.id],
+      );
+
+      final deletedRemoteIds = localDeleted
+          .map((e) => e['remote_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .toList();
+
       final remoteContas =
           await supabase.from('contas').select().eq('user_id', user.id);
 
       for (var remote in remoteContas) {
+        if (deletedRemoteIds.contains(remote['id'])) continue;
+
         final existing = await db.query(DBHelper.tabelaContas,
             where: 'remote_id = ?', whereArgs: [remote['id']]);
 
         if (existing.isNotEmpty) {
-          await db.update(
-              DBHelper.tabelaContas,
-              {
-                'nome': remote['nome'],
-                'valor': remote['valor'],
-                'dia_vencimento': remote['dia_vencimento'],
-                'tipo': remote['tipo'],
-                'categoria': remote['categoria'],
-                'ativa': remote['ativa'],
-                'parcelas_total': remote['parcelas_total'],
-                'parcelas_pagas': remote['parcelas_pagas'],
-                'data_inicio': remote['data_inicio'],
-                'data_fim': remote['data_fim'],
-                'sync_status': 'synced',
-              },
-              where: 'remote_id = ?',
-              whereArgs: [remote['id']]);
+          final localSyncStatus = existing.first['sync_status'] as String?;
+          if (localSyncStatus != 'pending') {
+            await db.update(
+                DBHelper.tabelaContas,
+                {
+                  'nome': remote['nome'],
+                  'valor': remote['valor'],
+                  'dia_vencimento': remote['dia_vencimento'],
+                  'tipo': remote['tipo'],
+                  'categoria': remote['categoria'],
+                  'ativa': remote['ativa'],
+                  'parcelas_total': remote['parcelas_total'],
+                  'parcelas_pagas': remote['parcelas_pagas'],
+                  'data_inicio': remote['data_inicio'],
+                  'data_fim': remote['data_fim'],
+                  'sync_status': 'synced',
+                },
+                where: 'remote_id = ?',
+                whereArgs: [remote['id']]);
+          }
         } else {
           await db.insert(DBHelper.tabelaContas, {
             'remote_id': remote['id'],
@@ -895,7 +778,7 @@ class SyncManager {
     }
   }
 
-  // ========== SINCRONIZACAO DE PAGAMENTOS (VALIDACAO REMOVIDA) ==========
+  // ========== SINCRONIZACAO DE PAGAMENTOS ==========
 
   Future<void> syncPendingPagamentos() async {
     final db = await dbHelper.database;
@@ -910,6 +793,8 @@ class SyncManager {
 
     if (pending.isEmpty) return;
 
+    LoggerService.info('Processando ${pending.length} pagamentos pendentes...');
+
     for (var localData in pending) {
       final syncStatus = localData['sync_status'] as String? ?? 'pending';
       final remoteId = localData['remote_id']?.toString();
@@ -921,6 +806,7 @@ class SyncManager {
                 .from('pagamentos_mensais')
                 .delete()
                 .eq('id', remoteId);
+            LoggerService.info('Pagamento deletado do servidor: $remoteId');
           }
           await db.delete(DBHelper.tabelaPagamentos,
               where: 'id = ?', whereArgs: [localData['id']]);
@@ -937,6 +823,7 @@ class SyncManager {
             'data_pagamento': localData['data_pagamento'],
             'status': localData['status'],
             'user_id': user.id,
+            'updated_at': DateTime.now().toIso8601String(),
           };
 
           if (remoteId != null && remoteId.isNotEmpty) {
@@ -960,6 +847,8 @@ class SyncManager {
         }
       } catch (e) {
         LoggerService.error('Erro ao sincronizar pagamento: $e');
+        await db.update(DBHelper.tabelaPagamentos, {'sync_status': 'failed'},
+            where: 'id = ?', whereArgs: [localData['id']]);
       }
     }
   }
@@ -982,14 +871,20 @@ class SyncManager {
       String table, dynamic localId, String remoteId) async {
     final db = await dbHelper.database;
     final user = supabase.auth.currentUser;
-    if (remoteId.isNotEmpty && user != null) {
-      try {
-        await supabase.from(table).delete().eq('id', remoteId);
-      } catch (e) {
-        LoggerService.error('Erro ao deletar no servidor: $e');
-      }
+    if (user == null) {
+      await db.delete(table, where: 'id = ?', whereArgs: [localId]);
+      return;
     }
-    await db.delete(table, where: 'id = ?', whereArgs: [localId]);
+    await db.update(
+        table,
+        {
+          'sync_status': 'deleted',
+          'deleted_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String()
+        },
+        where: 'id = ?',
+        whereArgs: [localId]);
+    syncAll();
   }
 
   Future<void> forcarEnvioTodosDados() async {

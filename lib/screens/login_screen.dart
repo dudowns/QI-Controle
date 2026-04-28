@@ -15,21 +15,22 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final AuthService _auth = AuthService();
   final SyncService _syncService = SyncService();
-  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _loginController =
+      TextEditingController(); // ✅ Email OU Username
   final TextEditingController _senhaController = TextEditingController();
   bool _carregando = false;
   bool _mostrarSenha = false;
 
   Future<void> _fazerLogin() async {
-    if (_emailController.text.isEmpty || _senhaController.text.isEmpty) {
-      _mostrarMensagem('Preencha email e senha', isError: true);
+    if (_loginController.text.isEmpty || _senhaController.text.isEmpty) {
+      _mostrarMensagem('Preencha todos os campos', isError: true);
       return;
     }
 
     setState(() => _carregando = true);
 
     final usuario = await _auth.login(
-      _emailController.text.trim(),
+      _loginController.text.trim(),
       _senhaController.text,
     );
 
@@ -38,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await _syncService.syncNow();
       Navigator.pushReplacementNamed(context, '/main');
     } else {
-      _mostrarMensagem('❌ Email ou senha inválidos', isError: true);
+      _mostrarMensagem('❌ Email/Usuário ou senha inválidos', isError: true);
     }
 
     setState(() => _carregando = false);
@@ -86,22 +87,20 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         child: Stack(
           children: [
-            // 🔥 IMAGEM DE FUNDO (ESPALHADA, TRANSPARENTE)
             SizedBox(
               width: double.infinity,
               height: double.infinity,
               child: Opacity(
-                opacity: 0.15, // 🔥 Deixa a imagem transparente (15%)
+                opacity: 0.15,
                 child: Image.asset(
                   'assets/images/login_illustration.png',
-                  fit: BoxFit.cover, // 🔥 Espalha pela tela toda
+                  fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
-                    return const SizedBox.shrink(); // Some se não tiver imagem
+                    return const SizedBox.shrink();
                   },
                 ),
               ),
             ),
-            // 🔥 CARD BRANCO (por cima)
             Center(
               child: SingleChildScrollView(
                 padding: EdgeInsets.symmetric(
@@ -113,11 +112,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     constraints: const BoxConstraints(maxWidth: 450),
                     padding: const EdgeInsets.all(28),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha:0.95),
+                      color: Colors.white.withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(32),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha:0.15),
+                          color: Colors.black.withValues(alpha: 0.15),
                           blurRadius: 30,
                           offset: const Offset(0, 15),
                           spreadRadius: 5,
@@ -141,14 +140,16 @@ class _LoginScreenState extends State<LoginScreen> {
                               TextStyle(fontSize: 13, color: Colors.grey[600]),
                         ),
                         const SizedBox(height: 32),
+                        // ✅ CAMPO EMAIL OU USERNAME
                         TextField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
+                          controller: _loginController,
+                          keyboardType: TextInputType.text,
                           decoration: InputDecoration(
-                            labelText: 'E-mail',
-                            hintText: 'seu@email.com',
-                            labelStyle: const TextStyle(color: Color(0xFF7B2CBF)),
-                            prefixIcon: const Icon(Icons.email_outlined,
+                            labelText: 'E-mail ou Username',
+                            hintText: 'seu@email.com ou username',
+                            labelStyle:
+                                const TextStyle(color: Color(0xFF7B2CBF)),
+                            prefixIcon: const Icon(Icons.person_outline,
                                 color: Color(0xFF7B2CBF)),
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(16)),
@@ -172,7 +173,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: InputDecoration(
                             labelText: 'Senha',
                             hintText: '••••••••',
-                            labelStyle: const TextStyle(color: Color(0xFF7B2CBF)),
+                            labelStyle:
+                                const TextStyle(color: Color(0xFF7B2CBF)),
                             prefixIcon: const Icon(Icons.lock_outline,
                                 color: Color(0xFF7B2CBF)),
                             suffixIcon: IconButton(
@@ -223,8 +225,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF7B2CBF),
                                     elevation: 3,
-                                    shadowColor:
-                                        const Color(0xFF7B2CBF).withValues(alpha:0.5),
+                                    shadowColor: const Color(0xFF7B2CBF)
+                                        .withValues(alpha: 0.5),
                                     shape: RoundedRectangleBorder(
                                         borderRadius:
                                             BorderRadius.circular(16)),
@@ -243,7 +245,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               Expanded(
                                   child: Divider(color: Colors.grey.shade300)),
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
                                 child: Text('ou continue com',
                                     style: TextStyle(
                                         color: Colors.grey.shade500,
@@ -334,4 +337,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
