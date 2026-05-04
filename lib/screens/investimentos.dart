@@ -1,8 +1,8 @@
-﻿// lib/screens/investimentos.dart
+﻿// lib/screens/investimentos.dart - COMPLETO E CORRIGIDO
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../database/db_helper.dart';
+import '../repositories/repositories.dart';
 import '../models/investimento_model.dart';
 import '../models/renda_fixa_model.dart';
 import '../services/renda_fixa_diaria.dart';
@@ -10,6 +10,7 @@ import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
 import '../widgets/adicionar_investimento_modal.dart';
 import '../widgets/toast.dart';
+import '../services/b3_service.dart';
 import '../services/logger_service.dart';
 import 'package:sqflite/sqflite.dart';
 import 'transacoes_screen.dart';
@@ -21,7 +22,7 @@ class InvestimentosScreen extends StatefulWidget {
 }
 
 class _InvestimentosScreenState extends State<InvestimentosScreen> {
-  final DBHelper _dbHelper = DBHelper();
+  final RendaFixaRepository _rendaFixaRepo = RendaFixaRepository();
   final _supabase = Supabase.instance.client;
 
   List<Investimento> _investimentos = [];
@@ -54,10 +55,8 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
     super.initState();
     _carregarDados();
     _carregarUltimasTransacoes();
-    // ❌ NÃO CHAMA _sincronizarComSupabase();
   }
 
-  // ✅ SINCRONIZAR COM SUPABASE (usa 'investments')
   Future<void> _sincronizarComSupabase() async {
     if (_sincronizando) return;
     _sincronizando = true;
@@ -65,41 +64,38 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
       final userId = _supabase.auth.currentUser?.id;
       LoggerService.info('🔄 Sincronizando investimentos com Supabase...');
       final response = await _supabase.from('investments').select();
-      if (response == null || response.isEmpty) {
+      if (response.isEmpty) {
         LoggerService.info('📭 Nenhum investimento no Supabase');
         return;
       }
-      final db = await _dbHelper.database;
+      final db = await _rendaFixaRepo.getDatabase();
       for (var inv in response) {
         try {
-          final existente = await db.query('investments',
-              where: 'remote_id = ?', whereArgs: [inv['id']?.toString()]);
-          if (existente.isNotEmpty) {
-            LoggerService.info('⏭️ ${inv['ticker']} já existe, pulando...');
-            continue;
-          }
-          await db.insert(
-              'investments',
-              {
-                'ticker': inv['ticker']?.toString() ?? '',
-                'tipo': inv['tipo']?.toString() ?? 'ACAO',
-                'tipo_transacao': inv['tipo_transacao']?.toString() == 'compra'
-                    ? 'COMPRA'
-                    : 'VENDA',
-                'quantidade':
-                    double.tryParse(inv['quantidade']?.toString() ?? '0') ?? 0,
-                'preco_medio':
-                    double.tryParse(inv['preco_medio']?.toString() ?? '0') ?? 0,
-                'preco_atual':
-                    double.tryParse(inv['preco_medio']?.toString() ?? '0') ?? 0,
-                'data_compra': inv['data_compra']?.toString() ??
-                    inv['created_at']?.toString() ??
-                    DateTime.now().toIso8601String(),
-                'user_id': userId,
-                'remote_id': inv['id']?.toString(),
-                'sync_status': 'synced',
-              },
-              conflictAlgorithm: ConflictAlgorithm.ignore);
+          final existente = await db.query(
+            'investments',
+            where: 'remote_id = ?',
+            whereArgs: [inv['id']?.toString()],
+          );
+          if (existente.isNotEmpty) continue;
+          await db.insert('investments', {
+            'ticker': inv['ticker']?.toString() ?? '',
+            'tipo': inv['tipo']?.toString() ?? 'ACAO',
+            'tipo_transacao': inv['tipo_transacao']?.toString() == 'compra'
+                ? 'COMPRA'
+                : 'VENDA',
+            'quantidade':
+                double.tryParse(inv['quantidade']?.toString() ?? '0') ?? 0,
+            'preco_medio':
+                double.tryParse(inv['preco_medio']?.toString() ?? '0') ?? 0,
+            'preco_atual':
+                double.tryParse(inv['preco_medio']?.toString() ?? '0') ?? 0,
+            'data_compra': inv['data_compra']?.toString() ??
+                inv['created_at']?.toString() ??
+                DateTime.now().toIso8601String(),
+            'user_id': userId,
+            'remote_id': inv['id']?.toString(),
+            'sync_status': 'synced',
+          });
         } catch (e) {
           LoggerService.error('Erro ao inserir: $e');
         }
@@ -114,13 +110,11 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
     }
   }
 
-  // ✅ CARREGAR DADOS (usa 'investments' e colunas corretas)
   Future<void> _carregarDados() async {
     if (!mounted) return;
-    _dbHelper.limparCacheCompleto();
     setState(() => _isLoading = true);
     try {
-      final db = await _dbHelper.database;
+      final db = await _rendaFixaRepo.getDatabase();
       final transacoes =
           await db.query('investments', orderBy: 'data_compra ASC');
       final Map<String, Investimento> agrupados = {};
@@ -180,20 +174,20 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
       }
       _investimentos = agrupados.values.toList();
       _investimentos.sort((a, b) => a.ticker.compareTo(b.ticker));
-      final rendaFixa = await _dbHelper.getAllRendaFixa();
+      final rendaFixa = await _rendaFixaRepo.getAll();
       _totalRendaFixa = 0;
       final hoje = DateTime.now();
-      for (var item in rendaFixa) {
-        final inv = RendaFixaModel.fromJson(item);
+      for (var inv in rendaFixa) {
         _totalRendaFixa += RendaFixaDiaria.calcularValorEm(inv, hoje);
       }
-      if (_totalRendaFixa > 0)
+      if (_totalRendaFixa > 0) {
         _investimentos.add(Investimento(
             ticker: 'RENDA FIXA',
             tipo: 'RENDA_FIXA',
             quantidade: 1,
             precoMedio: _totalRendaFixa,
             precoAtual: _totalRendaFixa));
+      }
       _aplicarFiltro();
       _calcularTotais();
     } catch (e) {
@@ -210,17 +204,70 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
     return 'ACAO';
   }
 
+  // ✅ NOVO: Atualizar cotações reais via B3Service
   Future<void> _atualizarPrecos() async {
     if (_atualizandoCotacoes) return;
     setState(() => _atualizandoCotacoes = true);
+
     try {
-      await Future.delayed(const Duration(seconds: 1));
+      final tickers = _investimentos
+          .where((inv) => inv.ticker != 'RENDA FIXA')
+          .map((inv) => inv.ticker)
+          .toList();
+
+      if (tickers.isEmpty) {
+        if (mounted) Toast.info(context, 'Nenhum ticker para atualizar');
+        return;
+      }
+
+      LoggerService.info(
+          '📈 Atualizando cotações para ${tickers.length} ativos...');
+
+      final b3Service = B3Service();
+      final resultados = await b3Service.getCotacoesEmLote(tickers);
+
+      int atualizados = 0;
+      for (var inv in _investimentos) {
+        if (inv.ticker == 'RENDA FIXA') continue;
+
+        final cotacao = resultados[inv.ticker];
+        if (cotacao != null && cotacao['preco'] != null) {
+          final preco = cotacao['preco'] as double;
+          if (preco > 0) {
+            inv.precoAtual = preco;
+            atualizados++;
+
+            // Atualiza no banco local também
+            try {
+              final db = await _rendaFixaRepo.getDatabase();
+              await db.update(
+                'investments',
+                {
+                  'preco_atual': preco,
+                  'ultima_atualizacao': DateTime.now().toIso8601String()
+                },
+                where: 'ticker = ?',
+                whereArgs: [inv.ticker],
+              );
+            } catch (e) {
+              // Ignora erro de atualização local
+            }
+          }
+        }
+      }
+
       _calcularTotais();
-      if (mounted)
-        Toast.info(context, 'Funcionalidade de cotacoes em desenvolvimento');
+
+      if (mounted) {
+        if (atualizados > 0) {
+          Toast.success(context, '✅ $atualizados cotações atualizadas!');
+        } else {
+          Toast.warning(context, '⚠️ Nenhuma cotação encontrada');
+        }
+      }
     } catch (e) {
       LoggerService.error('Erro ao atualizar cotacoes: $e');
-      if (mounted) Toast.error(context, 'Erro ao atualizar: $e');
+      if (mounted) Toast.error(context, 'Erro ao atualizar cotações');
     } finally {
       if (mounted) setState(() => _atualizandoCotacoes = false);
     }
@@ -230,13 +277,10 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
     double totalInvestido = 0, totalAtual = 0;
     int ativos = 0;
     for (var inv in _investimentos) {
-      if (inv.ticker != 'RENDA FIXA') {
-        totalInvestido += inv.valorInvestido;
-        totalAtual += inv.valorAtual;
-        ativos++;
-      }
+      totalInvestido += inv.valorInvestido;
+      totalAtual += inv.valorAtual;
+      ativos++;
     }
-    totalAtual += _totalRendaFixa;
     _valorInvestido = totalInvestido;
     _patrimonioTotal = totalAtual;
     _ganhoPerda = _patrimonioTotal - _valorInvestido;
@@ -245,12 +289,10 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
     _totalAtivos = ativos;
   }
 
-  // ✅ CARREGAR ÚLTIMAS TRANSAÇÕES (usa 'investments')
   Future<void> _carregarUltimasTransacoes() async {
-    _dbHelper.limparCacheCompleto();
     setState(() => _carregandoTransacoes = true);
     try {
-      final db = await _dbHelper.database;
+      final db = await _rendaFixaRepo.getDatabase();
       _ultimasTransacoes =
           await db.query('investments', orderBy: 'data_compra DESC', limit: 5);
     } catch (e) {
@@ -299,9 +341,9 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
     };
     for (var inv in _investimentos) {
       final tipo = inv.tipo.toUpperCase();
-      if (tipo == 'ACAO')
+      if (tipo == 'ACAO') {
         valores['Acoes'] = (valores['Acoes'] ?? 0) + inv.valorAtual;
-      else if (tipo == 'FII')
+      } else if (tipo == 'FII')
         valores['FIIs'] = (valores['FIIs'] ?? 0) + inv.valorAtual;
       else if (tipo == 'CRIPTO')
         valores['Cripto'] = (valores['Cripto'] ?? 0) + inv.valorAtual;
@@ -335,14 +377,12 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
         });
   }
 
-  // ✅ ADICIONAR INVESTIMENTO (usa 'investments')
   Future<void> _adicionarInvestimento(Investimento investimento,
       String tipoTransacao, DateTime dataTransacao) async {
     try {
-      final db = await _dbHelper.database;
+      final db = await _rendaFixaRepo.getDatabase();
       final userId = _supabase.auth.currentUser?.id;
 
-      // ✅ PRIMEIRO: Envia pro Supabase e pega o remote_id
       String? remoteId;
       try {
         final response = await _supabase
@@ -359,14 +399,11 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
             })
             .select()
             .single();
-
         remoteId = response['id']?.toString();
-        LoggerService.info('✅ Investimento sincronizado com Supabase');
       } catch (e) {
         LoggerService.error('Erro ao sincronizar com Supabase: $e');
       }
 
-      // ✅ DEPOIS: Insere no banco local COM o remote_id
       await db.insert('investments', {
         'ticker': investimento.ticker,
         'tipo': investimento.tipo,
@@ -376,11 +413,10 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
         'preco_atual': investimento.precoMedio,
         'data_compra': dataTransacao.toIso8601String().split('T')[0],
         'user_id': userId,
-        'remote_id': remoteId, // ✅ SALVA O REMOTE ID
+        'remote_id': remoteId,
         'sync_status': 'synced',
       });
 
-      _dbHelper.limparCacheCompleto();
       await _carregarDados();
       await _carregarUltimasTransacoes();
       if (mounted) {
@@ -403,7 +439,6 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
         });
   }
 
-  // ========== BUILD (ORIGINAL COMPLETO MANTIDO) ==========
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -668,7 +703,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
 
   Widget _buildDistribuicaoCard() {
     final distribuicao = _dadosDistribuicao;
-    if (distribuicao.isEmpty)
+    if (distribuicao.isEmpty) {
       return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -679,6 +714,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
           child: Center(
               child: Text('Nenhum investimento cadastrado',
                   style: TextStyle(color: AppColors.textSecondary(context)))));
+    }
     return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -703,75 +739,87 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
           const SizedBox(height: 16),
           Row(children: [
             Expanded(
-                flex: 4,
-                child: SizedBox(
-                    height: 130,
-                    child: PieChart(PieChartData(
-                        sectionsSpace: 2,
-                        centerSpaceRadius: 30,
-                        sections: distribuicao.asMap().entries.map((e) {
-                          final item = e.value;
-                          final p = item['percentual'] as double;
-                          final cat = item['categoria'] as String;
-                          return PieChartSectionData(
-                              value: item['valor'] as double,
-                              color: _coresPorTipo[cat] ?? Colors.grey,
-                              title: p > 8 ? '${p.toStringAsFixed(0)}%' : '',
-                              titleStyle: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white),
-                              radius: 55);
-                        }).toList())))),
+              flex: 4,
+              child: SizedBox(
+                height: 130,
+                child: PieChart(
+                  PieChartData(
+                    sectionsSpace: 2,
+                    centerSpaceRadius: 30,
+                    sections: distribuicao.asMap().entries.map((e) {
+                      final item = e.value;
+                      final p = item['percentual'] as double;
+                      final cat = item['categoria'] as String;
+                      return PieChartSectionData(
+                        value: item['valor'] as double,
+                        color: _coresPorTipo[cat] ?? Colors.grey,
+                        title: p > 3 ? '${p.toStringAsFixed(0)}%' : '',
+                        titleStyle: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                        radius: 55,
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(width: 16),
             Expanded(
-                flex: 5,
-                child: Column(
-                    children: distribuicao.map((item) {
+              flex: 5,
+              child: Column(
+                children: distribuicao.map((item) {
                   final cat = item['categoria'] as String;
                   final v = item['valor'] as double;
                   final p = item['percentual'] as double;
                   final cor = _coresPorTipo[cat] ?? Colors.grey;
                   return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(children: [
-                        Expanded(
-                            flex: 2,
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(cat,
-                                      style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 4),
-                                  Container(height: 2, width: 30, color: cor)
-                                ])),
-                        Expanded(
-                            flex: 1,
-                            child: Text('${p.toStringAsFixed(1)}%',
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.textSecondary(context)))),
-                        const SizedBox(width: 8),
-                        Expanded(
-                            flex: 1,
-                            child: Text(Formatador.moeda(v),
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: cor)))
-                      ]));
-                }).toList()))
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(children: [
+                      Expanded(
+                        flex: 2,
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(cat,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 4),
+                              Container(height: 2, width: 30, color: cor),
+                            ]),
+                      ),
+                      Expanded(
+                        flex: 1,
+                        child: Text('${p.toStringAsFixed(1)}%',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary(context))),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 1,
+                        child: Text(Formatador.moeda(v),
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: cor)),
+                      ),
+                    ]),
+                  );
+                }).toList(),
+              ),
+            ),
           ]),
         ]));
   }
 
   Widget _buildTop5Card() {
     final top5 = _top5Ativos;
-    if (top5.isEmpty)
+    if (top5.isEmpty) {
       return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -782,6 +830,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
           child: Center(
               child: Text('Nenhum investimento',
                   style: TextStyle(color: AppColors.textSecondary(context)))));
+    }
     return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -936,7 +985,6 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                           MaterialPageRoute(
                               builder: (_) => const TransacoesScreen()));
                       if (result == true) {
-                        _dbHelper.limparCacheCompleto();
                         await _carregarUltimasTransacoes();
                         await _carregarDados();
                       }
@@ -1027,7 +1075,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
   }
 
   Widget _buildListaAtivos() {
-    if (_investimentosFiltrados.isEmpty)
+    if (_investimentosFiltrados.isEmpty) {
       return Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(Icons.show_chart, size: 64, color: AppColors.muted(context)),
@@ -1043,6 +1091,7 @@ class _InvestimentosScreenState extends State<InvestimentosScreen> {
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white))
       ]));
+    }
     return ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _investimentosFiltrados.length,

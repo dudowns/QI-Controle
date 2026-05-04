@@ -1,4 +1,5 @@
 ﻿// lib/repositories/renda_fixa_repository.dart
+import 'package:sqflite/sqflite.dart';
 import '../database/db_helper.dart';
 import '../models/renda_fixa_model.dart';
 import '../services/sync_service.dart';
@@ -10,6 +11,11 @@ class RendaFixaRepository {
   final SyncService _syncService = SyncService();
 
   static const String tabelaRendaFixa = DBHelper.tabelaRendaFixa;
+
+  /// Acesso direto ao banco para queries complexas
+  Future<Database> getDatabase() async {
+    return await _dbHelper.database;
+  }
 
   /// Insere um novo investimento
   Future<int> insert(RendaFixaModel investimento) async {
@@ -233,4 +239,3 @@ class RendaFixaRepository {
     return todos.where((inv) => inv.dataVencimento.isBefore(hoje)).toList();
   }
 }
-

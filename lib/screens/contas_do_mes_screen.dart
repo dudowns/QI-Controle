@@ -1,7 +1,7 @@
 // lib/screens/contas_do_mes_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../repositories/conta_repository.dart';
+import '../repositories/repositories.dart';
 import '../widgets/adicionar_conta_modal.dart';
 import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
@@ -25,6 +25,10 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
   String _filtroStatus = 'Todas';
 
   final Map<String, Map<String, dynamic>> _parcelasCache = {};
+
+  // ✅ Cache local para evitar buscas repetidas
+  final Map<String, List<Map<String, dynamic>>> _cachePagamentos = {};
+  DateTime? _ultimaAtualizacao;
 
   final List<String> _meses = [
     'Jan',
@@ -53,12 +57,31 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
       return;
     }
 
+    // ✅ Verifica cache antes de buscar
+    final cacheKey = '${_mesSelecionado.year}_${_mesSelecionado.month}';
+    if (_cachePagamentos.containsKey(cacheKey) &&
+        _ultimaAtualizacao != null &&
+        DateTime.now().difference(_ultimaAtualizacao!) <
+            const Duration(minutes: 2)) {
+      LoggerService.info('✅ Usando cache para $cacheKey');
+      setState(() {
+        _pagamentos = _cachePagamentos[cacheKey]!;
+        _isLoading = false;
+      });
+      return;
+    }
+
     _carregando = true;
     setState(() => _isLoading = true);
 
     try {
       _pagamentos = await _repository.getPagamentosDoMes(
           _mesSelecionado.year, _mesSelecionado.month);
+
+      // ✅ Salva no cache
+      _cachePagamentos[cacheKey] = List.from(_pagamentos);
+      _ultimaAtualizacao = DateTime.now();
+
       await _carregarParcelasInfo();
     } catch (e) {
       LoggerService.error('Erro ao carregar: $e');
@@ -129,10 +152,12 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
 
   List<Map<String, dynamic>> get _contasFiltradas {
     if (_filtroStatus == 'Todas') return _pagamentos;
-    if (_filtroStatus == 'Pendentes')
+    if (_filtroStatus == 'Pendentes') {
       return _pagamentos.where((b) => b['status'] != 1).toList();
-    if (_filtroStatus == 'Pagas')
+    }
+    if (_filtroStatus == 'Pagas') {
       return _pagamentos.where((b) => b['status'] == 1).toList();
+    }
     if (_filtroStatus == 'Parceladas') {
       return _pagamentos.where((b) {
         final contaId = b['conta_id']?.toString() ?? '';
@@ -152,6 +177,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
       Toast.error(context, result.error);
     } else {
       Toast.success(context, 'Conta paga!');
+      _limparCache(); // ✅ Limpa cache após ação
     }
   }
 
@@ -164,6 +190,7 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
       Toast.error(context, result.error);
     } else {
       Toast.success(context, 'Pagamento desfeito!');
+      _limparCache(); // ✅ Limpa cache após ação
     }
   }
 
@@ -175,7 +202,10 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
     await AdicionarContaModal.show(
         context: context,
         conta: conta.toJson(),
-        onSalvo: () => _carregarDados());
+        onSalvo: () {
+          _limparCache(); // ✅ Limpa cache após ação
+          _carregarDados();
+        });
   }
 
   void _excluirConta(Map<String, dynamic> pagamento) async {
@@ -198,9 +228,16 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
     if (confirmar == true) {
       await _repository
           .deletarContaString(pagamento['conta_id']?.toString() ?? '');
+      _limparCache(); // ✅ Limpa cache após ação
       _carregarDados();
       Toast.success(context, 'Conta excluida!');
     }
+  }
+
+  // ✅ Limpa o cache local
+  void _limparCache() {
+    _cachePagamentos.clear();
+    _ultimaAtualizacao = null;
   }
 
   String _formatarDataVencimento(Map<String, dynamic> pagamento) {
@@ -242,7 +279,10 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
         actions: [
           IconButton(
               icon: Icon(Icons.refresh, color: AppColors.textPrimary(context)),
-              onPressed: _carregarDados,
+              onPressed: () {
+                _limparCache(); // ✅ Limpa cache ao atualizar manualmente
+                _carregarDados();
+              },
               tooltip: 'Atualizar'),
           const SizedBox(width: 8),
         ],
@@ -287,7 +327,11 @@ class _ContasDoMesScreenState extends State<ContasDoMesScreen> {
                     const SizedBox(height: 6),
                     ElevatedButton.icon(
                       onPressed: () => AdicionarContaModal.show(
-                          context: context, onSalvo: () => _carregarDados()),
+                          context: context,
+                          onSalvo: () {
+                            _limparCache();
+                            _carregarDados();
+                          }),
                       icon: const Icon(Icons.add, size: 14),
                       label: const Text('Nova Conta',
                           style: TextStyle(fontSize: 11)),

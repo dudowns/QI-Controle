@@ -1,7 +1,7 @@
 ﻿// lib/screens/nova_transacao.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../database/db_helper.dart';
+import '../repositories/repositories.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_categories.dart';
 import '../utils/formatters.dart';
@@ -14,7 +14,7 @@ class NovaTransacaoScreen extends StatefulWidget {
 }
 
 class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
-  final DBHelper _dbHelper = DBHelper();
+  final LancamentoRepository _repo = LancamentoRepository();
   final _formKey = GlobalKey<FormState>();
 
   final _descricaoController = TextEditingController();
@@ -67,7 +67,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
       };
 
       try {
-        await _dbHelper.insertLancamento(novoLancamento);
+        await _repo.insertLancamento(novoLancamento);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -190,7 +190,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _categoriaSelecionada, // âœ… CORRIGIDO
+                initialValue: _categoriaSelecionada, // âœ… CORRIGIDO
                 decoration: const InputDecoration(
                   labelText: 'Categoria',
                   border: OutlineInputBorder(),
@@ -285,4 +285,3 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
     );
   }
 }
-

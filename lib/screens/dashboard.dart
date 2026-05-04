@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-import '../database/db_helper.dart';
 import '../constants/app_colors.dart';
+import '../repositories/repositories.dart';
 import '../constants/app_categories.dart';
 import '../utils/formatters.dart';
 import '../widgets/animated_counter.dart';
@@ -18,7 +18,9 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final DBHelper _dbHelper = DBHelper();
+  final LancamentoRepository _lancamentoRepository = LancamentoRepository();
+  final MetaRepository _metaRepository = MetaRepository();
+  final ContaRepository _contaRepository = ContaRepository();
   final DashboardService _dashboardService = DashboardService();
 
   List<Map<String, dynamic>> _lancamentos = [];
@@ -72,28 +74,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _carregarDados();
   }
 
-  // ✅ ÚNICO MÉTODO ALTERADO
   Future<void> _carregarDados() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
       final metricas = await _dashboardService.getMetricasRapidas();
-      _totalReceitas = metricas['receitas_mes'] ?? 0;
-      _totalDespesas = metricas['despesas_mes'] ?? 0;
-      _metasAtivas = metricas['metas_ativas'] ?? 0;
+      _totalReceitas = (metricas['receitas_mes'] ?? 0).toDouble();
+      _totalDespesas = (metricas['despesas_mes'] ?? 0).toDouble();
+      _metasAtivas = (metricas['metas_ativas'] ?? 0) as int;
 
       final contasPendentes = await _dashboardService.getContasPendentesPorMes(
         _mesSelecionado.year,
         _mesSelecionado.month,
       );
-      _totalContasPendentes = contasPendentes['valor_total'] ?? 0.0;
-      _quantidadeContas = contasPendentes['quantidade'] ?? 0;
+      _totalContasPendentes =
+          (contasPendentes['valor_total'] ?? 0.0).toDouble();
+      _quantidadeContas = (contasPendentes['quantidade'] ?? 0) as int;
 
-      _lancamentos = await _dbHelper.getAllLancamentos();
+      // ✅ Usa repositórios
+      _lancamentos = await _lancamentoRepository.getAllLancamentos();
+      _metas = await _metaRepository.getAllMetas();
+      _contas = await _contaRepository.getPagamentosDoMes(
+          _mesSelecionado.year, _mesSelecionado.month);
 
-      // ✅ USA 'investments' E COLUNAS CORRETAS (preco_medio, data_compra)
-      final db = await _dbHelper.database;
+      // Carregar investimentos
+      final db = await _contaRepository.getDatabase();
       final transacoes =
           await db.query('investments', orderBy: 'data_compra ASC');
 
@@ -137,9 +143,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       _investimentos = agrupados.values.toList();
-      _metas = await _dbHelper.getAllMetas();
-      _contas = await _dbHelper.getPagamentosDoMes(
-          _mesSelecionado.year, _mesSelecionado.month);
 
       _calcularTotais();
       _calcularEstatisticas();
@@ -157,14 +160,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _calcularTotais() {
     double receitas = 0, despesas = 0;
     for (var lancamento in _lancamentos) {
-      final data = DateTime.parse(lancamento['data'].toString());
-      if (data.year == _mesSelecionado.year &&
-          data.month == _mesSelecionado.month) {
-        if (lancamento['tipo'] == 'receita') {
-          receitas += (lancamento['valor'] as num).toDouble();
-        } else {
-          despesas += (lancamento['valor'] as num).toDouble();
+      try {
+        final data = DateTime.parse(lancamento['data'].toString());
+        if (data.year == _mesSelecionado.year &&
+            data.month == _mesSelecionado.month) {
+          final valor = (lancamento['valor'] as num).toDouble();
+          if (lancamento['tipo'] == 'receita') {
+            receitas += valor;
+          } else {
+            despesas += valor;
+          }
         }
+      } catch (e) {
+        debugPrint('Erro ao processar lançamento: $e');
       }
     }
     _totalReceitas = receitas;
@@ -183,32 +191,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     int ativas = 0;
     for (var meta in _metas) {
-      if ((meta['concluida'] as int) == 0) ativas++;
+      if ((meta['concluida'] as int?) == 0) ativas++;
     }
     _metasAtivas = ativas;
   }
 
   void _calcularEstatisticas() {
     final lancamentosMes = _lancamentos.where((l) {
-      final data = DateTime.parse(l['data'].toString());
-      return data.year == _mesSelecionado.year &&
-          data.month == _mesSelecionado.month;
+      try {
+        final data = DateTime.parse(l['data'].toString());
+        return data.year == _mesSelecionado.year &&
+            data.month == _mesSelecionado.month;
+      } catch (e) {
+        return false;
+      }
     }).toList();
 
     double despesasTotal = 0;
+    double receitasTotal = 0;
     final Map<String, double> gastosPorCategoria = {};
+
     for (var l in lancamentosMes) {
+      final valor = (l['valor'] as num).toDouble();
       if (l['tipo'] != 'receita') {
-        final valor = (l['valor'] as num).toDouble();
         despesasTotal += valor;
         final cat = l['categoria']?.toString() ?? 'Outros';
         gastosPorCategoria[cat] = (gastosPorCategoria[cat] ?? 0) + valor;
+      } else {
+        receitasTotal += valor;
       }
     }
 
     final diasNoMes =
         DateTime(_mesSelecionado.year, _mesSelecionado.month + 1, 0).day;
-    _mediaGastosDiaria = despesasTotal / diasNoMes;
+    _mediaGastosDiaria = diasNoMes > 0 ? despesasTotal / diasNoMes : 0;
 
     if (gastosPorCategoria.isNotEmpty) {
       MapEntry<String, double>? maior;
@@ -220,11 +236,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _maiorGasto = null;
     }
 
-    double receitasTotal = 0;
-    for (var l in lancamentosMes) {
-      if (l['tipo'] == 'receita')
-        receitasTotal += (l['valor'] as num).toDouble();
-    }
     _taxaEconomia = receitasTotal > 0
         ? ((receitasTotal - despesasTotal) / receitasTotal) * 100
         : 0;
@@ -236,13 +247,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final data = DateTime(_mesSelecionado.year, _mesSelecionado.month - i, 1);
       double receitas = 0, despesas = 0;
       for (var l in _lancamentos) {
-        final dl = DateTime.parse(l['data'].toString());
-        if (dl.year == data.year && dl.month == data.month) {
-          if (l['tipo'] == 'receita') {
-            receitas += (l['valor'] as num).toDouble();
-          } else {
-            despesas += (l['valor'] as num).toDouble();
+        try {
+          final dl = DateTime.parse(l['data'].toString());
+          if (dl.year == data.year && dl.month == data.month) {
+            final valor = (l['valor'] as num).toDouble();
+            if (l['tipo'] == 'receita') {
+              receitas += valor;
+            } else {
+              despesas += valor;
+            }
           }
+        } catch (e) {
+          debugPrint('Erro ao processar evolução mensal: $e');
         }
       }
       _evolucaoMensal
@@ -254,15 +270,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final Map<String, double> gastos = {};
     double totalDespesas = 0;
     for (var l in _lancamentos) {
-      final data = DateTime.parse(l['data'].toString());
-      if (data.year == _mesSelecionado.year &&
-          data.month == _mesSelecionado.month) {
-        if (l['tipo'] != 'receita') {
-          final valor = (l['valor'] as num).toDouble();
-          totalDespesas += valor;
-          final cat = l['categoria']?.toString() ?? 'Outros';
-          gastos[cat] = (gastos[cat] ?? 0) + valor;
+      try {
+        final data = DateTime.parse(l['data'].toString());
+        if (data.year == _mesSelecionado.year &&
+            data.month == _mesSelecionado.month) {
+          if (l['tipo'] != 'receita') {
+            final valor = (l['valor'] as num).toDouble();
+            totalDespesas += valor;
+            final cat = l['categoria']?.toString() ?? 'Outros';
+            gastos[cat] = (gastos[cat] ?? 0) + valor;
+          }
         }
+      } catch (e) {
+        debugPrint('Erro ao calcular gastos por categoria: $e');
       }
     }
     _gastosPorCategoria = gastos.entries
@@ -278,9 +298,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _carregarUltimosLancamentos() {
     _ultimosLancamentos = _lancamentos.where((l) {
-      final data = DateTime.parse(l['data'].toString());
-      return data.year == _mesSelecionado.year &&
-          data.month == _mesSelecionado.month;
+      try {
+        final data = DateTime.parse(l['data'].toString());
+        return data.year == _mesSelecionado.year &&
+            data.month == _mesSelecionado.month;
+      } catch (e) {
+        return false;
+      }
     }).toList()
       ..sort((a, b) => b['data'].compareTo(a['data']));
     _ultimosLancamentos = _ultimosLancamentos.take(5).toList();
@@ -292,13 +316,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _carregarDados();
   }
 
-  String _formatarMoeda(double valor) => _realFormat.format(valor);
+  String _formatarMoeda(double valor) {
+    if (valor.isNaN || valor.isInfinite) return 'R\$ 0,00';
+    return _realFormat.format(valor);
+  }
+
   String _formatarEixoY(double valor) => valor >= 1000
       ? '${(valor / 1000).toStringAsFixed(0)}k'
       : valor.toStringAsFixed(0);
+
   void _irParaLancamentos() => Navigator.pushNamed(context, '/lancamentos');
 
-  // ========== BUILD (ORIGINAL COMPLETO) ==========
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
@@ -413,6 +441,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildStatCard(String title, double value, Color color, IconData icon,
       {String? subtitle}) {
+    final displayValue = (value.isNaN || value.isInfinite) ? 0.0 : value;
+
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
@@ -423,12 +453,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(icon, size: 18, color: color),
           const SizedBox(height: 8),
-          AnimatedCounter(
-              value: value,
-              duration: const Duration(milliseconds: 1000),
-              style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold, color: color),
-              formatter: (val) => _formatarMoeda(val)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(_formatarMoeda(displayValue),
+                style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+          ),
           Text(title,
               style: TextStyle(
                   fontSize: 11, color: AppColors.textSecondary(context))),
@@ -444,7 +475,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildExpensesSection() {
     final gastos = _gastosPorCategoria;
     final despesasTotal = _totalDespesas;
-    if (gastos.isEmpty)
+    if (gastos.isEmpty) {
       return Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -454,6 +485,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Center(
               child: Text('Nenhum gasto registrado',
                   style: TextStyle(color: AppColors.textSecondary(context)))));
+    }
     final pizzaData = gastos.map((item) {
       final v = (item['total'] as num).toDouble();
       return {
@@ -492,8 +524,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 return PieChartSectionData(
                                     value: item['valor'] as double,
                                     color: item['cor'] as Color,
-                                    title:
-                                        p > 6 ? '${p.toStringAsFixed(0)}%' : '',
+                                    title: p >= 5
+                                        ? '${p.toStringAsFixed(0)}%'
+                                        : '',
                                     titleStyle: const TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold,
@@ -516,19 +549,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(cat,
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                        color: AppColors.textPrimary(context))),
-                                AnimatedCounter(
-                                    value: v,
-                                    duration: const Duration(milliseconds: 800),
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.textPrimary(context)),
-                                    formatter: (val) => _formatarMoeda(val))
+                                Flexible(
+                                  child: Text(cat,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                          color:
+                                              AppColors.textPrimary(context))),
+                                ),
+                                const SizedBox(width: 8),
+                                FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(_formatarMoeda(v),
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.textPrimary(
+                                                context)))),
                               ]),
                           const SizedBox(height: 4),
                           Container(height: 2, width: 35, color: cor)
@@ -540,7 +579,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildIncomeExpenseChart() {
-    if (_evolucaoMensal.isEmpty)
+    if (_evolucaoMensal.isEmpty) {
       return Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -550,17 +589,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Center(
               child: Text('Carregando dados...',
                   style: TextStyle(color: AppColors.textSecondary(context)))));
+    }
     double maxValor = 0;
     for (var item in _evolucaoMensal) {
-      final r = item['receitas'] as double;
-      final d = item['despesas'] as double;
+      final r = (item['receitas'] as num).toDouble();
+      final d = (item['despesas'] as num).toDouble();
       if (r > maxValor) maxValor = r;
       if (d > maxValor) maxValor = d;
     }
     maxValor = maxValor * 1.2;
     if (maxValor == 0) maxValor = 100;
-    const int nd = 4;
-    final double intervalo = maxValor / nd;
+    final double intervalo = maxValor / 4;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -572,16 +611,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('Receitas: ${_formatarMoeda(_totalReceitas)}',
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.success)),
-          Text('Despesas: ${_formatarMoeda(_totalDespesas)}',
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.error)),
+          FittedBox(
+              child: Text('Receitas: ${_formatarMoeda(_totalReceitas)}',
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.success))),
+          FittedBox(
+              child: Text('Despesas: ${_formatarMoeda(_totalDespesas)}',
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.error))),
         ]),
         const SizedBox(height: 16),
         SizedBox(
@@ -597,8 +638,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         final item = _evolucaoMensal[g.x.toInt()];
                         final isR = ri == 0;
                         final v = isR
-                            ? item['receitas'] as double
-                            : item['despesas'] as double;
+                            ? (item['receitas'] as num).toDouble()
+                            : (item['despesas'] as num).toDouble();
                         return BarTooltipItem(
                             '${isR ? 'Receitas' : 'Despesas'}\n${_formatarMoeda(v)}',
                             const TextStyle(
@@ -615,12 +656,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       x: i,
                       barRods: [
                         BarChartRodData(
-                            toY: _evolucaoMensal[i]['receitas'] as double,
+                            toY: (_evolucaoMensal[i]['receitas'] as num)
+                                .toDouble(),
                             color: AppColors.success,
                             width: 24,
                             borderRadius: BorderRadius.circular(6)),
                         BarChartRodData(
-                            toY: _evolucaoMensal[i]['despesas'] as double,
+                            toY: (_evolucaoMensal[i]['despesas'] as num)
+                                .toDouble(),
                             color: AppColors.error,
                             width: 24,
                             borderRadius: BorderRadius.circular(6))
@@ -632,7 +675,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         showTitles: true,
                         getTitlesWidget: (v, m) {
                           final i = v.toInt();
-                          if (i >= 0 && i < _evolucaoMensal.length)
+                          if (i >= 0 && i < _evolucaoMensal.length) {
                             return Padding(
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Text(
@@ -640,6 +683,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     style: const TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w500)));
+                          }
                           return const Text('');
                         },
                         reservedSize: 32)),
@@ -648,16 +692,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         showTitles: true,
                         reservedSize: 40,
                         getTitlesWidget: (v, m) {
-                          if (v == 0)
+                          if (v == 0) {
                             return Text('0',
                                 style: TextStyle(
                                     fontSize: 10,
                                     color: AppColors.textSecondary(context)));
-                          if (v > 0 && v <= maxValor)
+                          }
+                          if (v > 0 && v <= maxValor) {
                             return Text(_formatarEixoY(v),
                                 style: TextStyle(
                                     fontSize: 10,
                                     color: AppColors.textSecondary(context)));
+                          }
                           return const Text('');
                         },
                         interval: intervalo)),
@@ -689,49 +735,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
           border: Border.all(color: AppColors.border(context))),
       child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('Media de gastos/dia:',
+          Text('Media gastos/dia:',
               style: TextStyle(
                   fontSize: 11, color: AppColors.textSecondary(context))),
-          AnimatedCounter(
-              value: _mediaGastosDiaria,
-              duration: const Duration(milliseconds: 800),
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary(context)),
-              formatter: (val) => _formatarMoeda(val))
+          FittedBox(
+              child: Text(_formatarMoeda(_mediaGastosDiaria),
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary(context)))),
         ]),
         const SizedBox(height: 10),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('Maior gasto:',
               style: TextStyle(
                   fontSize: 11, color: AppColors.textSecondary(context))),
-          Expanded(
-              child: AnimatedCounter(
-                  value: _maiorGasto?.value ?? 0,
-                  duration: const Duration(milliseconds: 800),
-                  style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.warning),
-                  formatter: (val) => _maiorGasto != null
-                      ? '${_maiorGasto!.key} ${_formatarMoeda(val)}'
-                      : 'Nenhum gasto'))
+          Flexible(
+              child: FittedBox(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                      _maiorGasto != null
+                          ? '${_maiorGasto!.key} ${_formatarMoeda(_maiorGasto!.value)}'
+                          : 'Nenhum gasto',
+                      style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.warning)))),
         ]),
         const SizedBox(height: 10),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('Taxa de economia:',
               style: TextStyle(
                   fontSize: 11, color: AppColors.textSecondary(context))),
-          AnimatedCounter(
-              value: _taxaEconomia,
-              duration: const Duration(milliseconds: 800),
+          Text('${_taxaEconomia.toStringAsFixed(1)}%',
               style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color:
-                      _taxaEconomia >= 0 ? AppColors.success : AppColors.error),
-              formatter: (val) => '${val.toStringAsFixed(1)}%')
+                  color: _taxaEconomia >= 0
+                      ? AppColors.success
+                      : AppColors.error)),
         ]),
       ]),
     );
@@ -808,6 +850,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                   Text(t['descricao']?.toString() ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
@@ -820,24 +864,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         decoration: BoxDecoration(
                             color: categoriaCor, shape: BoxShape.circle)),
                     const SizedBox(width: 4),
-                    Text(categoria,
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: AppColors.textSecondary(context)))
+                    Flexible(
+                      child: Text(categoria,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textSecondary(context))),
+                    ),
                   ]),
                 ])),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              AnimatedCounter(
-                  value: valor,
-                  duration: const Duration(milliseconds: 600),
-                  style: TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.bold, color: cor),
-                  formatter: (val) => '$prefixo ${Formatador.moeda(val)}'),
-              const SizedBox(height: 2),
-              Text(DateFormat('dd/MM').format(data),
-                  style: TextStyle(
-                      fontSize: 10, color: AppColors.textSecondary(context))),
-            ]),
+            const SizedBox(width: 8),
+            Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('$prefixo ${Formatador.moeda(valor)}',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: cor))),
+                  const SizedBox(height: 2),
+                  FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(DateFormat('dd/MM').format(data),
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textSecondary(context)))),
+                ]),
           ])),
     );
   }

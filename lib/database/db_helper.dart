@@ -44,14 +44,16 @@ class DBHelper {
 
   static final Map<String, CacheEntry> _queryCache = {};
 
-  static const Duration cacheValidity = Duration(minutes: 5);
+  static const Duration cacheValidity = Duration(minutes: 15);
 
-  static const Duration dbTimeout = Duration(seconds: 5);
+  static const Duration dbTimeout = Duration(seconds: 30);
+
+  static final Set<String> _pendingQueries = {};
 
   static const String tabelaLancamentos = 'lancamentos';
   static const String tabelaMetas = 'metas';
   static const String tabelaDepositosMeta = 'depositos_meta';
-  static const String tabelaInvestimentos = 'investments'; // ✅ IGUAL SUPABASE
+  static const String tabelaInvestimentos = 'investments';
   static const String tabelaProventos = 'proventos';
   static const String tabelaRendaFixa = 'renda_fixa';
   static const String tabelaContas = 'contas';
@@ -89,6 +91,8 @@ class DBHelper {
         await db.execute('PRAGMA journal_mode = WAL');
         await db.execute('PRAGMA synchronous = NORMAL');
         await db.execute('PRAGMA cache_size = -50000');
+        await db.execute('PRAGMA temp_store = MEMORY');
+        await db.execute('PRAGMA mmap_size = 268435456');
       },
     );
   }
@@ -152,7 +156,6 @@ class DBHelper {
       )
     ''');
 
-    // ✅ TABELA INVESTMENTS (igual ao Supabase)
     await db.execute('''
       CREATE TABLE $tabelaInvestimentos(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -562,7 +565,12 @@ class DBHelper {
   }
 
   void _clearQueryCache() {
-    _queryCache.clear();
+    if (_queryCache.length > 50) {
+      final tamanhoAnterior = _queryCache.length;
+      _queryCache.clear();
+      LoggerService.info(
+          '🗑️ Cache limpo (${tamanhoAnterior} entradas removidas)');
+    }
   }
 
   String _agoraBrasil() => DateTime.now().toIso8601String();
@@ -615,7 +623,6 @@ class DBHelper {
           where: 'id = ? OR remote_id = ?',
           whereArgs: [id, id]).timeout(dbTimeout);
       _clearTableCache(table);
-      _clearQueryCache();
       PerformanceService.stop('db_update_$table');
       return result;
     } catch (e) {
@@ -638,7 +645,6 @@ class DBHelper {
             whereArgs: [id, id])
         .timeout(dbTimeout);
     _clearTableCache(table);
-    _clearQueryCache();
     return result;
   }
 
@@ -648,7 +654,6 @@ class DBHelper {
         where: 'id = ? OR remote_id = ?',
         whereArgs: [id, id]).timeout(dbTimeout);
     _clearTableCache(table);
-    _clearQueryCache();
     return result;
   }
 
@@ -663,31 +668,44 @@ class DBHelper {
       int? offset,
       bool useCache = true,
       bool excludeDeleted = true}) async {
-    PerformanceService.start('db_query_$table');
     String finalWhere = where ?? '1=1';
     List<dynamic> finalWhereArgs = whereArgs ?? [];
     if (excludeDeleted) {
       finalWhere += ' AND (deleted_at IS NULL)';
     }
     final cacheKey = '${table}_${finalWhere}_${orderBy}_${limit}_$offset';
+
+    if (_pendingQueries.contains(cacheKey)) {
+      PerformanceService.stop('db_query_$table (cache)');
+      LoggerService.info('⏭️ Query já em andamento: $cacheKey');
+      return [];
+    }
+
     if (useCache &&
         _queryCache.containsKey(cacheKey) &&
         _queryCache[cacheKey]!.isValid) {
       PerformanceService.stop('db_query_$table (cache)');
       return List<Map<String, dynamic>>.from(_queryCache[cacheKey]!.data);
     }
-    final db = await database;
-    final result = await db
-        .query(table,
-            where: finalWhere,
-            whereArgs: finalWhereArgs,
-            orderBy: orderBy,
-            limit: limit,
-            offset: offset)
-        .timeout(dbTimeout);
-    if (useCache) _queryCache[cacheKey] = CacheEntry(result, DateTime.now());
-    PerformanceService.stop('db_query_$table');
-    return result;
+
+    _pendingQueries.add(cacheKey);
+    PerformanceService.start('db_query_$table');
+    try {
+      final db = await database;
+      final result = await db
+          .query(table,
+              where: finalWhere,
+              whereArgs: finalWhereArgs,
+              orderBy: orderBy,
+              limit: limit,
+              offset: offset)
+          .timeout(dbTimeout);
+      if (useCache) _queryCache[cacheKey] = CacheEntry(result, DateTime.now());
+      PerformanceService.stop('db_query_$table');
+      return result;
+    } finally {
+      _pendingQueries.remove(cacheKey);
+    }
   }
 
   // ========== MÉTODOS ESPECÍFICOS ==========
@@ -892,23 +910,37 @@ class DBHelper {
 
   Future<List<Map<String, dynamic>>> getPagamentosDoMes(int ano, int mes,
       {bool useCache = true}) async {
-    PerformanceService.start('db_query_pagamentos_mes');
     final cacheKey = 'pagamentos_${ano}_$mes';
+
+    if (_pendingQueries.contains(cacheKey)) {
+      PerformanceService.stop('db_query_pagamentos_mes (cache)');
+      LoggerService.info('⏭️ Pagamentos do mês já em andamento: $ano/$mes');
+      return [];
+    }
+
     if (useCache &&
         _queryCache.containsKey(cacheKey) &&
         _queryCache[cacheKey]!.isValid) {
       PerformanceService.stop('db_query_pagamentos_mes (cache)');
       return List<Map<String, dynamic>>.from(_queryCache[cacheKey]!.data);
     }
-    final db = await database;
-    final anoMes = ano * 100 + mes;
-    final resultados = await db.rawQuery(
-        '''SELECT p.id, p.conta_id, p.ano_mes, p.valor, p.data_pagamento, p.status, p.lancamento_id, c.nome as conta_nome, c.dia_vencimento, c.categoria, c.tipo as conta_tipo, c.parcelas_total, c.parcelas_pagas FROM $tabelaPagamentos p INNER JOIN $tabelaContas c ON p.conta_id = c.id WHERE p.ano_mes = ? AND (p.deleted_at IS NULL) AND (c.deleted_at IS NULL) ORDER BY CASE WHEN p.status = 0 THEN 1 WHEN p.status = 2 THEN 2 ELSE 3 END, c.dia_vencimento ASC LIMIT 500''',
-        [anoMes]).timeout(dbTimeout);
-    if (useCache)
-      _queryCache[cacheKey] = CacheEntry(resultados, DateTime.now());
-    PerformanceService.stop('db_query_pagamentos_mes');
-    return resultados;
+
+    _pendingQueries.add(cacheKey);
+    PerformanceService.start('db_query_pagamentos_mes');
+
+    try {
+      final db = await database;
+      final anoMes = ano * 100 + mes;
+      final resultados = await db.rawQuery(
+          '''SELECT p.id, p.conta_id, p.ano_mes, p.valor, p.data_pagamento, p.status, p.lancamento_id, c.nome as conta_nome, c.dia_vencimento, c.categoria, c.tipo as conta_tipo, c.parcelas_total, c.parcelas_pagas FROM $tabelaPagamentos p INNER JOIN $tabelaContas c ON p.conta_id = c.id WHERE p.ano_mes = ? AND (p.deleted_at IS NULL) AND (c.deleted_at IS NULL) ORDER BY CASE WHEN p.status = 0 THEN 1 WHEN p.status = 2 THEN 2 ELSE 3 END, c.dia_vencimento ASC LIMIT 500''',
+          [anoMes]).timeout(dbTimeout);
+      if (useCache)
+        _queryCache[cacheKey] = CacheEntry(resultados, DateTime.now());
+      PerformanceService.stop('db_query_pagamentos_mes');
+      return resultados;
+    } finally {
+      _pendingQueries.remove(cacheKey);
+    }
   }
 
   Future<bool> pagarConta(dynamic pagamentoId,
@@ -952,7 +984,6 @@ class DBHelper {
     }).timeout(dbTimeout);
     _clearTableCache(tabelaPagamentos);
     _clearTableCache(tabelaContas);
-    _clearQueryCache();
     return result;
   }
 
@@ -1017,7 +1048,6 @@ class DBHelper {
         .timeout(dbTimeout);
     _clearTableCache(tabelaContas);
     _clearTableCache(tabelaPagamentos);
-    _clearQueryCache();
     return result;
   }
 
@@ -1061,7 +1091,6 @@ class DBHelper {
       }
     }).timeout(dbTimeout);
     _clearTableCache(tabelaLancamentos);
-    _clearQueryCache();
   }
 
   Future<int> updatePrecoAtual(dynamic id, double preco) async {
@@ -1116,14 +1145,19 @@ class DBHelper {
   }
 
   void limparCacheCompleto() {
+    final tamanhoAnterior = _queryCache.length;
     _queryCache.clear();
-    LoggerService.info('🗑️ Cache completamente limpo');
+    LoggerService.info(
+        '🗑️ Cache completamente limpo (${tamanhoAnterior} entradas removidas)');
   }
 
   Future<void> otimizarBanco() async {
     final db = await database;
     await db.execute('PRAGMA optimize');
     await db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+    await db.execute('PRAGMA analysis_limit=400');
+    await db.execute('PRAGMA automatic_index=TRUE');
+    LoggerService.success('✅ Banco de dados otimizado');
   }
 
   Future<Map<String, dynamic>> getResumoMensalOtimizado(
@@ -1274,7 +1308,6 @@ class DBHelper {
       }
     }).timeout(dbTimeout);
     _clearTableCache(tabelaInvestimentos);
-    _clearQueryCache();
   }
 
   Future<void> deleteEmLote(String table, List<dynamic> ids) async {
@@ -1285,7 +1318,6 @@ class DBHelper {
         'UPDATE $table SET deleted_at = ?, sync_status = "deleted", updated_at = ? WHERE id IN ($placeholders) OR remote_id IN ($placeholders)',
         [_agoraBrasil(), _agoraBrasil(), ...ids, ...ids]);
     _clearTableCache(table);
-    _clearQueryCache();
   }
 
   Future<Map<String, dynamic>> validarIntegridade() async {

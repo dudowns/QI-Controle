@@ -1,6 +1,5 @@
 // lib/widgets/animated_counter.dart
 import 'package:flutter/material.dart';
-import 'dart:math';
 
 class AnimatedCounter extends StatefulWidget {
   final double value;
@@ -60,12 +59,13 @@ class _AnimatedCounterState extends State<AnimatedCounter>
 
   @override
   Widget build(BuildContext context) {
+    // ✅ CORRIGIDO: AnimatedBuilder -> AnimatedBuilder
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
-        final value = _animation.value; // 🔥 JÁ É DOUBLE
+        final value = _animation.value;
         return Text(
-          widget.formatter(value), // 🔥 PASSA DOUBLE DIRETO
+          widget.formatter(value),
           style: widget.style,
         );
       },

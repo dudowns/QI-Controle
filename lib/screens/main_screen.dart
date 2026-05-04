@@ -1,4 +1,4 @@
-// lib/screens/main_screen.dart
+// lib/screens/main_screen.dart - COMPLETO E CORRIGIDO
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:animate_do/animate_do.dart';
@@ -6,11 +6,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
 import '../services/sync_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../services/loading_service.dart';
+import '../services/auth_service.dart';
 import '../widgets/theme_selector.dart';
 import '../widgets/backup_modal.dart';
 import '../widgets/notificacao_botao.dart';
-import '../database/db_helper.dart';
 import 'dashboard.dart';
 import 'lancamentos.dart';
 import 'contas_do_mes_screen.dart' as contas_mes;
@@ -45,27 +46,35 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   late final Animation<double> _menuAnimation;
 
   final SyncService _syncService = SyncService();
+  final AuthService _auth = AuthService();
   bool _isSyncing = false;
   bool _realtimeConnected = false;
   RealtimeChannel? _realtimeChannel;
 
+  Map<String, dynamic>? _perfil;
+  int _avatarVersion = 0;
+
   final List<Map<String, dynamic>> _bottomNavItems = [
-    {'icon': Icons.dashboard, 'label': 'Dashboard', 'index': 0},
-    {'icon': Icons.receipt, 'label': 'Lançamentos', 'index': 1},
-    {'icon': Icons.trending_up, 'label': 'Investimentos', 'index': 3},
-    {'icon': Icons.attach_money, 'label': 'Proventos', 'index': 5},
-    {'icon': Icons.flag, 'label': 'Metas', 'index': 6},
+    {'icon': Icons.dashboard_rounded, 'label': 'Dashboard', 'index': 0},
+    {'icon': Icons.receipt_long_rounded, 'label': 'Lançamentos', 'index': 1},
+    {'icon': Icons.trending_up_rounded, 'label': 'Investimentos', 'index': 3},
+    {'icon': Icons.payments_rounded, 'label': 'Proventos', 'index': 5},
+    {'icon': Icons.flag_rounded, 'label': 'Metas', 'index': 6},
   ];
 
   final List<Map<String, dynamic>> _menuItems = [
-    {'icon': Icons.dashboard, 'label': 'Dashboard', 'index': 0},
-    {'icon': Icons.receipt, 'label': 'Lançamentos', 'index': 1},
-    {'icon': Icons.calendar_month, 'label': 'Contas do Mês', 'index': 2},
-    {'icon': Icons.trending_up, 'label': 'Investimentos', 'index': 3},
-    {'icon': Icons.savings, 'label': 'Renda Fixa', 'index': 4},
-    {'icon': Icons.attach_money, 'label': 'Proventos', 'index': 5},
-    {'icon': Icons.flag, 'label': 'Metas', 'index': 6},
-    {'icon': Icons.settings, 'label': 'Configurações', 'index': 7},
+    {'icon': Icons.dashboard_rounded, 'label': 'Dashboard', 'index': 0},
+    {'icon': Icons.receipt_long_rounded, 'label': 'Lançamentos', 'index': 1},
+    {
+      'icon': Icons.calendar_month_rounded,
+      'label': 'Contas do Mês',
+      'index': 2
+    },
+    {'icon': Icons.trending_up_rounded, 'label': 'Investimentos', 'index': 3},
+    {'icon': Icons.savings_rounded, 'label': 'Renda Fixa', 'index': 4},
+    {'icon': Icons.payments_rounded, 'label': 'Proventos', 'index': 5},
+    {'icon': Icons.flag_rounded, 'label': 'Metas', 'index': 6},
+    {'icon': Icons.settings_rounded, 'label': 'Configurações', 'index': 7},
   ];
 
   final List<Widget> _screensList = [
@@ -96,8 +105,21 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     );
 
     _screens = _screensList;
+    _carregarPerfil();
     _sincronizarDados();
     _initRealtime();
+  }
+
+  Future<void> _carregarPerfil() async {
+    try {
+      final perfil = await _auth.getPerfil();
+      if (mounted) {
+        setState(() {
+          _perfil = perfil;
+          _avatarVersion++;
+        });
+      }
+    } catch (e) {}
   }
 
   @override
@@ -111,7 +133,6 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     try {
       final supabase = Supabase.instance.client;
       _realtimeChannel = supabase.channel('public:changes');
-
       _realtimeChannel?.onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
@@ -121,15 +142,11 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
           _onDataChanged();
         },
       );
-
       _realtimeChannel?.subscribe((status, error) {
         if (!mounted) return;
         setState(() {
           _realtimeConnected = status == RealtimeSubscribeStatus.subscribed;
         });
-        if (error != null && kDebugMode) {
-          debugPrint('❌ Realtime error: $error');
-        }
       });
     } catch (e) {
       if (kDebugMode) debugPrint('❌ Realtime init error: $e');
@@ -169,12 +186,9 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       );
       return;
     }
-
     setState(() => _isSyncing = true);
-
     try {
       await _syncService.syncNow();
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -209,30 +223,21 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   }
 
   void mudarTela(int index) {
-    if (kDebugMode) debugPrint('🔄 mudarTela chamado para índice: $index');
-
     if (mounted && index >= 0 && index < _screensList.length) {
       setState(() {
         _currentIndex = index;
       });
+      _carregarPerfil();
       if (MediaQuery.of(context).size.width <= 900) {
         Navigator.pop(context);
-      }
-
-      if (kDebugMode) debugPrint('✅ Tela alterada para índice: $_currentIndex');
-    } else {
-      if (kDebugMode) {
-        debugPrint(
-            '❌ Não foi possível mudar tela. mounted: $mounted, index: $index, length: ${_screensList.length}');
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth > 900;
-    final isMobile = screenWidth <= 900;
+    final isDesktop = MediaQuery.of(context).size.width > 900;
+    final isMobile = MediaQuery.of(context).size.width <= 900;
 
     return Consumer<LoadingService>(
       builder: (context, loadingService, child) {
@@ -242,29 +247,19 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             backgroundColor: AppColors.background(context),
             appBar: AppBar(
               leading: isDesktop
-                  ? AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                      child: IconButton(
-                        icon: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 300),
-                          child: Icon(
-                            _drawerOpen ? Icons.menu_open : Icons.menu,
-                            key: ValueKey(_drawerOpen),
-                            color: Colors.white,
-                          ),
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _drawerOpen = !_drawerOpen;
-                          });
-                          _animationController.forward(from: 0);
-                        },
-                        tooltip: _drawerOpen ? 'Esconder menu' : 'Mostrar menu',
+                  ? IconButton(
+                      icon: Icon(
+                        _drawerOpen ? Icons.menu_open : Icons.menu,
+                        color: Colors.white,
                       ),
+                      onPressed: () {
+                        setState(() => _drawerOpen = !_drawerOpen);
+                        _animationController.forward(from: 0);
+                      },
+                      tooltip: _drawerOpen ? 'Esconder menu' : 'Mostrar menu',
                     )
                   : IconButton(
-                      icon: const Icon(Icons.menu),
+                      icon: const Icon(Icons.menu_rounded),
                       onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                       tooltip: 'Menu',
                     ),
@@ -278,6 +273,7 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 0.5,
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -359,7 +355,6 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                       BackupModal.show(
                         context: context,
                         onBackupRealizado: () {
-                          if (kDebugMode) debugPrint('Backup realizado');
                           _sincronizarDados();
                         },
                       );
@@ -377,29 +372,13 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeInOut,
-                    width: _drawerOpen ? 280 : 0,
-                    child: ClipRect(
-                      child: OverflowBox(
-                        alignment: Alignment.centerLeft,
-                        maxWidth: 280,
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 250),
-                          opacity: _drawerOpen ? 1.0 : 0.0,
-                          child: _buildDrawer(),
-                        ),
-                      ),
-                    ),
+                    width: _drawerOpen ? 230 : 0,
+                    child: _drawerOpen ? _buildSideMenu() : const SizedBox(),
                   ),
                 Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    switchInCurve: Curves.easeInOut,
-                    switchOutCurve: Curves.easeInOut,
-                    child: IndexedStack(
-                      key: ValueKey(_currentIndex),
-                      index: _currentIndex,
-                      children: _screens,
-                    ),
+                  child: IndexedStack(
+                    index: _currentIndex,
+                    children: _screens,
                   ),
                 ),
               ],
@@ -428,6 +407,7 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                               child: InkWell(
                                 onTap: () {
                                   setState(() => _currentIndex = item['index']);
+                                  _carregarPerfil();
                                   _animationController.forward(from: 0);
                                 },
                                 child: Column(
@@ -482,79 +462,230 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     );
   }
 
+  // ========== MENU LATERAL ==========
+  Widget _buildSideMenu() {
+    return Container(
+      color: AppColors.surface(context),
+      child: Column(
+        children: [
+          // Cabeçalho azul escuro (igual imagem)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primaryDark,
+                  AppColors.primary,
+                  AppColors.primaryLight
+                ],
+              ),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.account_balance_wallet,
+                      color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 10),
+                const Text('QI Controle',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              itemCount: _menuItems.length,
+              itemBuilder: (context, index) {
+                final item = _menuItems[index];
+                final isSelected = _currentIndex == item['index'];
+                return _buildMenuItem(
+                  icon: item['icon'] as IconData,
+                  label: item['label'] as String,
+                  isSelected: isSelected,
+                  onTap: () => mudarTela(item['index'] as int),
+                );
+              },
+            ),
+          ),
+          // Perfil do usuário
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                    color: AppColors.border(context).withValues(alpha: 0.5)),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    image: _perfil?['avatar_url'] != null
+                        ? DecorationImage(
+                            image: CachedNetworkImageProvider(
+                                '${_perfil!['avatar_url']}?v=$_avatarVersion'),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  child: _perfil?['avatar_url'] == null
+                      ? Icon(Icons.person, color: AppColors.primary, size: 22)
+                      : null,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _perfil?['nome'] ?? _perfil?['username'] ?? 'Usuário',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary(context),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text('v2.0',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textSecondary(context))),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuItem({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              gradient: isSelected
+                  ? const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [AppColors.primary, AppColors.primaryDark],
+                    )
+                  : null,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Icon(icon,
+                    size: 30,
+                    color: isSelected
+                        ? Colors.white
+                        : AppColors.textSecondary(context)),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(label,
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.normal,
+                          color: isSelected
+                              ? Colors.white
+                              : AppColors.textPrimary(context))),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildDrawer() {
     return Drawer(
       child: Container(
         color: AppColors.surface(context),
         child: Column(
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeInOut,
+            // Cabeçalho azul escuro (igual imagem)
+            Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(20),
-                  bottomRight: Radius.circular(20),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
+              padding: const EdgeInsets.fromLTRB(16, 44, 16, 16),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.primaryDark,
+                      AppColors.primary,
+                      AppColors.primaryLight
+                    ]),
+                borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(16),
+                    bottomRight: Radius.circular(16)),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  FadeInDown(
-                    duration: const Duration(milliseconds: 500),
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.account_balance_wallet,
-                        color: Colors.white,
-                        size: 32,
-                      ),
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.account_balance_wallet,
+                          color: Colors.white, size: 24),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  FadeInLeft(
-                    duration: const Duration(milliseconds: 600),
-                    child: const Text(
-                      'QI Controle',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  FadeInLeft(
-                    duration: const Duration(milliseconds: 700),
-                    child: const Text(
-                      'Seu gerenciador financeiro pessoal',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white70,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 12),
+                    const Text('QI Controle',
+                        style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                    const SizedBox(height: 2),
+                    Text('Seu gerenciador financeiro',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.white.withValues(alpha: 0.7))),
+                  ]),
             ),
-            const SizedBox(height: 16),
             Expanded(
               child: ListView.builder(
-                padding: EdgeInsets.zero,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                 itemCount: _menuItems.length,
                 itemBuilder: (context, index) {
                   final item = _menuItems[index];
@@ -562,62 +693,60 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                   return FadeInLeft(
                     delay: Duration(milliseconds: 50 * index),
                     duration: const Duration(milliseconds: 400),
-                    child: ListTile(
-                      leading: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: EdgeInsets.all(isSelected ? 6 : 0),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppColors.primary.withValues(alpha: 0.2)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          item['icon'],
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.muted(context),
-                          size: isSelected ? 24 : 22,
-                        ),
-                      ),
-                      title: Text(
-                        item['label'],
-                        style: TextStyle(
-                          fontWeight:
-                              isSelected ? FontWeight.w600 : FontWeight.normal,
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.textPrimary(context),
-                        ),
-                      ),
-                      selected: isSelected,
-                      selectedTileColor:
-                          AppColors.primary.withValues(alpha: 0.1),
+                    child: _buildMenuItem(
+                      icon: item['icon'] as IconData,
+                      label: item['label'] as String,
+                      isSelected: isSelected,
                       onTap: () {
-                        setState(() {
-                          _currentIndex = item['index'];
-                        });
+                        setState(() => _currentIndex = item['index'] as int);
+                        _carregarPerfil();
                         _animationController.forward(from: 0);
-                        if (MediaQuery.of(context).size.width <= 900) {
-                          Navigator.pop(context);
-                        }
+                        Navigator.pop(context);
                       },
                     ),
                   );
                 },
               ),
             ),
-            FadeInUp(
-              duration: const Duration(milliseconds: 800),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'Versão 2.0',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.muted(context),
+            // Perfil do usuário
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                border: Border(
+                    top: BorderSide(
+                        color:
+                            AppColors.border(context).withValues(alpha: 0.5))),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      image: _perfil?['avatar_url'] != null
+                          ? DecorationImage(
+                              image: CachedNetworkImageProvider(
+                                  '${_perfil!['avatar_url']}?v=$_avatarVersion'),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                    ),
+                    child: _perfil?['avatar_url'] == null
+                        ? Icon(Icons.person, color: AppColors.primary, size: 22)
+                        : null,
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                        _perfil?['nome'] ?? _perfil?['username'] ?? 'Usuário',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary(context))),
+                  ),
+                ],
               ),
             ),
           ],

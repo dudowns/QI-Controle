@@ -32,8 +32,6 @@ class SyncManager {
 
     try {
       await syncPendingLancamentos();
-      // await syncPendingInvestimentos(); // ❌ DESLIGADO
-      // await syncPendingTransacoes();    // ❌ DESLIGADO
       await syncPendingMetas();
       await syncPendingProventos();
       await syncPendingRendaFixa();
@@ -41,8 +39,6 @@ class SyncManager {
       await syncPendingPagamentos();
 
       await fetchRemoteLancamentos();
-      // await fetchRemoteInvestimentos(); // ❌ DESLIGADO
-      // await fetchRemoteTransacoes();    // ❌ DESLIGADO
       await fetchRemoteMetas();
       await fetchRemoteProventos();
       await fetchRemoteRendaFixa();
@@ -57,27 +53,24 @@ class SyncManager {
   }
 
   // ========== SINCRONIZACAO DE TRANSACOES ==========
-
   Future<void> syncPendingTransacoes() async {
-    return; // ❌ DESLIGADO PERMANENTEMENTE
+    return;
   }
 
   Future<void> fetchRemoteTransacoes() async {
-    return; // ❌ DESLIGADO PERMANENTEMENTE
+    return;
   }
 
   // ========== SINCRONIZACAO DE INVESTIMENTOS ==========
-
   Future<void> syncPendingInvestimentos() async {
-    return; // ❌ DESLIGADO PERMANENTEMENTE
+    return;
   }
 
   Future<void> fetchRemoteInvestimentos() async {
-    return; // ❌ DESLIGADO PERMANENTEMENTE
+    return;
   }
 
   // ========== SINCRONIZACAO DE LANCAMENTOS ==========
-
   Future<void> syncPendingLancamentos() async {
     final db = await dbHelper.database;
     final user = supabase.auth.currentUser;
@@ -236,7 +229,6 @@ class SyncManager {
   }
 
   // ========== SINCRONIZACAO DE METAS ==========
-
   Future<void> syncPendingMetas() async {
     final db = await dbHelper.database;
     final user = supabase.auth.currentUser;
@@ -367,7 +359,6 @@ class SyncManager {
   }
 
   // ========== SINCRONIZACAO DE PROVENTOS ==========
-
   Future<void> syncPendingProventos() async {
     final db = await dbHelper.database;
     final user = supabase.auth.currentUser;
@@ -502,7 +493,6 @@ class SyncManager {
   }
 
   // ========== SINCRONIZACAO DE RENDA FIXA ==========
-
   Future<void> syncPendingRendaFixa() async {
     final db = await dbHelper.database;
     final user = supabase.auth.currentUser;
@@ -639,7 +629,6 @@ class SyncManager {
   }
 
   // ========== SINCRONIZACAO DE CONTAS ==========
-
   Future<void> syncPendingContas() async {
     final db = await dbHelper.database;
     final user = supabase.auth.currentUser;
@@ -779,7 +768,6 @@ class SyncManager {
   }
 
   // ========== SINCRONIZACAO DE PAGAMENTOS ==========
-
   Future<void> syncPendingPagamentos() async {
     final db = await dbHelper.database;
     final user = supabase.auth.currentUser;
@@ -854,7 +842,6 @@ class SyncManager {
   }
 
   // ========== METODOS AUXILIARES ==========
-
   Future<void> markAsPending(String table, dynamic localId) async {
     final db = await dbHelper.database;
     await db.update(
@@ -867,6 +854,7 @@ class SyncManager {
         whereArgs: [localId]);
   }
 
+  // ✅ CORRIGIDO: Não chama syncAll() para evitar loop infinito
   Future<void> deleteAndSync(
       String table, dynamic localId, String remoteId) async {
     final db = await dbHelper.database;
@@ -884,7 +872,8 @@ class SyncManager {
         },
         where: 'id = ?',
         whereArgs: [localId]);
-    syncAll();
+    // ✅ NÃO chama syncAll() - a sincronização será feita no próximo ciclo
+    LoggerService.info('📝 Registro marcado para deleção: $table/$localId');
   }
 
   Future<void> forcarEnvioTodosDados() async {

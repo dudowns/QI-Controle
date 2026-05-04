@@ -2,144 +2,127 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // ========== CORES PRINCIPAIS (NÃO MUDAM) ==========
-  static const Color primary = Color(0xFF7B2CBF);
-  static const Color primaryLight = Color(0xFFB084D9);
-  static const Color primaryDark = Color(0xFF5A1E8A);
-  static const Color secondary = Color(0xFFB084D9);
+  // ========== CORES PRINCIPAIS (Extraídas da Imagem) ==========
+  static const Color primary = Color(0xFF1B5F8C);
+  static const Color primaryLight = Color(0xFF2E86AB);
+  static const Color primaryDark = Color(0xFF0077A3);
+  static const Color secondary = Color(0xFFFF8C00);
 
-  // ========== CORES DE FUNDO (DINÂMICAS) ==========
-  static Color background(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light
-        ? const Color(0xFFF8F9FA) // Claro
-        : const Color(0xFF121212); // Escuro
-  }
+  // ========== FUNDO (TEMA ESCURO) ==========
+  static const Color darkBackground = Color(0xFF061229);
+  static const Color darkSurface = Color(0xFF0A1E46);
+  static const Color darkCard = Color(0xFF0E2855);
+  static const Color darkInput = Color(0xFF132D5E);
+  static const Color darkBorder = Color(0xFF1B3D7A);
 
-  static Color surface(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light
-        ? Colors.white
-        : const Color(0xFF1E1E1E);
-  }
+  // ========== FUNDO (TEMA CLARO) ==========
+  static const Color lightBackground = Color(0xFFF8F9FA);
+  static const Color lightSurface = Color(0xFFFFFFFF);
+  static const Color lightCard = Color(0xFFFFFFFF);
 
-  static Color cardBackground(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light
-        ? Colors.white
-        : const Color(0xFF1E1E1E);
-  }
+  // ========== BACKGROUND DINÂMICO ==========
+  static Color background(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light
+          ? lightBackground
+          : darkBackground;
 
-  static Color muted(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light
-        ? const Color(0xFFCED4DA)
-        : Colors.grey[700]!;
-  }
+  static Color surface(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light
+          ? lightSurface
+          : darkSurface;
 
-  // ========== TEXTOS (DINÂMICOS) ==========
-  static Color textPrimary(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light
-        ? const Color(0xFF343A40) // Quase preto
-        : Colors.white; // Branco
-  }
+  static Color cardBackground(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light ? lightCard : darkCard;
 
-  static Color textSecondary(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light
-        ? const Color(0xFF6C757D) // Cinza médio
-        : Colors.white70; // Branco com 70%
-  }
+  static Color inputBackground(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light
+          ? const Color(0xFFF5F5F5)
+          : darkInput;
 
-  static Color textHint(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light
-        ? const Color(0xFFADB5BD) // Cinza claro
-        : Colors.white38; // Branco com 38%
-  }
+  // ========== TEXTOS ==========
+  static Color textPrimary(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light
+          ? const Color(0xFF061229)
+          : Colors.white;
 
-  static Color textDisabled(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light
-        ? const Color(0xFFCED4DA) // Cinza muito claro
-        : Colors.white24; // Branco com 24%
-  }
+  static Color textSecondary(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light
+          ? const Color(0xFF6C757D)
+          : const Color(0xFF8DA2C0);
 
-  // ========== BORDAS (DINÂMICAS) ==========
-  static Color border(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light
-        ? const Color(0xFFDEE2E6) // Cinza claro
-        : Colors.grey[800]!; // Cinza escuro
-  }
-
-  static Color borderDark(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light
-        ? const Color(0xFFCED4DA) // Cinza médio
-        : Colors.grey[700]!; // Cinza mais escuro
-  }
-
-  static Color divider(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light
-        ? const Color(0xFFE9ECEF) // Quase branco
-        : Colors.grey[900]!; // Quase preto
-  }
-
-  // ========== STATUS (NÃO MUDAM) ==========
-  static const Color success = Color(0xFF2E7D32);
-  static const Color successLight = Color(0xFFE8F5E9);
-  static const Color error = Color(0xFFC62828);
-  static const Color errorLight = Color(0xFFFFEBEE);
-  static const Color warning = Color(0xFFFF8F00);
-  static const Color warningLight = Color(0xFFFFF3E0);
-  static const Color info = Color(0xFF1976D2);
-  static const Color infoLight = Color(0xFFE3F2FD);
-
-  // ========== CATEGORIAS (NÃO MUDAM) ==========
-  static const Map<String, Color> categoryColors = {
-    // ===== RECEITAS =====
-    'Salário': Color(0xFF2E7D32),
-    'Bico ou Extra': Color(0xFFFBC02D),
-    'Venda de Ativos': Color(0xFF7E57C2),
-
-    // ===== GASTOS COMUNS =====
-    'Transporte': Color(0xFF42A5F5),
-    'Alimentação': Color(0xFFFF7043),
-    'Moradia': Color(0xFF66BB6A),
-    'Lazer': Color(0xFFFFA726),
-    'Saúde': Color(0xFFEF5350),
-    'Educação': Color(0xFFAB47BC),
-    'Cartão': Color(0xFFFF9800),
-    'Investimentos': Color(0xFF7E57C2),
-    'Cuidados Pessoais': Color(0xFFE91E63),
-    'Empréstimo': Color(0xFFF44336),
-
-    // ===== CONTAS DO MÊS =====
-    'Água': Color(0xFF00ACC1),
-    'Luz': Color(0xFFFFD54F),
-    'Internet': Color(0xFF42A5F5),
-    'Telefone': Color(0xFF7E57C2),
-    'Aluguel': Color(0xFF4CAF50),
-    'IPVA': Color(0xFFFF7043),
-    'IPTU': Color(0xFFFF5722),
-    'Academia': Color(0xFF9C27B0),
-    'Streaming': Color(0xFFE91E63),
-    'Financiamento': Color(0xFFD32F2F),
-    'Cartão de Crédito': Color(0xFFFF9800),
-
-    // ===== DEFAULT =====
-    'Outros': Color(0xFF9E9E9E),
-  };
-
-  // ========== GRADIENTS (NÃO MUDAM) ==========
+  // ========== GRADIENTES ==========
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [primary, secondary],
+    colors: [primary, primaryLight],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  // ========== MÉTODOS ÚTEIS ==========
-  static Color getCategoryColor(String category) {
-    return categoryColors[category] ?? categoryColors['Outros']!;
-  }
+  static const LinearGradient brandGradient = LinearGradient(
+    colors: [Color(0xFF061229), Color(0xFF0A1E46)],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+  );
 
-  // ========== MÉTODO PARA PEGAR COR DE FUNDO DOS CARDS ==========
-  static Color getCardColor(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.light
-        ? Colors.white
-        : const Color(0xFF1E1E1E);
-  }
+  // ========== STATUS ==========
+  static const Color success = Color(0xFF2E7D32);
+  static const Color error = Color(0xFFC62828);
+  static const Color warning = Color(0xFFFF8F00);
+  static const Color info = Color(0xFF1B5F8C);
+
+  // ========== MUTED / BORDER / DIVIDER ==========
+  static Color muted(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light
+          ? const Color(0xFFCED4DA)
+          : Colors.grey[700]!;
+
+  static Color border(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light
+          ? const Color(0xFFDEE2E6)
+          : darkBorder;
+
+  static Color divider(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light
+          ? const Color(0xFFE9ECEF)
+          : Colors.grey[900]!;
+
+  static Color textHint(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light
+          ? const Color(0xFFADB5BD)
+          : Colors.white38;
+
+  // ========== CATEGORIAS ==========
+  static const Map<String, Color> categoryColors = {
+    // Receitas
+    'Salário': Color(0xFF00E676),
+    'Bico ou Extra': Color(0xFFFBC02D),
+    'Venda de Ativos': Color(0xFF7E57C2),
+
+    // Gastos comuns
+    'Transporte': Color(0xFF42A5F5),
+    'Alimentação': Color(0xFFFF7043),
+    'Moradia': Color(0xFF66BB6A),
+    'Lazer': Color(0xFFFF8C00),
+    'Saúde': Color(0xFFEF4444),
+    'Educação': Color(0xFF8B5CF6),
+    'Cartão': Color(0xFFFF9800),
+    'Investimentos': Color(0xFF00AEEF),
+    'Cuidados Pessoais': Color(0xFFE91E63),
+    'Empréstimo': Color(0xFFF44336),
+
+    // Contas do mês
+    'Água': Color(0xFF00ACC1),
+    'Luz': Color(0xFFFFD54F),
+    'Internet': Color(0xFF42A5F5),
+    'Telefone': Color(0xFF7E57C2),
+    'IPVA': Color(0xFFFF7043),
+    'IPTU': Color(0xFFFF5722),
+    'Financiamento': Color(0xFFD32F2F),
+    'Cartão de Crédito': Color(0xFFFF9800),
+
+    // Default
+    'Outros': Color(0xFF6B7280),
+  };
+
+  static Color getCategoryColor(String category) =>
+      categoryColors[category] ?? categoryColors['Outros']!;
 }
-

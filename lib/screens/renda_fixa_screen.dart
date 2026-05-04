@@ -1,7 +1,7 @@
 ﻿// lib/screens/renda_fixa_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../database/db_helper.dart';
+import '../repositories/repositories.dart';
 import '../models/renda_fixa_model.dart';
 import '../services/renda_fixa_diaria.dart';
 import '../utils/formatters.dart';
@@ -18,7 +18,7 @@ class RendaFixaScreen extends StatefulWidget {
 }
 
 class _RendaFixaScreenState extends State<RendaFixaScreen> {
-  final DBHelper _dbHelper = DBHelper();
+  final RendaFixaRepository _repo = RendaFixaRepository();
 
   List<RendaFixaModel> _investimentos = [];
   bool _isLoading = true;
@@ -37,9 +37,7 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final dados = await _dbHelper.getAllRendaFixa();
-      _investimentos =
-          dados.map((json) => RendaFixaModel.fromJson(json)).toList();
+      _investimentos = await _repo.getAll();
       _calcularTotais();
     } catch (e) {
       debugPrint('Erro ao carregar renda fixa: $e');
@@ -70,10 +68,11 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
       context: context,
       onSalvar: (investimento) async {
         try {
-          await _dbHelper.insertRendaFixa(investimento.toJson());
+          await _repo.insert(investimento);
           await _carregarDados();
-          if (mounted)
+          if (mounted) {
             Toast.success(context, '${investimento.nome} adicionado!');
+          }
         } catch (e) {
           if (mounted) Toast.error(context, 'Erro: $e');
         }
@@ -90,9 +89,9 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
           final json = investimento.toJson();
           if (investimento.id != null && investimento.id!.isNotEmpty) {
             json['id'] = investimento.id;
-            await _dbHelper.updateRendaFixa(json);
+            await _repo.update(investimento);
           } else {
-            await _dbHelper.insertRendaFixa(json);
+            await _repo.insert(investimento);
           }
           await _carregarDados();
           if (mounted) Toast.success(context, 'Investimento atualizado!');
@@ -176,8 +175,9 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
                                 initialDate: dataDeposito,
                                 firstDate: DateTime(2020),
                                 lastDate: DateTime.now());
-                            if (picked != null)
+                            if (picked != null) {
                               setStateDialog(() => dataDeposito = picked);
+                            }
                           },
                           child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -228,11 +228,12 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
             valorAplicado: novoValorTotal, observacao: novaObservacao);
         final json = investimentoAtualizado.toJson();
         if (inv.id != null && inv.id!.isNotEmpty) json['id'] = inv.id;
-        await _dbHelper.updateRendaFixa(json);
+        await _repo.update(investimentoAtualizado);
         await _carregarDados();
-        if (mounted)
+        if (mounted) {
           Toast.success(context,
               'Adicionado R\$ ${valorAdicional.toStringAsFixed(2)} em $dataFormatada!');
+        }
       } catch (e) {
         Toast.error(context, 'Erro: $e');
       }
@@ -261,9 +262,7 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
     if (confirmar == true) {
       try {
         if (inv.id != null && inv.id!.isNotEmpty) {
-          final db = await _dbHelper.database;
-          await db.delete('renda_fixa',
-              where: 'id = ? OR remote_id = ?', whereArgs: [inv.id, inv.id]);
+          await _repo.delete(int.parse(inv.id!));
         }
         await _carregarDados();
         if (mounted) Toast.success(context, 'Investimento excluido!');
@@ -581,4 +580,3 @@ class _RendaFixaScreenState extends State<RendaFixaScreen> {
     }
   }
 }
-

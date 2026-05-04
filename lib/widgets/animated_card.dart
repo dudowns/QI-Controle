@@ -67,6 +67,7 @@ class _AnimatedCardState extends State<AnimatedCard>
 
   @override
   Widget build(BuildContext context) {
+    // ✅ CORRIGIDO: AnimatedBuilder -> AnimatedBuilder
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {

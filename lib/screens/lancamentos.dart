@@ -2,7 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../database/db_helper.dart';
+import '../models/lancamento_model.dart';
+import '../repositories/repositories.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_categories.dart';
 import '../utils/formatters.dart';
@@ -19,7 +20,7 @@ class LancamentosScreen extends StatefulWidget {
 }
 
 class _LancamentosScreenState extends State<LancamentosScreen> {
-  final DBHelper _dbHelper = DBHelper();
+  final LancamentoRepository _repository = LancamentoRepository();
 
   List<Map<String, dynamic>> _lancamentos = [];
   bool _isLoading = true;
@@ -62,6 +63,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     if (_filtroTipo == 'Receitas') {
       filtrados = filtrados.where((l) => l['tipo'] == 'receita').toList();
     } else if (_filtroTipo == 'Despesas') {
+      // ✅ CORRIGIDO: Aceita 'gasto' e 'despesa'
       filtrados = filtrados.where((l) {
         final tipo = l['tipo']?.toString().toLowerCase() ?? '';
         return tipo == 'gasto' || tipo == 'despesa';
@@ -91,6 +93,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     }).toList();
   }
 
+  // ✅ CORRIGIDO: Padronizado para 'receita' e 'gasto'
   double _calcularTotalPorTipo(String tipo) {
     double total = 0.0;
     for (var lancamento in _lancamentosMes) {
@@ -105,13 +108,11 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
         }
       }
       if (tipo == 'receita') {
-        if (tipoLancamento == 'receita' || tipoLancamento == 'receitas') {
+        if (tipoLancamento == 'receita') {
           total += valor;
         }
       } else {
-        if (tipoLancamento == 'gasto' ||
-            tipoLancamento == 'despesa' ||
-            tipoLancamento == 'despesas') {
+        if (tipoLancamento == 'gasto' || tipoLancamento == 'despesa') {
           total += valor;
         }
       }
@@ -132,10 +133,9 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
 
   Future<void> _carregarDados() async {
     if (!mounted) return;
-    _dbHelper.limparCacheCompleto();
     setState(() => _isLoading = true);
     try {
-      _lancamentos = await _dbHelper.getAllLancamentos();
+      _lancamentos = await _repository.getAllLancamentos();
     } catch (e) {
       LoggerService.info('Erro ao carregar lancamentos: $e');
       if (mounted) {
@@ -175,8 +175,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
 
   Future<void> _salvarLancamento(Map<String, dynamic> lancamento) async {
     try {
-      await _dbHelper.insertLancamento(lancamento);
-      _dbHelper.limparCacheCompleto();
+      await _repository.insertLancamento(lancamento);
       await _carregarDados();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -195,8 +194,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
 
   Future<void> _atualizarLancamento(Map<String, dynamic> lancamento) async {
     try {
-      await _dbHelper.updateLancamento(lancamento);
-      _dbHelper.limparCacheCompleto();
+      await _repository.updateLancamentoResult(Lancamento.fromJson(lancamento));
       await _carregarDados();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -213,7 +211,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     }
   }
 
-  // ✅ CORRIGIDO: Apaga do Supabase também
+  // ✅ Apaga do Supabase também
   Future<void> _excluirLancamento(int id, String descricao) async {
     final confirmar = await showDialog<bool>(
       context: context,
@@ -235,36 +233,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     );
     if (confirmar == true) {
       try {
-        final db = await _dbHelper.database;
-
-        // ✅ Busca o remote_id antes de apagar
-        final lancamentos = await db.query(
-          'lancamentos',
-          where: 'id = ?',
-          whereArgs: [id],
-        );
-
-        // ✅ Apaga do Supabase primeiro (se tiver remote_id válido)
-        if (lancamentos.isNotEmpty) {
-          final remoteId = lancamentos.first['remote_id']?.toString();
-          if (remoteId != null &&
-              remoteId.isNotEmpty &&
-              remoteId.contains('-')) {
-            try {
-              await Supabase.instance.client
-                  .from('lancamentos')
-                  .delete()
-                  .eq('id', remoteId);
-              LoggerService.info('✅ Apagado do Supabase: $descricao');
-            } catch (e) {
-              LoggerService.error('Erro ao apagar do Supabase: $e');
-            }
-          }
-        }
-
-        // Depois apaga do banco local
-        await _dbHelper.deleteLancamento(id);
-        _dbHelper.limparCacheCompleto();
+        await _repository.deleteLancamentoResult(id);
         await _carregarDados();
 
         if (mounted) {

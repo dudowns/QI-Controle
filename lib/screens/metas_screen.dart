@@ -1,7 +1,7 @@
 ﻿// lib/screens/metas_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../database/db_helper.dart';
+import '../repositories/repositories.dart';
 import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
 import '../services/logger_service.dart';
@@ -16,7 +16,7 @@ class MetasScreen extends StatefulWidget {
 }
 
 class _MetasScreenState extends State<MetasScreen> {
-  final DBHelper _dbHelper = DBHelper();
+  final MetaRepository _metaRepo = MetaRepository();
 
   List<Map<String, dynamic>> _metas = [];
   bool _isLoading = true;
@@ -32,7 +32,7 @@ class _MetasScreenState extends State<MetasScreen> {
     setState(() => _isLoading = true);
 
     try {
-      _metas = await _dbHelper.getAllMetas();
+      _metas = await _metaRepo.getAllMetas();
     } catch (e) {
       LoggerService.error('Erro ao carregar metas: $e');
       if (mounted) {
@@ -195,7 +195,7 @@ class _MetasScreenState extends State<MetasScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: cor, // âœ… CORRIGIDO: initialValue -> value
+                    initialValue: cor, // âœ… CORRIGIDO: initialValue -> value
                     decoration: const InputDecoration(
                       labelText: 'Cor',
                       border: OutlineInputBorder(),
@@ -304,7 +304,7 @@ class _MetasScreenState extends State<MetasScreen> {
 
   Future<void> _salvarMeta(Map<String, dynamic> meta) async {
     try {
-      await _dbHelper.insertMeta(meta);
+      await _metaRepo.insertMeta(meta);
       if (mounted) {
         Toast.success(context, '${meta['titulo']} adicionada!');
       }
@@ -318,7 +318,7 @@ class _MetasScreenState extends State<MetasScreen> {
 
   Future<void> _atualizarMeta(Map<String, dynamic> meta) async {
     try {
-      await _dbHelper.updateMeta(meta);
+      await _metaRepo.updateMeta(meta);
       if (mounted) {
         Toast.success(context, '${meta['titulo']} atualizada!');
       }
@@ -351,7 +351,7 @@ class _MetasScreenState extends State<MetasScreen> {
 
     if (confirmar == true) {
       try {
-        await _dbHelper.deleteMeta(id);
+        await _metaRepo.deleteMeta(id);
         await _carregarMetas();
         if (mounted) {
           Toast.success(context, '$titulo excluida!');
@@ -405,7 +405,7 @@ class _MetasScreenState extends State<MetasScreen> {
         final novoValorAtual =
             (meta['valor_atual'] as num).toDouble() + valorAdicional;
 
-        await _dbHelper.atualizarProgressoMeta(meta['id'], novoValorAtual);
+        await _metaRepo.atualizarProgressoMeta(meta['id'], novoValorAtual);
         await _carregarMetas();
 
         if (mounted) {
@@ -685,4 +685,3 @@ class _MetasScreenState extends State<MetasScreen> {
     );
   }
 }
-

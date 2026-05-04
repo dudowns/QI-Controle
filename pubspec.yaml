@@ -14,6 +14,9 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: ^0.20.2
+
+    # ========== IMAGEM ==========
+  image_picker: ^1.0.7  
   
   # ========== BANCO DE DADOS ==========
   sqflite: ^2.3.0
@@ -69,7 +72,7 @@ dependencies:
   # ========== UI ADICIONAL ==========
   google_fonts: ^6.1.0
   font_awesome_flutter: ^10.7.0
-  cached_network_image: ^3.3.0
+  cached_network_image: ^3.4.1
 
   # 🔥 ADICIONADO - NECESSÁRIO PARA .withValues() e .withoutValues()
   flex_color_scheme: ^7.3.1
@@ -113,13 +116,12 @@ flutter:
 # ========== CONFIGURAÇÃO DO ÍCONE ==========
 flutter_launcher_icons:
   android: true
-  ios: true
+  ios: false
   windows:
     generate: true
     icon_size: 48
   image_path: "assets/icon/icon.png"
   adaptive_icon_background: "#7B2CBF"
-  adaptive_icon_foreground: "assets/icon/icon-foreground.png"
 
 # ========== CONFIGURAÇÃO DA SPLASH SCREEN ==========
 flutter_native_splash:
@@ -128,7 +130,3 @@ flutter_native_splash:
   android: true
   ios: true
   web: false
-  
-  android_12:
-    color: "#7B2CBF"
-    image: assets/images/splash_logo_android12.png

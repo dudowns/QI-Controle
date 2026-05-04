@@ -86,13 +86,13 @@ class ContaRepository {
     return await getContaByIdString(id.toString());
   }
 
-  // ✅ MÉTODO PARA LIMPAR CACHE
+  // ✅ MÉTODO PARA LIMPAR CACHE (SEM chamar limparCacheCompleto)
   void _limparCache() {
     _cachePaginacao.clear();
     _cachedPagamentos.clear();
     _lastCacheTime = null;
-    _dbHelper.limparCacheCompleto();
-    LoggerService.info('🗑️ Cache limpo');
+    // ✅ NÃO chama _dbHelper.limparCacheCompleto() - deixa o DBHelper gerenciar
+    LoggerService.info('🗑️ Cache local limpo');
   }
 
   // ✅ CORRIGIDO: Com cache em memória e controle de concorrência
@@ -164,9 +164,6 @@ class ContaRepository {
         }
         LoggerService.info(
             '💾 ${supabaseData.length} pagamentos salvos localmente');
-
-        // ✅ FORÇA LIMPEZA DO CACHE DO DB HELPER PARA VER OS NOVOS DADOS
-        _dbHelper.limparCacheCompleto();
       }
 
       // ✅ SALVA NO CACHE EM MEMÓRIA
@@ -301,14 +298,12 @@ class ContaRepository {
 
   Future<bool> pagarConta(int pagamentoId) async {
     final result = await _dbHelper.pagarConta(pagamentoId);
-    // ✅ LIMPA CACHE AO PAGAR CONTA
     _limparCache();
     return result;
   }
 
   Future<int> deletarConta(int contaId) async {
     final result = await _dbHelper.deletarConta(contaId);
-    // ✅ LIMPA CACHE AO DELETAR CONTA
     _limparCache();
     return result;
   }
@@ -320,7 +315,6 @@ class ContaRepository {
     conta['updated_at'] = DateTime.now().toIso8601String();
 
     final result = await _dbHelper.update(tabelaContas, conta, id);
-    // ✅ LIMPA CACHE AO ATUALIZAR CONTA
     _limparCache();
     _syncService.syncNow();
     return result;
@@ -332,7 +326,6 @@ class ContaRepository {
     return await pagarContaComLancamentoString(pagamentoId.toString());
   }
 
-  // NOVO: Pagar conta com ID String
   Future<Result<bool>> pagarContaComLancamentoString(String pagamentoId) async {
     try {
       final db = await _dbHelper.database;
@@ -363,7 +356,6 @@ class ContaRepository {
       final contaData = conta.first;
       final dataPagamento = DateTime.now();
 
-      // Atualizar status para pago (1)
       await db.update(
         tabelaPagamentos,
         {
@@ -376,7 +368,6 @@ class ContaRepository {
         whereArgs: [pagamentoId, pagamentoId],
       );
 
-      // Criar lancamento
       final lancamento = {
         'descricao': contaData['nome'],
         'valor': pagamentoData['valor'],
@@ -401,9 +392,7 @@ class ContaRepository {
         whereArgs: [pagamentoId, pagamentoId],
       );
 
-      // ✅ LIMPA CACHE APÓS PAGAR
       _limparCache();
-
       _syncService.syncNow();
 
       return Result.success(true);
@@ -416,7 +405,6 @@ class ContaRepository {
     return await desfazerPagamentoString(pagamentoId.toString());
   }
 
-  // NOVO: Desfazer pagamento com ID String
   Future<Result<bool>> desfazerPagamentoString(String pagamentoId) async {
     try {
       final db = await _dbHelper.database;
@@ -461,9 +449,7 @@ class ContaRepository {
         whereArgs: [pagamentoId, pagamentoId],
       );
 
-      // ✅ LIMPA CACHE APÓS DESFAZER
       _limparCache();
-
       _syncService.syncNow();
 
       return Result.success(true);
@@ -473,27 +459,22 @@ class ContaRepository {
     }
   }
 
-  // NOVO: Deletar conta com ID String
   Future<void> deletarContaString(String contaId) async {
     final db = await _dbHelper.database;
 
-    // Primeiro deletar pagamentos associados
     await db.delete(
       tabelaPagamentos,
       where: 'conta_id = ?',
       whereArgs: [contaId],
     );
 
-    // Depois deletar a conta
     await db.delete(
       tabelaContas,
       where: 'id = ? OR remote_id = ?',
       whereArgs: [contaId, contaId],
     );
 
-    // ✅ LIMPA CACHE APÓS DELETAR
     _limparCache();
-
     _syncService.syncNow();
   }
 

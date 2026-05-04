@@ -75,10 +75,9 @@ class _ProventosScreenState extends State<ProventosScreen> {
 
   Future<void> _carregarTickers() async {
     try {
-      final response = await _supabase
-          .from('investimentos')
-          .select('ticker')
-          .order('ticker');
+      // ✅ CORRIGIDO: investments (sem 'i' no final)
+      final response =
+          await _supabase.from('investments').select('ticker').order('ticker');
 
       if (!_isDisposed && mounted) {
         final tickers = response
@@ -130,11 +129,13 @@ class _ProventosScreenState extends State<ProventosScreen> {
 
     if (_selectedPeriod != 'ALL') {
       final meses = int.parse(_selectedPeriod.replaceAll('M', ''));
-      final dataCorte = DateTime.now().subtract(Duration(days: meses * 30));
-      resultado =
-          resultado.where((p) => p.dataPagamento.isAfter(dataCorte)).toList();
+      final agora = DateTime.now();
+      final dataCorte = DateTime(agora.year, agora.month - meses + 1, 1);
+      resultado = resultado
+          .where((p) => p.dataPagamento
+              .isAfter(dataCorte.subtract(const Duration(days: 1))))
+          .toList();
     }
-
     if (_searchQuery.isNotEmpty) {
       resultado = resultado
           .where((p) =>
@@ -330,7 +331,7 @@ class _ProventosScreenState extends State<ProventosScreen> {
                     onPressed: _carregarTudo,
                   ),
                   IconButton(
-                    icon: Icon(
+                    icon: const Icon(
                       Icons.add_circle_outline,
                       color: AppColors.primary,
                       size: 24,
@@ -558,7 +559,6 @@ class _ProventosScreenState extends State<ProventosScreen> {
                         height: 140,
                         child: Row(
                           children: [
-                            // Gráfico
                             Expanded(
                               flex: 1,
                               child: PieChart(
@@ -595,7 +595,6 @@ class _ProventosScreenState extends State<ProventosScreen> {
                                 ),
                               ),
                             ),
-                            // Legenda
                             Expanded(
                               flex: 1,
                               child: ListView.builder(
@@ -739,7 +738,6 @@ class _ProventosScreenState extends State<ProventosScreen> {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            // Ícone
             Container(
               width: 40,
               height: 40,
@@ -754,8 +752,6 @@ class _ProventosScreenState extends State<ProventosScreen> {
               ),
             ),
             const SizedBox(width: 12),
-
-            // Informações
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -783,7 +779,7 @@ class _ProventosScreenState extends State<ProventosScreen> {
                         child: Text(
                           _tiposProvento[provento.tipoProvento] ??
                               provento.tipoProvento,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 9,
                             color: AppColors.primary,
                             fontWeight: FontWeight.w500,
@@ -806,11 +802,11 @@ class _ProventosScreenState extends State<ProventosScreen> {
                                 const Color(0xFF3B82F6).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Text(
+                          child: const Text(
                             'Futuro',
                             style: TextStyle(
                               fontSize: 9,
-                              color: const Color(0xFF3B82F6),
+                              color: Color(0xFF3B82F6),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -820,8 +816,6 @@ class _ProventosScreenState extends State<ProventosScreen> {
                 ],
               ),
             ),
-
-            // Valor e ações
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
