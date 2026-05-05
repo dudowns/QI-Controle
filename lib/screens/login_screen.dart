@@ -1,8 +1,10 @@
+// lib/screens/login_screen.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import '../services/auth_service.dart';
 import '../services/sync_service.dart';
+import '../constants/app_colors.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -15,8 +17,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final AuthService _auth = AuthService();
   final SyncService _syncService = SyncService();
-  final TextEditingController _loginController =
-      TextEditingController(); // ✅ Email OU Username
+  final TextEditingController _loginController = TextEditingController();
   final TextEditingController _senhaController = TextEditingController();
   bool _carregando = false;
   bool _mostrarSenha = false;
@@ -82,25 +83,11 @@ class _LoginScreenState extends State<LoginScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF7B2CBF), Color(0xFF9D4EDD), Color(0xFFE0AAFF)],
+            colors: [Color(0xFF0D1B2A), Color(0xFF133B5C), Color(0xFF1B5F8C)],
           ),
         ),
         child: Stack(
           children: [
-            SizedBox(
-              width: double.infinity,
-              height: double.infinity,
-              child: Opacity(
-                opacity: 0.15,
-                child: Image.asset(
-                  'assets/images/login_illustration.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const SizedBox.shrink();
-                  },
-                ),
-              ),
-            ),
             Center(
               child: SingleChildScrollView(
                 padding: EdgeInsets.symmetric(
@@ -140,17 +127,15 @@ class _LoginScreenState extends State<LoginScreen> {
                               TextStyle(fontSize: 13, color: Colors.grey[600]),
                         ),
                         const SizedBox(height: 32),
-                        // ✅ CAMPO EMAIL OU USERNAME
                         TextField(
                           controller: _loginController,
                           keyboardType: TextInputType.text,
                           decoration: InputDecoration(
                             labelText: 'E-mail ou Username',
                             hintText: 'seu@email.com ou username',
-                            labelStyle:
-                                const TextStyle(color: Color(0xFF7B2CBF)),
-                            prefixIcon: const Icon(Icons.person_outline,
-                                color: Color(0xFF7B2CBF)),
+                            labelStyle: TextStyle(color: AppColors.primary),
+                            prefixIcon: Icon(Icons.person_outline,
+                                color: AppColors.primary),
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(16)),
                             enabledBorder: OutlineInputBorder(
@@ -159,8 +144,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                  color: Color(0xFF7B2CBF), width: 2),
+                              borderSide: BorderSide(
+                                  color: AppColors.primary, width: 2),
                             ),
                             filled: true,
                             fillColor: Colors.grey[50],
@@ -173,16 +158,15 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: InputDecoration(
                             labelText: 'Senha',
                             hintText: '••••••••',
-                            labelStyle:
-                                const TextStyle(color: Color(0xFF7B2CBF)),
-                            prefixIcon: const Icon(Icons.lock_outline,
-                                color: Color(0xFF7B2CBF)),
+                            labelStyle: TextStyle(color: AppColors.primary),
+                            prefixIcon: Icon(Icons.lock_outline,
+                                color: AppColors.primary),
                             suffixIcon: IconButton(
                               icon: Icon(
                                   _mostrarSenha
                                       ? Icons.visibility
                                       : Icons.visibility_off,
-                                  color: const Color(0xFF7B2CBF)),
+                                  color: AppColors.primary),
                               onPressed: () => setState(
                                   () => _mostrarSenha = !_mostrarSenha),
                             ),
@@ -194,8 +178,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                  color: Color(0xFF7B2CBF), width: 2),
+                              borderSide: BorderSide(
+                                  color: AppColors.primary, width: 2),
                             ),
                             filled: true,
                             fillColor: Colors.grey[50],
@@ -207,25 +191,25 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: TextButton(
                             onPressed: () => Navigator.pushNamed(
                                 context, '/forgot-password'),
-                            child: const Text('Esqueceu a senha?',
+                            child: Text('Esqueceu a senha?',
                                 style: TextStyle(
-                                    fontSize: 12, color: Color(0xFF7B2CBF))),
+                                    fontSize: 12, color: AppColors.primary)),
                           ),
                         ),
                         const SizedBox(height: 16),
                         _carregando
                             ? const Center(
                                 child: CircularProgressIndicator(
-                                    color: Color(0xFF7B2CBF)))
+                                    color: AppColors.primary))
                             : SizedBox(
                                 width: double.infinity,
                                 height: 52,
                                 child: ElevatedButton(
                                   onPressed: _fazerLogin,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF7B2CBF),
+                                    backgroundColor: AppColors.primary,
                                     elevation: 3,
-                                    shadowColor: const Color(0xFF7B2CBF)
+                                    shadowColor: AppColors.primary
                                         .withValues(alpha: 0.5),
                                     shape: RoundedRectangleBorder(
                                         borderRadius:
@@ -269,29 +253,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Image.asset(
-                                    'assets/images/google_g.png',
-                                    height: 24,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        width: 24,
-                                        height: 24,
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                              color: const Color(0xFF7B2CBF),
-                                              width: 1),
-                                        ),
-                                        child: const Center(
-                                            child: Text('G',
-                                                style: TextStyle(
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Color(0xFF7B2CBF)))),
-                                      );
-                                    },
-                                  ),
+                                  Image.asset('assets/images/google_g.png',
+                                      height: 24),
                                   const SizedBox(width: 12),
                                   const Text('Google',
                                       style: TextStyle(
@@ -317,9 +280,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: TextButton.styleFrom(
                                   padding: EdgeInsets.zero,
                                   minimumSize: Size.zero),
-                              child: const Text('CADASTRE-SE',
+                              child: Text('CADASTRE-SE',
                                   style: TextStyle(
-                                      color: Color(0xFF7B2CBF),
+                                      color: AppColors.primary,
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13)),
                             ),

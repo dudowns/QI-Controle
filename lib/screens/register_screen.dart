@@ -1,6 +1,8 @@
+// lib/screens/register_screen.dart
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import '../services/auth_service.dart';
+import '../constants/app_colors.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -12,8 +14,7 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final AuthService _auth = AuthService();
   final TextEditingController _nomeController = TextEditingController();
-  final TextEditingController _usernameController =
-      TextEditingController(); // ✅ NOVO
+  final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _senhaController = TextEditingController();
   final TextEditingController _confirmarController = TextEditingController();
@@ -88,7 +89,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF7B2CBF), Color(0xFF9D4EDD), Color(0xFFE0AAFF)],
+            colors: [Color(0xFF0D1B2A), Color(0xFF133B5C), Color(0xFF1B5F8C)],
           ),
         ),
         child: Center(
@@ -122,13 +123,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFF7B2CBF), Color(0xFF9D4EDD)],
+                            colors: [AppColors.primary, AppColors.primaryLight],
                           ),
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF7B2CBF)
-                                  .withValues(alpha: 0.4),
+                              color: AppColors.primary.withValues(alpha: 0.4),
                               blurRadius: 20,
                               spreadRadius: 5,
                             ),
@@ -152,15 +152,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                     ),
                     const SizedBox(height: 32),
-                    // Nome
                     TextField(
                       controller: _nomeController,
                       decoration: InputDecoration(
                         labelText: 'Nome (opcional)',
                         hintText: 'Seu nome',
-                        labelStyle: const TextStyle(color: Color(0xFF7B2CBF)),
-                        prefixIcon: const Icon(Icons.person_outline,
-                            color: Color(0xFF7B2CBF)),
+                        labelStyle: TextStyle(color: AppColors.primary),
+                        prefixIcon: Icon(Icons.person_outline,
+                            color: AppColors.primary),
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16)),
                         enabledBorder: OutlineInputBorder(
@@ -169,24 +168,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                              color: Color(0xFF7B2CBF), width: 2),
+                          borderSide:
+                              BorderSide(color: AppColors.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // ✅ USERNAME
                     TextField(
                       controller: _usernameController,
                       textInputAction: TextInputAction.next,
                       decoration: InputDecoration(
                         labelText: 'Nome de usuário (para login)',
                         hintText: 'seu_username',
-                        labelStyle: const TextStyle(color: Color(0xFF7B2CBF)),
-                        prefixIcon: const Icon(Icons.alternate_email,
-                            color: Color(0xFF7B2CBF)),
+                        labelStyle: TextStyle(color: AppColors.primary),
+                        prefixIcon: Icon(Icons.alternate_email,
+                            color: AppColors.primary),
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16)),
                         enabledBorder: OutlineInputBorder(
@@ -195,24 +193,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                              color: Color(0xFF7B2CBF), width: 2),
+                          borderSide:
+                              BorderSide(color: AppColors.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // Email
                     TextField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                       decoration: InputDecoration(
                         labelText: 'E-mail',
                         hintText: 'seu@email.com',
-                        labelStyle: const TextStyle(color: Color(0xFF7B2CBF)),
-                        prefixIcon: const Icon(Icons.email_outlined,
-                            color: Color(0xFF7B2CBF)),
+                        labelStyle: TextStyle(color: AppColors.primary),
+                        prefixIcon: Icon(Icons.email_outlined,
+                            color: AppColors.primary),
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16)),
                         enabledBorder: OutlineInputBorder(
@@ -221,30 +218,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                              color: Color(0xFF7B2CBF), width: 2),
+                          borderSide:
+                              BorderSide(color: AppColors.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // Senha
                     TextField(
                       controller: _senhaController,
                       obscureText: !_mostrarSenha,
                       decoration: InputDecoration(
                         labelText: 'Senha',
                         hintText: '••••••••',
-                        labelStyle: const TextStyle(color: Color(0xFF7B2CBF)),
-                        prefixIcon: const Icon(Icons.lock_outline,
-                            color: Color(0xFF7B2CBF)),
+                        labelStyle: TextStyle(color: AppColors.primary),
+                        prefixIcon:
+                            Icon(Icons.lock_outline, color: AppColors.primary),
                         suffixIcon: IconButton(
                           icon: Icon(
                               _mostrarSenha
                                   ? Icons.visibility
                                   : Icons.visibility_off,
-                              color: const Color(0xFF7B2CBF)),
+                              color: AppColors.primary),
                           onPressed: () =>
                               setState(() => _mostrarSenha = !_mostrarSenha),
                         ),
@@ -256,30 +252,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                              color: Color(0xFF7B2CBF), width: 2),
+                          borderSide:
+                              BorderSide(color: AppColors.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // Confirmar Senha
                     TextField(
                       controller: _confirmarController,
                       obscureText: !_mostrarConfirmar,
                       decoration: InputDecoration(
                         labelText: 'Confirmar Senha',
                         hintText: '••••••••',
-                        labelStyle: const TextStyle(color: Color(0xFF7B2CBF)),
-                        prefixIcon: const Icon(Icons.lock_outline,
-                            color: Color(0xFF7B2CBF)),
+                        labelStyle: TextStyle(color: AppColors.primary),
+                        prefixIcon:
+                            Icon(Icons.lock_outline, color: AppColors.primary),
                         suffixIcon: IconButton(
                           icon: Icon(
                               _mostrarConfirmar
                                   ? Icons.visibility
                                   : Icons.visibility_off,
-                              color: const Color(0xFF7B2CBF)),
+                              color: AppColors.primary),
                           onPressed: () => setState(
                               () => _mostrarConfirmar = !_mostrarConfirmar),
                         ),
@@ -291,8 +286,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                              color: Color(0xFF7B2CBF), width: 2),
+                          borderSide:
+                              BorderSide(color: AppColors.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
@@ -302,17 +297,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     _carregando
                         ? const Center(
                             child: CircularProgressIndicator(
-                                color: Color(0xFF7B2CBF)))
+                                color: AppColors.primary))
                         : SizedBox(
                             width: double.infinity,
                             height: 52,
                             child: ElevatedButton(
                               onPressed: _cadastrar,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF7B2CBF),
+                                backgroundColor: AppColors.primary,
                                 elevation: 3,
-                                shadowColor: const Color(0xFF7B2CBF)
-                                    .withValues(alpha: 0.5),
+                                shadowColor:
+                                    AppColors.primary.withValues(alpha: 0.5),
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16)),
                               ),
@@ -335,9 +330,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           onPressed: () => Navigator.pop(context),
                           style: TextButton.styleFrom(
                               padding: EdgeInsets.zero, minimumSize: Size.zero),
-                          child: const Text('FAZER LOGIN',
+                          child: Text('FAZER LOGIN',
                               style: TextStyle(
-                                  color: Color(0xFF7B2CBF),
+                                  color: AppColors.primary,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13)),
                         ),

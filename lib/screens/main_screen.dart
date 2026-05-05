@@ -130,27 +130,29 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   }
 
   void _initRealtime() {
-    try {
-      final supabase = Supabase.instance.client;
-      _realtimeChannel = supabase.channel('public:changes');
-      _realtimeChannel?.onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'lancamentos',
-        callback: (payload) {
-          if (kDebugMode) debugPrint('🔄 Mudança detectada');
-          _onDataChanged();
-        },
-      );
-      _realtimeChannel?.subscribe((status, error) {
-        if (!mounted) return;
-        setState(() {
-          _realtimeConnected = status == RealtimeSubscribeStatus.subscribed;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        final supabase = Supabase.instance.client;
+        _realtimeChannel = supabase.channel('public:changes');
+        _realtimeChannel?.onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'lancamentos',
+          callback: (payload) {
+            if (kDebugMode) debugPrint('🔄 Mudança detectada');
+            _onDataChanged();
+          },
+        );
+        _realtimeChannel?.subscribe((status, error) {
+          if (!mounted) return;
+          setState(() {
+            _realtimeConnected = status == RealtimeSubscribeStatus.subscribed;
+          });
         });
-      });
-    } catch (e) {
-      if (kDebugMode) debugPrint('❌ Realtime init error: $e');
-    }
+      } catch (e) {
+        if (kDebugMode) debugPrint('❌ Realtime init error: $e');
+      }
+    });
   }
 
   void _onDataChanged() {
@@ -376,10 +378,7 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                     child: _drawerOpen ? _buildSideMenu() : const SizedBox(),
                   ),
                 Expanded(
-                  child: IndexedStack(
-                    index: _currentIndex,
-                    children: _screens,
-                  ),
+                  child: _screens[_currentIndex],
                 ),
               ],
             ),

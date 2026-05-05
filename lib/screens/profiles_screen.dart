@@ -171,9 +171,9 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-              Color(0xFF0F0C29),
-              Color(0xFF302B63),
-              Color(0xFF24243E)
+              Color(0xFF0D1B2A),
+              Color(0xFF133B5C),
+              Color(0xFF0D1B2A)
             ])),
         child: SafeArea(
           child: Stack(children: [
@@ -330,8 +330,8 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                               borderRadius: BorderRadius.circular(12)),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                                color: Color(0xFF1B5F8C), width: 2),
+                            borderSide:
+                                BorderSide(color: AppColors.primary, width: 2),
                           ),
                           filled: true,
                           fillColor: Colors.grey[50],
@@ -350,7 +350,7 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                         onPressed:
                             _fazendoLogin ? null : () => _verificarPin(perfil),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1B5F8C),
+                          backgroundColor: AppColors.primary,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10)),
                         ),
