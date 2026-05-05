@@ -320,6 +320,7 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                           fontSize: 26,
                           letterSpacing: 10,
                           fontWeight: FontWeight.bold,
+                          color: Colors.black87,
                         ),
                         decoration: InputDecoration(
                           hintText: '0000',
