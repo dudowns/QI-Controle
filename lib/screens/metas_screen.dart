@@ -1,12 +1,13 @@
 ﻿// lib/screens/metas_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../repositories/repositories.dart';
+import '../models/meta_model.dart';
+import '../repositories/meta_repository.dart';
 import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
 import '../services/logger_service.dart';
 import '../widgets/toast.dart';
-import '../widgets/animated_counter.dart';
 
 class MetasScreen extends StatefulWidget {
   const MetasScreen({super.key});
@@ -19,136 +20,243 @@ class _MetasScreenState extends State<MetasScreen> {
   final MetaRepository _metaRepo = MetaRepository();
 
   List<Map<String, dynamic>> _metas = [];
+  Map<String, dynamic>? _resumo;
   bool _isLoading = true;
+  String _filtroStatus = 'todas';
 
   @override
   void initState() {
     super.initState();
-    _carregarMetas();
+    _carregarDados();
   }
 
-  Future<void> _carregarMetas() async {
+  Future<void> _carregarDados() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
-      _metas = await _metaRepo.getAllMetas();
+      final resultados = await Future.wait([
+        _metaRepo.getAllMetas(),
+        _metaRepo.getResumoMetas(),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _metas = resultados[0] as List<Map<String, dynamic>>;
+          _resumo = resultados[1] as Map<String, dynamic>?;
+        });
+      }
     } catch (e) {
       LoggerService.error('Erro ao carregar metas: $e');
       if (mounted) {
-        Toast.error(context, 'Erro ao carregar: $e');
+        Toast.error(context, 'Erro ao carregar metas');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  List<Map<String, dynamic>> get _metasFiltradas {
+    if (_filtroStatus == 'todas') return _metas;
+    if (_filtroStatus == 'concluidas') {
+      return _metas.where((m) {
+        final concluida = m['concluida'] == 1;
+        final valorAtual = (m['valor_atual'] as num?)?.toDouble() ?? 0;
+        final valorObjetivo = (m['valor_objetivo'] as num?)?.toDouble() ?? 0;
+        return concluida || valorAtual >= valorObjetivo;
+      }).toList();
+    }
+    if (_filtroStatus == 'andamento') {
+      return _metas.where((m) {
+        final concluida = m['concluida'] == 1;
+        final valorAtual = (m['valor_atual'] as num?)?.toDouble() ?? 0;
+        final valorObjetivo = (m['valor_objetivo'] as num?)?.toDouble() ?? 0;
+        return !(concluida || valorAtual >= valorObjetivo);
+      }).toList();
+    }
+    return _metas;
+  }
+
   Future<void> _adicionarMeta() async {
     final resultado = await _mostrarModalMeta();
     if (resultado != null) {
-      await _salvarMeta(resultado);
-      await _carregarMetas();
+      await _metaRepo.insertMeta(resultado);
+      await _carregarDados();
     }
   }
 
   Future<void> _editarMeta(Map<String, dynamic> meta) async {
     final resultado = await _mostrarModalMeta(meta: meta);
     if (resultado != null) {
-      await _atualizarMeta(resultado);
-      await _carregarMetas();
+      await _metaRepo.updateMeta(resultado);
+      await _carregarDados();
     }
   }
 
   Future<Map<String, dynamic>?> _mostrarModalMeta(
       {Map<String, dynamic>? meta}) async {
-    final tituloController = TextEditingController(text: meta?['titulo'] ?? '');
+    final tituloController =
+        TextEditingController(text: meta?['titulo']?.toString() ?? '');
     final descricaoController =
-        TextEditingController(text: meta?['descricao'] ?? '');
+        TextEditingController(text: meta?['descricao']?.toString() ?? '');
     final valorObjetivoController =
         TextEditingController(text: meta?['valor_objetivo']?.toString() ?? '');
     final valorAtualController =
         TextEditingController(text: meta?['valor_atual']?.toString() ?? '');
-    final dataFimController = TextEditingController();
-    String cor = meta?['cor'] ?? '#4CAF50';
-    String icone = meta?['icone'] ?? 'ðŸŽ¯';
-    DateTime? dataInicio;
-    DateTime? dataFim;
 
-    dataInicio = meta != null && meta['data_inicio'] != null
-        ? DateTime.parse(meta['data_inicio'])
+    String tipoSelecionado = meta?['cor']?.toString() ?? 'geral';
+    DateTime? dataInicio = meta?['data_inicio'] != null
+        ? DateTime.parse(meta!['data_inicio'].toString())
         : DateTime.now();
-
-    if (meta?['data_fim'] != null) {
-      dataFim = DateTime.parse(meta!['data_fim']);
-      dataFimController.text = DateFormat('dd/MM/yyyy').format(dataFim);
-    }
+    DateTime? dataFim = meta?['data_fim'] != null
+        ? DateTime.parse(meta!['data_fim'].toString())
+        : null;
 
     return showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) {
           return AlertDialog(
-            title: Text(meta == null ? 'Nova Meta' : 'Editar Meta'),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        _getTipoMeta(tipoSelecionado).cor.withOpacity(0.8),
+                        _getTipoMeta(tipoSelecionado).cor,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    _getTipoMeta(tipoSelecionado).emoji,
+                    style: const TextStyle(fontSize: 24),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    meta == null ? 'Nova Meta' : 'Editar Meta',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text('Tipo de Meta',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: TipoMeta.values.map((tipo) {
+                        final selecionado = tipo.nome == tipoSelecionado;
+                        return GestureDetector(
+                          onTap: () =>
+                              setStateDialog(() => tipoSelecionado = tipo.nome),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: selecionado
+                                  ? tipo.cor.withOpacity(0.15)
+                                  : Colors.grey[100],
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color:
+                                    selecionado ? tipo.cor : Colors.transparent,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(tipo.emoji,
+                                    style: const TextStyle(fontSize: 16)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  tipo.nome.substring(0, 1).toUpperCase() +
+                                      tipo.nome.substring(1),
+                                  style: TextStyle(
+                                    color: selecionado
+                                        ? tipo.cor
+                                        : Colors.grey[700],
+                                    fontWeight: selecionado
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                   TextField(
                     controller: tituloController,
-                    decoration: const InputDecoration(
-                      labelText: 'Titulo da Meta',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: 'Título',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.flag_outlined),
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: descricaoController,
-                    decoration: const InputDecoration(
-                      labelText: 'Descricao (opcional)',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: 'Descrição (opcional)',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.description_outlined),
                     ),
+                    maxLines: 2,
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: valorObjetivoController,
-                    decoration: const InputDecoration(
-                      labelText: 'Valor Objetivo',
-                      border: OutlineInputBorder(),
-                      prefixText: 'R\$ ',
-                    ),
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: valorAtualController,
-                    decoration: const InputDecoration(
-                      labelText: 'Valor Atual (opcional)',
-                      border: OutlineInputBorder(),
-                      prefixText: 'R\$ ',
-                    ),
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 16),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Data de inicio: ${DateFormat('dd/MM/yyyy').format(dataInicio!)}',
-                          style: const TextStyle(fontSize: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: valorObjetivoController,
+                          decoration: InputDecoration(
+                            labelText: 'Valor Objetivo',
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            prefixText: 'R\$ ',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
                         ),
-                        Icon(Icons.calendar_today,
-                            size: 18, color: Colors.grey[600]),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: valorAtualController,
+                          decoration: InputDecoration(
+                            labelText: 'Valor Atual',
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            prefixText: 'R\$ ',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   InkWell(
@@ -162,72 +270,27 @@ class _MetasScreenState extends State<MetasScreen> {
                             DateTime.now().add(const Duration(days: 365 * 5)),
                       );
                       if (picked != null) {
-                        dataFim = picked;
-                        dataFimController.text =
-                            DateFormat('dd/MM/yyyy').format(picked);
-                        setStateDialog(() {});
+                        setStateDialog(() => dataFim = picked);
                       }
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 16),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          Icon(Icons.calendar_today,
+                              color: _getTipoMeta(tipoSelecionado).cor),
+                          const SizedBox(width: 12),
                           Text(
-                            dataFimController.text.isEmpty
-                                ? 'Data de conclusao'
-                                : dataFimController.text,
-                            style: TextStyle(
-                              color: dataFimController.text.isEmpty
-                                  ? Colors.grey
-                                  : Colors.black,
-                            ),
+                            'Prazo: ${dataFim != null ? DateFormat('dd/MM/yyyy').format(dataFim!) : 'Selecionar data'}',
+                            style: const TextStyle(fontSize: 14),
                           ),
-                          const Icon(Icons.calendar_today, size: 18),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: cor, // âœ… CORRIGIDO: initialValue -> value
-                    decoration: const InputDecoration(
-                      labelText: 'Cor',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: [
-                      '#4CAF50',
-                      '#2196F3',
-                      '#FF9800',
-                      '#F44336',
-                      '#9C27B0',
-                      '#00BCD4'
-                    ].map((c) {
-                      return DropdownMenuItem(
-                        value: c,
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 20,
-                              height: 20,
-                              decoration: BoxDecoration(
-                                color: Color(
-                                    int.parse(c.replaceFirst('#', '0xFF'))),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(c),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (value) => setStateDialog(() => cor = value!),
                   ),
                 ],
               ),
@@ -237,24 +300,22 @@ class _MetasScreenState extends State<MetasScreen> {
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Cancelar'),
               ),
-              ElevatedButton(
+              ElevatedButton.icon(
                 onPressed: () {
                   final titulo = tituloController.text.trim();
                   if (titulo.isEmpty) {
-                    Toast.warning(context, 'Digite o titulo da meta');
+                    Toast.warning(context, 'Digite o título da meta');
                     return;
                   }
 
                   double valorObjetivo;
                   double valorAtual;
-
                   try {
                     String valorObjStr = valorObjetivoController.text
                         .replaceAll('R\$', '')
                         .replaceAll(' ', '')
                         .replaceAll(',', '.')
                         .trim();
-
                     if (valorObjStr.isEmpty) {
                       Toast.warning(context, 'Digite o valor objetivo');
                       return;
@@ -266,17 +327,15 @@ class _MetasScreenState extends State<MetasScreen> {
                         .replaceAll(' ', '')
                         .replaceAll(',', '.')
                         .trim();
-
                     valorAtual =
                         valorAtualStr.isEmpty ? 0 : double.parse(valorAtualStr);
                   } catch (e) {
-                    Toast.error(context,
-                        'Valor invalido. Use numeros como: 1000 ou 1000,50');
+                    Toast.error(context, 'Valor inválido');
                     return;
                   }
 
                   if (dataFim == null) {
-                    Toast.warning(context, 'Selecione a data de conclusao');
+                    Toast.warning(context, 'Selecione a data de conclusão');
                     return;
                   }
 
@@ -286,14 +345,24 @@ class _MetasScreenState extends State<MetasScreen> {
                     'descricao': descricaoController.text.trim(),
                     'valor_objetivo': valorObjetivo,
                     'valor_atual': valorAtual,
-                    'data_inicio': DateFormat('yyyy-MM-dd').format(dataInicio!),
+                    'data_inicio': DateFormat('yyyy-MM-dd')
+                        .format(dataInicio ?? DateTime.now()),
                     'data_fim': DateFormat('yyyy-MM-dd').format(dataFim!),
-                    'cor': cor,
-                    'icone': icone,
+                    'cor': tipoSelecionado,
+                    // 'type': tipoSelecionado,
+                    // 'icon': _getTipoMeta(tipoSelecionado).emoji,
                     'concluida': meta?['concluida'] ?? 0,
                   });
                 },
-                child: const Text('Salvar'),
+                icon: const Icon(Icons.save, size: 18),
+                label: const Text('Salvar'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _getTipoMeta(tipoSelecionado).cor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
             ],
           );
@@ -302,83 +371,48 @@ class _MetasScreenState extends State<MetasScreen> {
     );
   }
 
-  Future<void> _salvarMeta(Map<String, dynamic> meta) async {
-    try {
-      await _metaRepo.insertMeta(meta);
-      if (mounted) {
-        Toast.success(context, '${meta['titulo']} adicionada!');
-      }
-    } catch (e) {
-      if (mounted) {
-        Toast.error(context, 'Erro ao salvar: $e');
-      }
-      LoggerService.error('Erro ao salvar meta: $e');
-    }
-  }
-
-  Future<void> _atualizarMeta(Map<String, dynamic> meta) async {
-    try {
-      await _metaRepo.updateMeta(meta);
-      if (mounted) {
-        Toast.success(context, '${meta['titulo']} atualizada!');
-      }
-    } catch (e) {
-      if (mounted) {
-        Toast.error(context, 'Erro ao atualizar: $e');
-      }
-      LoggerService.error('Erro ao atualizar meta: $e');
-    }
-  }
-
-  Future<void> _excluirMeta(int id, String titulo) async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Excluir Meta'),
-        content: Text('Deseja excluir "$titulo"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar == true) {
-      try {
-        await _metaRepo.deleteMeta(id);
-        await _carregarMetas();
-        if (mounted) {
-          Toast.success(context, '$titulo excluida!');
-        }
-      } catch (e) {
-        if (mounted) {
-          Toast.error(context, 'Erro ao excluir: $e');
-        }
-      }
-    }
-  }
-
-  Future<void> _atualizarProgresso(Map<String, dynamic> meta) async {
+  Future<void> _adicionarProgresso(Map<String, dynamic> meta) async {
     final valorController = TextEditingController();
 
-    final confirmar = await showDialog<bool>(
+    final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Adicionar Progresso'),
-        content: TextField(
-          controller: valorController,
-          decoration: const InputDecoration(
-            labelText: 'Valor a adicionar',
-            border: OutlineInputBorder(),
-            prefixText: 'R\$ ',
-          ),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.add_chart, color: Colors.orange),
+            ),
+            const SizedBox(width: 12),
+            const Text('Adicionar Progresso'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Meta: ${meta['titulo']?.toString() ?? ''}',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: valorController,
+              decoration: InputDecoration(
+                labelText: 'Valor a adicionar',
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                prefixText: 'R\$ ',
+              ),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -387,36 +421,89 @@ class _MetasScreenState extends State<MetasScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Adicionar'),
           ),
         ],
       ),
     );
 
-    if (confirmar == true && valorController.text.isNotEmpty) {
+    if (result == true && valorController.text.isNotEmpty) {
       try {
         String valorStr = valorController.text
             .replaceAll('R\$', '')
             .replaceAll(' ', '')
             .replaceAll(',', '.')
             .trim();
-
         final valorAdicional = double.parse(valorStr);
-        final novoValorAtual =
-            (meta['valor_atual'] as num).toDouble() + valorAdicional;
+        final valorAtualAtual = (meta['valor_atual'] as num?)?.toDouble() ?? 0;
+        final novoValorAtual = valorAtualAtual + valorAdicional;
 
-        await _metaRepo.atualizarProgressoMeta(meta['id'], novoValorAtual);
-        await _carregarMetas();
+        await _metaRepo.atualizarProgressoMeta(
+            meta['id'] as int, novoValorAtual);
 
+        final valorObjetivo = (meta['valor_objetivo'] as num?)?.toDouble() ?? 0;
+        if (novoValorAtual >= valorObjetivo) {
+          await _metaRepo.concluirMeta(meta['id'] as int);
+        }
+
+        await _carregarDados();
         if (mounted) {
-          Toast.success(context, 'Progresso atualizado!');
+          Toast.success(context, 'Progresso atualizado! 🎯');
         }
       } catch (e) {
         if (mounted) {
-          Toast.error(context, 'Valor invalido');
+          Toast.error(context, 'Valor inválido');
         }
       }
     }
+  }
+
+  Future<void> _excluirMeta(int id, String titulo) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Excluir Meta'),
+        content:
+            Text('Deseja excluir "$titulo"?\nEsta ação não pode ser desfeita.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      try {
+        await _metaRepo.deleteMeta(id);
+        await _carregarDados();
+        if (mounted) {
+          Toast.success(context, '$titulo excluída!');
+        }
+      } catch (e) {
+        if (mounted) {
+          Toast.error(context, 'Erro ao excluir');
+        }
+      }
+    }
+  }
+
+  TipoMeta _getTipoMeta(String? tipo) {
+    return TipoMetaExtension.fromString(tipo);
   }
 
   @override
@@ -424,94 +511,284 @@ class _MetasScreenState extends State<MetasScreen> {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        title: const Text('Metas'),
         backgroundColor: Colors.transparent,
         foregroundColor: AppColors.textPrimary(context),
         elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _carregarMetas,
+            onPressed: _carregarDados,
             tooltip: 'Atualizar',
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _metas.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+          : Column(
+              children: [
+                if (_resumo != null) _buildResumo(),
+                _buildFiltrosStatus(),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(Icons.flag,
-                          size: 64, color: AppColors.muted(context)),
-                      const SizedBox(height: 16),
                       Text(
-                        'Nenhuma meta cadastrada',
-                        style:
-                            TextStyle(color: AppColors.textSecondary(context)),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Clique no botao + para criar sua primeira meta',
+                        '${_metasFiltradas.length} meta(s)',
                         style: TextStyle(
-                            fontSize: 12, color: AppColors.textHint(context)),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary(context),
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _adicionarMeta,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Nova Meta'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                        ),
                       ),
                     ],
                   ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _metas.length,
-                  itemBuilder: (context, index) {
-                    final meta = _metas[index];
-                    return _buildMetaCard(meta);
-                  },
                 ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _adicionarMeta,
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
+                Expanded(
+                  child: _metasFiltradas.isEmpty
+                      ? _buildEmptyState()
+                      : RefreshIndicator(
+                          onRefresh: _carregarDados,
+                          child: GridView.builder(
+                            padding: const EdgeInsets.all(16),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              mainAxisSpacing: 12,
+                              crossAxisSpacing: 12,
+                              childAspectRatio: 2.1,
+                            ),
+                            itemCount: _metasFiltradas.length,
+                            itemBuilder: (context, index) {
+                              return _buildMetaCard(_metasFiltradas[index]);
+                            },
+                          ),
+                        ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildResumo() {
+    if (_resumo == null) return const SizedBox.shrink();
+
+    final total = (_resumo!['total'] as num?)?.toInt() ?? 0;
+    final concluidas = (_resumo!['concluidas'] as num?)?.toInt() ?? 0;
+    final emAndamento = (_resumo!['emAndamento'] as num?)?.toInt() ?? 0;
+    final progressoGeral =
+        (_resumo!['progressoGeral'] as num?)?.toDouble() ?? 0.0;
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.primary.withOpacity(0.8), AppColors.primary],
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildResumoItem('Total', '$total', Icons.flag),
+              _buildResumoItem('Concluídas', '$concluidas', Icons.check_circle),
+              _buildResumoItem(
+                  'Em Andamento', '$emAndamento', Icons.trending_up),
+            ],
+          ),
+          if (progressoGeral > 0) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: (progressoGeral / 100).clamp(0.0, 1.0),
+                      backgroundColor: Colors.white.withOpacity(0.3),
+                      color: Colors.white,
+                      minHeight: 6,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${progressoGeral.toStringAsFixed(1)}%',
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResumoItem(String label, String valor, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white, size: 20),
+        const SizedBox(height: 4),
+        Text(
+          valor,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 11),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFiltrosStatus() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          _buildChipFiltro('Todas', 'todas'),
+          const SizedBox(width: 8),
+          _buildChipFiltro('Em Andamento', 'andamento'),
+          const SizedBox(width: 8),
+          _buildChipFiltro('Concluídas', 'concluidas'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChipFiltro(String label, String status) {
+    final selecionado = _filtroStatus == status;
+    return GestureDetector(
+      onTap: () => setState(() => _filtroStatus = status),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selecionado ? AppColors.primary : Colors.grey[200],
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selecionado ? Colors.white : Colors.grey[700],
+            fontWeight: selecionado ? FontWeight.bold : FontWeight.normal,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.flag, size: 64, color: AppColors.primary),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _filtroStatus == 'todas'
+                ? 'Nenhuma meta cadastrada'
+                : 'Nenhuma meta encontrada',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textSecondary(context),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Clique no botão + para criar sua primeira meta',
+            style: TextStyle(fontSize: 12, color: AppColors.textHint(context)),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildMetaCard(Map<String, dynamic> meta) {
-    final titulo = meta['titulo'] ?? 'Sem titulo';
-    final descricao = meta['descricao'] ?? '';
+    final titulo = meta['titulo']?.toString() ?? 'Sem título';
+    final descricao = meta['descricao']?.toString() ?? '';
     final valorObjetivo = (meta['valor_objetivo'] as num?)?.toDouble() ?? 0;
     final valorAtual = (meta['valor_atual'] as num?)?.toDouble() ?? 0;
     final progresso = valorObjetivo > 0 ? (valorAtual / valorObjetivo) : 0;
     final percentual = (progresso * 100).clamp(0, 100);
-    final dataInicio = meta['data_inicio'] != null
-        ? DateTime.parse(meta['data_inicio'].toString())
+    final dataFim = meta['data_fim'] != null
+        ? DateTime.parse(meta['data_fim'].toString())
         : DateTime.now();
-    final dataFim = DateTime.parse(meta['data_fim'].toString());
-    final corHex = meta['cor'] ?? '#4CAF50';
-    final cor = Color(int.parse(corHex.replaceFirst('#', '0xFF')));
+    final tipoMeta = _getTipoMeta(meta['cor']?.toString());
     final diasRestantes = dataFim.difference(DateTime.now()).inDays;
     final estaConcluida = meta['concluida'] == 1 || valorAtual >= valorObjetivo;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      elevation: 3,
+      shadowColor: tipoMeta.cor.withOpacity(0.3),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white,
+              tipoMeta.cor.withOpacity(0.02),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
+            // Cabeçalho
             Row(
               children: [
                 Container(
-                  width: 8,
-                  height: 40,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
-                    color: cor,
-                    borderRadius: BorderRadius.circular(4),
+                    gradient: LinearGradient(
+                      colors: [tipoMeta.cor.withOpacity(0.7), tipoMeta.cor],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Text(tipoMeta.emoji,
+                        style: const TextStyle(fontSize: 16)),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -519,163 +796,137 @@ class _MetasScreenState extends State<MetasScreen> {
                       Text(
                         titulo,
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       if (descricao.isNotEmpty)
                         Text(
                           descricao,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary(context),
-                          ),
+                          style:
+                              TextStyle(fontSize: 10, color: Colors.grey[500]),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Objetivo: ${Formatador.moeda(valorObjetivo)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary(context),
-                        ),
-                      ),
                     ],
                   ),
                 ),
-                if (estaConcluida)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.check_circle, size: 14, color: Colors.green),
-                        SizedBox(width: 4),
-                        Text('Concluida',
-                            style:
-                                TextStyle(fontSize: 10, color: Colors.green)),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Progresso: ${percentual.toStringAsFixed(1)}%',
-                  style: const TextStyle(fontSize: 12),
-                ),
-                Text(
-                  '${Formatador.moeda(valorAtual)} / ${Formatador.moeda(valorObjetivo)}',
-                  style: const TextStyle(fontSize: 12),
-                ),
               ],
             ),
             const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: (valorObjetivo > 0 ? (valorAtual / valorObjetivo) : 0.0)
-                    .clamp(0.0, 1.0),
-                backgroundColor: Colors.grey[200],
-                color: cor,
-                minHeight: 8,
+
+            // Status
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: estaConcluida
+                    ? Colors.green.withOpacity(0.1)
+                    : diasRestantes < 0
+                        ? Colors.red.withOpacity(0.1)
+                        : Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                estaConcluida
+                    ? 'Concluída'
+                    : diasRestantes < 0
+                        ? 'Atrasada'
+                        : 'Em andamento',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  color: estaConcluida
+                      ? Colors.green
+                      : diasRestantes < 0
+                          ? Colors.red
+                          : Colors.orange,
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.calendar_today,
-                        size: 14, color: Colors.grey[500]),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Inicio: ${DateFormat('dd/MM/yyyy').format(dataInicio)}',
-                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Icon(Icons.flag, size: 14, color: Colors.grey[500]),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Fim: ${DateFormat('dd/MM/yyyy').format(dataFim)}',
-                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                    ),
-                  ],
-                ),
-              ],
+            const SizedBox(height: 6),
+
+            // Tipo e data
+            Text(
+              '${tipoMeta.nome} - Até ${DateFormat('dd/MM/yy').format(dataFim)}',
+              style: TextStyle(fontSize: 9, color: Colors.grey[500]),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                if (diasRestantes > 0 && !estaConcluida)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '$diasRestantes dias restantes',
-                      style:
-                          const TextStyle(fontSize: 10, color: Colors.orange),
-                    ),
-                  ),
-                if (diasRestantes < 0 && !estaConcluida)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'Atrasada',
-                      style: TextStyle(fontSize: 10, color: Colors.red),
-                    ),
-                  ),
-              ],
+            const SizedBox(height: 6),
+
+            // Valores
+            Text(
+              Formatador.moeda(valorAtual),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
+            Text(
+              Formatador.moeda(valorObjetivo),
+              style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+            ),
+            const SizedBox(height: 6),
+
+            // Barra de progresso
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: (progresso.clamp(0.0, 1.0) as num).toDouble(),
+                backgroundColor: Colors.grey[200],
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  estaConcluida ? Colors.green : tipoMeta.cor,
+                ),
+                minHeight: 4,
+              ),
+            ),
+            const SizedBox(height: 4),
+
+            // Percentual
+            Text(
+              '${percentual.toStringAsFixed(1)}%',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: tipoMeta.cor,
+              ),
+            ),
+            const SizedBox(height: 6),
+
+            // Botão Depositar
+            SizedBox(
+              width: double.infinity,
+              height: 28,
+              child: ElevatedButton.icon(
+                onPressed:
+                    estaConcluida ? null : () => _adicionarProgresso(meta),
+                icon: const Icon(Icons.add, size: 14),
+                label: const Text('Depositar', style: TextStyle(fontSize: 11)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: tipoMeta.cor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+            const Spacer(),
+
+            // Ações
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                if (!estaConcluida)
-                  ElevatedButton.icon(
-                    onPressed: () => _atualizarProgresso(meta),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Progresso'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: cor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      minimumSize: const Size(0, 32),
-                      textStyle: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: () => _editarMeta(meta),
-                  icon: const Icon(Icons.edit, size: 18),
-                  tooltip: 'Editar',
+                InkWell(
+                  onTap: () => _editarMeta(meta),
+                  child: Icon(Icons.edit_outlined,
+                      size: 16, color: Colors.grey[500]),
                 ),
-                IconButton(
-                  onPressed: () => _excluirMeta(meta['id'], titulo),
-                  icon: const Icon(Icons.delete, size: 18),
-                  tooltip: 'Excluir',
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () => _excluirMeta(meta['id'] as int, titulo),
+                  child: Icon(Icons.delete_outline,
+                      size: 16, color: Colors.red[300]),
                 ),
               ],
             ),

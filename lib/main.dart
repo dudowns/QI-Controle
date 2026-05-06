@@ -167,7 +167,7 @@ class MyApp extends StatelessWidget {
               '/renda-fixa': (context) => const RendaFixaScreen(),
               '/transacoes': (context) => const TransacoesScreen(),
               '/contas': (context) => const ContasDoMesScreen(),
-              '/notificacoes': (context) => const NotificacoesScreen(),
+              '/notificacoes': (context) => NotificacoesScreen(),
               '/backup': (context) => const BackupScreen(),
               '/configuracoes': (context) => const ConfiguracoesScreen(),
               '/perfil': (context) => const PerfilScreen(),

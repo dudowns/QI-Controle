@@ -79,11 +79,28 @@ extension TipoMetaExtension on TipoMeta {
         return Icons.flag;
     }
   }
+
+  String get emoji {
+    switch (this) {
+      case TipoMeta.viagem:
+        return '✈️';
+      case TipoMeta.carro:
+        return '🚗';
+      case TipoMeta.casa:
+        return '🏠';
+      case TipoMeta.estudo:
+        return '📚';
+      case TipoMeta.investimento:
+        return '📈';
+      case TipoMeta.geral:
+        return '🎯';
+    }
+  }
 }
 
 class DepositoMeta {
-  final String? id; // 🔥 Alterado para String?
-  final String metaId; // 🔥 Alterado para String (UUID da Meta pai)
+  final String? id;
+  final String metaId;
   final double valor;
   final DateTime dataDeposito;
   final String? observacao;
@@ -121,7 +138,7 @@ class DepositoMeta {
 }
 
 class Meta {
-  final String? id; // 🔥 Alterado para String?
+  final String? id;
   final String titulo;
   final String? descricao;
   final double valorObjetivo;
@@ -131,6 +148,7 @@ class Meta {
   final TipoMeta tipo;
   final bool concluida;
   final List<DepositoMeta>? depositos;
+  final String? iconePersonalizado; // 🆕 NOVO CAMPO
 
   Meta({
     this.id,
@@ -143,6 +161,7 @@ class Meta {
     required this.tipo,
     this.concluida = false,
     this.depositos,
+    this.iconePersonalizado, // 🆕 NOVO CAMPO
   });
 
   double get progresso =>
@@ -151,6 +170,11 @@ class Meta {
   double get falta => (valorObjetivo - valorAtual).clamp(0, valorObjetivo);
   int get diasRestantes => dataFim.difference(DateTime.now()).inDays;
   bool get estaAtrasada => !concluida && DateTime.now().isAfter(dataFim);
+  bool get estaConcluida => concluida || valorAtual >= valorObjetivo;
+
+  Color get corTipo => tipo.cor;
+  IconData get iconeTipo => tipo.icone;
+  String get emojiTipo => tipo.emoji;
 
   factory Meta.fromJson(Map<String, dynamic> json) {
     return Meta(
@@ -165,11 +189,13 @@ class Meta {
       dataFim: json['data_fim'] != null
           ? DateTime.parse(json['data_fim'])
           : DateTime.now(),
-      tipo: TipoMetaExtension.fromString(json['cor']?.toString()),
-      // 🔥 No Supabase booleano é bool, não int
+      tipo: TipoMetaExtension.fromString(
+        json['type']?.toString() ?? json['cor']?.toString(),
+      ),
       concluida: json['concluida'] is bool
           ? json['concluida']
           : (json['concluida'] == 1),
+      iconePersonalizado: json['icon']?.toString(), // 🆕 NOVO CAMPO
     );
   }
 
@@ -182,9 +208,12 @@ class Meta {
       'data_inicio': dataInicio.toIso8601String(),
       'data_fim': dataFim.toIso8601String(),
       'cor': tipo.nome,
+      'type': tipo.nome, // 🆕 Para compatibilidade com schema
       'concluida': concluida,
+      'notes': descricao, // 🆕 Mapeia descricao como notes
     };
     if (id != null) map['id'] = id;
+    if (iconePersonalizado != null) map['icon'] = iconePersonalizado;
     return map;
   }
 
@@ -199,6 +228,7 @@ class Meta {
     TipoMeta? tipo,
     bool? concluida,
     List<DepositoMeta>? depositos,
+    String? iconePersonalizado,
   }) {
     return Meta(
       id: id ?? this.id,
@@ -211,7 +241,7 @@ class Meta {
       tipo: tipo ?? this.tipo,
       concluida: concluida ?? this.concluida,
       depositos: depositos ?? this.depositos,
+      iconePersonalizado: iconePersonalizado ?? this.iconePersonalizado,
     );
   }
 }
-

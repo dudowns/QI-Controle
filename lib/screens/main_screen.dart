@@ -550,7 +550,8 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                         : null,
                   ),
                   child: _perfil?['avatar_url'] == null
-                      ? Icon(Icons.person, color: AppColors.primary, size: 22)
+                      ? const Icon(Icons.person,
+                          color: AppColors.primary, size: 22)
                       : null,
                 ),
                 const SizedBox(width: 10),
@@ -733,7 +734,8 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                           : null,
                     ),
                     child: _perfil?['avatar_url'] == null
-                        ? Icon(Icons.person, color: AppColors.primary, size: 22)
+                        ? const Icon(Icons.person,
+                            color: AppColors.primary, size: 22)
                         : null,
                   ),
                   const SizedBox(width: 10),
