@@ -9,6 +9,8 @@ import 'services/theme_service.dart';
 import 'services/sync_service.dart';
 import 'services/loading_service.dart';
 import 'services/logger_service.dart';
+import 'services/notification_service.dart';
+import 'services/sync_manager.dart'; // ✅ ADICIONADO
 import 'database/db_helper.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
@@ -76,6 +78,20 @@ void main() async {
     SyncService().initialize();
     LoggerService.success('✅ SyncService inicializado');
 
+    // 🔔 Inicializar NotificationService
+    LoggerService.info('🔔 Inicializando NotificationService...');
+    await NotificationService().init();
+    LoggerService.success('✅ NotificationService inicializado');
+
+    // ✅ AGORA VAI! Sincronizar dados do Supabase automaticamente
+    LoggerService.info('🔄 Iniciando sincronização com Supabase...');
+    try {
+      await SyncManager().syncAll();
+      LoggerService.success('✅ Dados do Supabase sincronizados!');
+    } catch (e) {
+      LoggerService.error('❌ Erro na sincronização inicial: $e');
+    }
+
     runApp(MyApp(themeService: themeService));
   } catch (e) {
     LoggerService.error('❌ Erro fatal na inicialização: $e', e);
@@ -106,9 +122,8 @@ class ErrorApp extends StatelessWidget {
                 Text(error, textAlign: TextAlign.center),
                 const SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () => main(),
-                  child: const Text('Tentar Novamente'),
-                ),
+                    onPressed: () => main(),
+                    child: const Text('Tentar Novamente')),
               ],
             ),
           ),
@@ -167,7 +182,7 @@ class MyApp extends StatelessWidget {
               '/renda-fixa': (context) => const RendaFixaScreen(),
               '/transacoes': (context) => const TransacoesScreen(),
               '/contas': (context) => const ContasDoMesScreen(),
-              '/notificacoes': (context) => NotificacoesScreen(),
+              '/notificacoes': (context) => const NotificacoesScreen(),
               '/backup': (context) => const BackupScreen(),
               '/configuracoes': (context) => const ConfiguracoesScreen(),
               '/perfil': (context) => const PerfilScreen(),

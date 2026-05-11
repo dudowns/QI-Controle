@@ -103,10 +103,7 @@ class SyncManager {
           String dataStr = localData['data'].toString();
           if (dataStr.contains('T')) dataStr = dataStr.split('T')[0];
           String tipoOriginal = localData['tipo'].toString();
-          String tipoCorreto = tipoOriginal == 'gasto'
-              ? 'despesa'
-              : (tipoOriginal == 'receita' ? 'receita' : 'despesa');
-
+          String tipoCorreto = tipoOriginal;
           final remoteData = {
             'descricao': localData['descricao'],
             'valor': localData['valor'],
