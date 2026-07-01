@@ -1,15 +1,17 @@
 {
-  "builds": [
-    {
-      "src": "build/web/**",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "build/web/$1"
-    }
-  ],
-  "framework": null
+    "installCommand": "flutter pub get",
+    "buildCommand": "flutter build web --release --base-href=\"/\"",
+    "outputDirectory": "build/web",
+    "builds": [
+        {
+            "src": "build/web/**",
+            "use": "@vercel/static"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/(.*)",
+            "dest": "/index.html"
+        }
+    ]
 }
