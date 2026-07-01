@@ -127,8 +127,9 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
                   prefixIcon: Icon(Icons.sell),
                 ),
                 validator: (value) {
-                  if (value == null || value.isEmpty)
+                  if (value == null || value.isEmpty) {
                     return 'Campo obrigatorio';
+                  }
                   return null;
                 },
               ),
@@ -157,8 +158,9 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
                 ),
                 keyboardType: TextInputType.number,
                 validator: (value) {
-                  if (value == null || value.isEmpty)
+                  if (value == null || value.isEmpty) {
                     return 'Campo obrigatorio';
+                  }
                   final val = double.tryParse(value.replaceAll(',', '.'));
                   if (val == null || val <= 0) return 'Digite um valor valido';
                   return null;
@@ -175,11 +177,13 @@ class _NovoProventoDialogState extends State<NovoProventoDialog> {
                 ),
                 keyboardType: TextInputType.number,
                 validator: (value) {
-                  if (value == null || value.isEmpty)
+                  if (value == null || value.isEmpty) {
                     return 'Campo obrigatorio';
+                  }
                   final val = int.tryParse(value);
-                  if (val == null || val <= 0)
+                  if (val == null || val <= 0) {
                     return 'Digite uma quantidade valida';
+                  }
                   return null;
                 },
               ),

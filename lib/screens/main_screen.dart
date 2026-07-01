@@ -241,221 +241,234 @@ class MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     final isDesktop = MediaQuery.of(context).size.width > 900;
     final isMobile = MediaQuery.of(context).size.width <= 900;
 
+    // 🔥 O Consumer<LoadingService> agora está envolvido por um Builder
     return Consumer<LoadingService>(
       builder: (context, loadingService, child) {
-        return GlobalLoadingOverlay(
-          child: Scaffold(
-            key: _scaffoldKey,
-            backgroundColor: AppColors.background(context),
-            appBar: AppBar(
-              leading: isDesktop
-                  ? IconButton(
-                      icon: Icon(
-                        _drawerOpen ? Icons.menu_open : Icons.menu,
-                        color: Colors.white,
-                      ),
-                      onPressed: () {
-                        setState(() => _drawerOpen = !_drawerOpen);
-                        _animationController.forward(from: 0);
-                      },
-                      tooltip: _drawerOpen ? 'Esconder menu' : 'Mostrar menu',
-                    )
-                  : IconButton(
-                      icon: const Icon(Icons.menu_rounded),
-                      onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                      tooltip: 'Menu',
-                    ),
-              title: Row(
-                children: [
-                  FadeInLeft(
-                    duration: const Duration(milliseconds: 300),
-                    child: Text(
-                      _getTitle(),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  if (_isSyncing)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 8),
-                      child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
+        return Builder(
+          builder: (context) {
+            return GlobalLoadingOverlay(
+              child: Scaffold(
+                key: _scaffoldKey,
+                backgroundColor: AppColors.background(context),
+                appBar: AppBar(
+                  leading: isDesktop
+                      ? IconButton(
+                          icon: Icon(
+                            _drawerOpen ? Icons.menu_open : Icons.menu,
+                            color: Colors.white,
+                          ),
+                          onPressed: () {
+                            setState(() => _drawerOpen = !_drawerOpen);
+                            _animationController.forward(from: 0);
+                          },
+                          tooltip:
+                              _drawerOpen ? 'Esconder menu' : 'Mostrar menu',
+                        )
+                      : IconButton(
+                          icon: const Icon(Icons.menu_rounded),
+                          onPressed: () =>
+                              _scaffoldKey.currentState?.openDrawer(),
+                          tooltip: 'Menu',
+                        ),
+                  title: Row(
+                    children: [
+                      FadeInLeft(
+                        duration: const Duration(milliseconds: 300),
+                        child: Text(
+                          _getTitle(),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
-                    ),
-                  if (_realtimeConnected)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 500),
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.green.withValues(alpha: 0.5),
-                              blurRadius: 4,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              flexibleSpace: Container(
-                decoration: const BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                ),
-              ),
-              actions: [
-                const NotificacaoBotao(),
-                Container(
-                  margin: const EdgeInsets.only(right: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: IconButton(
-                    icon: _isSyncing
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
+                      if (_isSyncing)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               color: Colors.white,
                             ),
-                          )
-                        : const Icon(Icons.cloud_sync, color: Colors.white),
-                    onPressed: _forcarSincronizacao,
-                    tooltip: 'Sincronizar dados',
-                  ),
-                ),
-                Container(
-                  margin: const EdgeInsets.only(right: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.cloud_upload_outlined,
-                        color: Colors.white),
-                    onPressed: () {
-                      BackupModal.show(
-                        context: context,
-                        onBackupRealizado: () {
-                          _sincronizarDados();
-                        },
-                      );
-                    },
-                    tooltip: 'Backup',
-                  ),
-                ),
-                const ThemeSelector(),
-              ],
-            ),
-            drawer: isMobile ? _buildDrawer() : null,
-            body: Row(
-              children: [
-                if (isDesktop)
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    width: _drawerOpen ? 230 : 0,
-                    child: _drawerOpen ? _buildSideMenu() : const SizedBox(),
-                  ),
-                Expanded(
-                  child: _screens[_currentIndex],
-                ),
-              ],
-            ),
-            bottomNavigationBar: isMobile
-                ? Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surface(context),
-                      boxShadow: [
-                        if (Theme.of(context).brightness == Brightness.light)
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 20,
-                            offset: const Offset(0, -5),
                           ),
-                      ],
-                    ),
-                    child: SafeArea(
-                      child: SizedBox(
-                        height: 65,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: _bottomNavItems.map((item) {
-                            final isSelected = _currentIndex == item['index'];
-                            return Expanded(
-                              child: InkWell(
-                                onTap: () {
-                                  setState(() => _currentIndex = item['index']);
-                                  _carregarPerfil();
-                                  _animationController.forward(from: 0);
-                                },
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 200),
-                                      padding:
-                                          EdgeInsets.all(isSelected ? 6 : 0),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? AppColors.primary
-                                                .withValues(alpha: 0.2)
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Icon(
-                                        item['icon'],
-                                        color: isSelected
-                                            ? AppColors.primary
-                                            : AppColors.muted(context),
-                                        size: isSelected ? 26 : 24,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      item['label'],
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: isSelected
-                                            ? AppColors.primary
-                                            : AppColors.muted(context),
-                                        fontWeight: isSelected
-                                            ? FontWeight.w600
-                                            : FontWeight.normal,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }).toList(),
                         ),
+                      if (_realtimeConnected)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 500),
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.green.withValues(alpha: 0.5),
+                                  blurRadius: 4,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  flexibleSpace: Container(
+                    decoration: const BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                    ),
+                  ),
+                  actions: [
+                    const NotificacaoBotao(),
+                    Container(
+                      margin: const EdgeInsets.only(right: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: IconButton(
+                        icon: _isSyncing
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.cloud_sync, color: Colors.white),
+                        onPressed: _forcarSincronizacao,
+                        tooltip: 'Sincronizar dados',
                       ),
                     ),
-                  )
-                : null,
-          ),
+                    Container(
+                      margin: const EdgeInsets.only(right: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.cloud_upload_outlined,
+                            color: Colors.white),
+                        onPressed: () {
+                          BackupModal.show(
+                            context: context,
+                            onBackupRealizado: () {
+                              _sincronizarDados();
+                            },
+                          );
+                        },
+                        tooltip: 'Backup',
+                      ),
+                    ),
+                    const ThemeSelector(),
+                  ],
+                ),
+                drawer: isMobile ? _buildDrawer() : null,
+                body: Row(
+                  children: [
+                    if (isDesktop)
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        width: _drawerOpen ? 230 : 0,
+                        child:
+                            _drawerOpen ? _buildSideMenu() : const SizedBox(),
+                      ),
+                    Expanded(
+                      child: _screens[_currentIndex],
+                    ),
+                  ],
+                ),
+                bottomNavigationBar: isMobile
+                    ? Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.surface(context),
+                          boxShadow: [
+                            if (Theme.of(context).brightness ==
+                                Brightness.light)
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 20,
+                                offset: const Offset(0, -5),
+                              ),
+                          ],
+                        ),
+                        child: SafeArea(
+                          child: SizedBox(
+                            height: 65,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: _bottomNavItems.map((item) {
+                                final isSelected =
+                                    _currentIndex == item['index'];
+                                return Expanded(
+                                  child: InkWell(
+                                    onTap: () {
+                                      setState(
+                                          () => _currentIndex = item['index']);
+                                      _carregarPerfil();
+                                      _animationController.forward(from: 0);
+                                    },
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        AnimatedContainer(
+                                          duration:
+                                              const Duration(milliseconds: 200),
+                                          padding: EdgeInsets.all(
+                                              isSelected ? 6 : 0),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? AppColors.primary
+                                                    .withValues(alpha: 0.2)
+                                                : Colors.transparent,
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Icon(
+                                            item['icon'],
+                                            color: isSelected
+                                                ? AppColors.primary
+                                                : AppColors.muted(context),
+                                            size: isSelected ? 26 : 24,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          item['label'],
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: isSelected
+                                                ? AppColors.primary
+                                                : AppColors.muted(context),
+                                            fontWeight: isSelected
+                                                ? FontWeight.w600
+                                                : FontWeight.normal,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                      )
+                    : null,
+              ),
+            );
+          },
         );
       },
     );

@@ -1,6 +1,8 @@
-// lib/screens/lancamentos.dart
+// lib/screens/lancamentos.dart - COM ÍCONES POR CATEGORIA
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:animate_do/animate_do.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/lancamento_model.dart';
 import '../repositories/repositories.dart';
@@ -23,11 +25,15 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
   final LancamentoRepository _repository = LancamentoRepository();
 
   List<Map<String, dynamic>> _lancamentos = [];
+  List<Map<String, dynamic>> _filteredLancamentos = [];
   bool _isLoading = true;
 
   DateTime _mesSelecionado = DateTime.now();
   String _filtroTipo = 'Todos';
   String _filtroCategoria = 'Todas';
+  String _searchQuery = '';
+
+  final TextEditingController _searchController = TextEditingController();
 
   final List<String> _meses = [
     'Jan',
@@ -51,7 +57,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     return ['Todas', ...todas.toSet().toList()];
   }
 
-  List<Map<String, dynamic>> get _lancamentosFiltrados {
+  void _aplicarFiltros() {
     var filtrados = List<Map<String, dynamic>>.from(_lancamentos);
 
     filtrados = filtrados.where((l) {
@@ -63,7 +69,6 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     if (_filtroTipo == 'Receitas') {
       filtrados = filtrados.where((l) => l['tipo'] == 'receita').toList();
     } else if (_filtroTipo == 'Despesas') {
-      // ✅ CORRIGIDO: Aceita 'gasto' e 'despesa'
       filtrados = filtrados.where((l) {
         final tipo = l['tipo']?.toString().toLowerCase() ?? '';
         return tipo == 'gasto' || tipo == 'despesa';
@@ -75,8 +80,18 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
           filtrados.where((l) => l['categoria'] == _filtroCategoria).toList();
     }
 
+    if (_searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase();
+      filtrados = filtrados.where((l) {
+        return l['descricao']?.toString().toLowerCase().contains(query) ==
+                true ||
+            l['categoria']?.toString().toLowerCase().contains(query) == true;
+      }).toList();
+    }
+
     filtrados.sort((a, b) => b['data'].compareTo(a['data']));
-    return filtrados;
+
+    setState(() => _filteredLancamentos = filtrados);
   }
 
   List<Map<String, dynamic>> get _lancamentosMes {
@@ -93,7 +108,6 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     }).toList();
   }
 
-  // ✅ CORRIGIDO: Padronizado para 'receita' e 'gasto'
   double _calcularTotalPorTipo(String tipo) {
     double total = 0.0;
     for (var lancamento in _lancamentosMes) {
@@ -128,6 +142,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -136,6 +151,7 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     setState(() => _isLoading = true);
     try {
       _lancamentos = await _repository.getAllLancamentos();
+      _aplicarFiltros();
     } catch (e) {
       LoggerService.info('Erro ao carregar lancamentos: $e');
       if (mounted) {
@@ -211,14 +227,13 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     }
   }
 
-  // ✅ Apaga do Supabase também
   Future<void> _excluirLancamento(int id, String descricao) async {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface(context),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Excluir'),
+        title: const Text('Excluir',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text('Excluir "$descricao"?'),
         actions: [
           TextButton(
@@ -235,7 +250,6 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
       try {
         await _repository.deleteLancamentoResult(id);
         await _carregarDados();
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text('$descricao excluido!'),
@@ -262,36 +276,57 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     }
   }
 
-  Widget _buildStatCard(
-      String title, double value, Color color, IconData icon) {
-    return Expanded(
-      child: Container(
-        height: 80,
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-        decoration: BoxDecoration(
-            color: AppColors.cardBackground(context),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border(context))),
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(children: [
-                Icon(icon, size: 14, color: color),
-                const SizedBox(width: 4),
-                Text(title,
-                    style: TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary(context)))
-              ]),
-              AnimatedCounter(
-                  value: value,
-                  duration: const Duration(milliseconds: 600),
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold, color: color),
-                  formatter: (val) => Formatador.moeda(val)),
-            ]),
-      ),
-    );
+  // 🔥 ÍCONE POR CATEGORIA
+  IconData _getCategoryIconData(String categoria) {
+    switch (categoria.toLowerCase()) {
+      case 'alimentação':
+      case 'alimentacao':
+        return Icons.restaurant_rounded;
+      case 'transporte':
+        return Icons.directions_car_rounded;
+      case 'moradia':
+        return Icons.home_rounded;
+      case 'lazer':
+        return Icons.movie_rounded;
+      case 'saúde':
+      case 'saude':
+        return Icons.health_and_safety_rounded;
+      case 'educação':
+      case 'educacao':
+        return Icons.school_rounded;
+      case 'cartão':
+      case 'cartao':
+        return Icons.credit_card_rounded;
+      case 'investimentos':
+        return Icons.trending_up_rounded;
+      case 'cuidados pessoais':
+        return Icons.person_rounded;
+      case 'empréstimo':
+      case 'emprestimo':
+        return Icons.request_quote_rounded;
+      case 'água':
+      case 'agua':
+        return Icons.water_drop_rounded;
+      case 'luz':
+        return Icons.flash_on_rounded;
+      case 'internet':
+        return Icons.wifi_rounded;
+      case 'telefone':
+        return Icons.phone_android_rounded;
+      case 'salário':
+      case 'salario':
+        return Icons.work_rounded;
+      case 'bico ou extra':
+        return Icons.attach_money_rounded;
+      case 'venda de ativos':
+        return Icons.sell_rounded;
+      default:
+        return Icons.category_rounded;
+    }
+  }
+
+  Color _getCategoryColor(String categoria) {
+    return AppCategories.getColor(categoria);
   }
 
   @override
@@ -303,382 +338,406 @@ class _LancamentosScreenState extends State<LancamentosScreen> {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        title: null,
+        title: const Text('Lançamentos',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.transparent,
-        foregroundColor: AppColors.textPrimary(context),
         elevation: 0,
         centerTitle: false,
         leading: IconButton(
             icon: Icon(Icons.arrow_back_ios,
                 size: 18, color: AppColors.textPrimary(context)),
-            onPressed: _voltar,
-            tooltip: 'Voltar'),
+            onPressed: _voltar),
         actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 4),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.add_rounded,
+                  color: AppColors.primary, size: 22),
+              onPressed: _adicionarLancamento,
+              tooltip: 'Adicionar lançamento',
+            ),
+          ),
           IconButton(
-              icon: Icon(Icons.refresh, color: AppColors.textPrimary(context)),
-              onPressed: _carregarDados,
-              tooltip: 'Atualizar'),
+            icon: Icon(Icons.refresh_rounded,
+                color: AppColors.textSecondary(context), size: 22),
+            onPressed: _carregarDados,
+            tooltip: 'Atualizar',
+          ),
         ],
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary)))
-          : TweenAnimationBuilder(
-              tween: Tween<double>(begin: 0, end: 1),
-              duration: const Duration(milliseconds: 600),
-              curve: Curves.easeOutCubic,
-              builder: (context, opacity, child) {
-                return Opacity(
-                    opacity: opacity,
-                    child: Transform.translate(
-                        offset: Offset(0, 30 * (1 - opacity)), child: child));
-              },
-              child: SafeArea(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                        child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                    color: AppColors.surface(context),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                        color: AppColors.border(context))),
-                                child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                          icon: const Icon(Icons.chevron_left,
-                                              size: 18),
-                                          onPressed: () => _navegarMes(-1),
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
-                                          color:
-                                              AppColors.textPrimary(context)),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                          '${_meses[_mesSelecionado.month - 1]} ${_mesSelecionado.year}',
-                                          style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                              color: AppColors.textPrimary(
-                                                  context))),
-                                      const SizedBox(width: 8),
-                                      IconButton(
-                                          icon: const Icon(Icons.chevron_right,
-                                              size: 18),
-                                          onPressed: () => _navegarMes(1),
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
-                                          color:
-                                              AppColors.textPrimary(context)),
-                                    ]),
-                              ),
-                            ]),
+                      IconButton(
+                        icon: const Icon(Icons.chevron_left,
+                            size: 28, color: AppColors.primary),
+                        onPressed: () => _navegarMes(-1),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                        child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              SizedBox(
-                                  height: 36,
-                                  child: ElevatedButton(
-                                      onPressed: _adicionarLancamento,
-                                      style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppColors.primary,
-                                          foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(20))),
-                                      child: const Row(children: [
-                                        Icon(Icons.add, size: 16),
-                                        SizedBox(width: 6),
-                                        Text('ADICIONAR',
-                                            style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold)),
-                                      ]))),
-                            ]),
+                      Text(
+                        '${_meses[_mesSelecionado.month - 1]} ${_mesSelecionado.year}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary(context),
+                        ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                        child: Row(children: [
-                          _buildStatCard('Receitas', totalReceitas,
-                              AppColors.success, Icons.trending_up),
-                          const SizedBox(width: 12),
-                          _buildStatCard('Despesas', totalDespesas,
-                              AppColors.error, Icons.trending_down),
-                          const SizedBox(width: 12),
-                          _buildStatCard(
-                              'Saldo',
-                              saldo,
-                              saldo >= 0 ? AppColors.success : AppColors.error,
-                              Icons.account_balance_wallet),
-                        ]),
+                      IconButton(
+                        icon: const Icon(Icons.chevron_right,
+                            size: 28, color: AppColors.primary),
+                        onPressed: () => _navegarMes(1),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Container(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 12),
-                                height: 32,
-                                decoration: BoxDecoration(
-                                    border: Border.all(
-                                        color: AppColors.border(context)),
-                                    borderRadius: BorderRadius.circular(20)),
-                                child: DropdownButton<String>(
-                                    value: _filtroTipo,
-                                    isExpanded: false,
-                                    underline: const SizedBox(),
-                                    icon: Icon(Icons.arrow_drop_down,
-                                        size: 18,
-                                        color:
-                                            AppColors.textSecondary(context)),
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textPrimary(context)),
-                                    dropdownColor: AppColors.surface(context),
-                                    items: _tipos
-                                        .map((tipo) => DropdownMenuItem(
-                                            value: tipo, child: Text(tipo)))
-                                        .toList(),
-                                    onChanged: (value) =>
-                                        setState(() => _filtroTipo = value!)),
-                              ),
-                              const SizedBox(width: 12),
-                              Container(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 12),
-                                height: 32,
-                                decoration: BoxDecoration(
-                                    border: Border.all(
-                                        color: AppColors.border(context)),
-                                    borderRadius: BorderRadius.circular(20)),
-                                child: DropdownButton<String>(
-                                    value: _filtroCategoria,
-                                    isExpanded: false,
-                                    underline: const SizedBox(),
-                                    icon: Icon(Icons.arrow_drop_down,
-                                        size: 18,
-                                        color:
-                                            AppColors.textSecondary(context)),
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textPrimary(context)),
-                                    dropdownColor: AppColors.surface(context),
-                                    items: _categorias
-                                        .map((cat) => DropdownMenuItem(
-                                            value: cat,
-                                            child: Row(children: [
-                                              Container(
-                                                  width: 10,
-                                                  height: 10,
-                                                  decoration: BoxDecoration(
-                                                      color: cat == 'Todas'
-                                                          ? Colors.grey
-                                                          : AppCategories
-                                                              .getColor(cat),
-                                                      shape: BoxShape.circle)),
-                                              const SizedBox(width: 6),
-                                              Text(cat,
-                                                  style: TextStyle(
-                                                      color:
-                                                          AppColors.textPrimary(
-                                                              context))),
-                                            ])))
-                                        .toList(),
-                                    onChanged: (value) => setState(
-                                        () => _filtroCategoria = value!)),
-                              ),
-                            ]),
-                      ),
-                      const SizedBox(height: 4),
-                      Expanded(
-                        child: _lancamentosFiltrados.isEmpty
-                            ? Center(
-                                child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                    Icon(Icons.receipt,
-                                        size: 64,
-                                        color: AppColors.muted(context)),
-                                    const SizedBox(height: 16),
-                                    Text('Nenhum lancamento',
-                                        style: TextStyle(
-                                            fontSize: 16,
-                                            color: AppColors.textSecondary(
-                                                context))),
-                                    const SizedBox(height: 8),
-                                    Text('Clique em ADICIONAR para comecar',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            color:
-                                                AppColors.textHint(context))),
-                                  ]))
-                            : RefreshIndicator(
-                                onRefresh: _carregarDados,
-                                color: AppColors.primary,
-                                child: ListView.builder(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 4),
-                                  itemCount: _lancamentosFiltrados.length,
-                                  itemBuilder: (context, index) {
-                                    return TweenAnimationBuilder(
-                                      tween: Tween<double>(begin: 0, end: 1),
-                                      duration: Duration(
-                                          milliseconds: 300 + (index * 50)),
-                                      curve: Curves.easeOutCubic,
-                                      builder: (context, opacity, child) {
-                                        return Opacity(
-                                            opacity: opacity,
-                                            child: Transform.translate(
-                                                offset: Offset(
-                                                    0, 20 * (1 - opacity)),
-                                                child: child));
-                                      },
-                                      child: _buildLancamentoCard(
-                                          _lancamentosFiltrados[index]),
-                                    );
-                                  },
-                                ),
-                              ),
-                      ),
-                    ]),
-              ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      _buildResumoCard('Receitas', totalReceitas,
+                          AppColors.success, Icons.trending_up),
+                      const SizedBox(width: 12),
+                      _buildResumoCard('Despesas', totalDespesas,
+                          AppColors.error, Icons.trending_down),
+                      const SizedBox(width: 12),
+                      _buildResumoCard(
+                          'Saldo',
+                          saldo,
+                          saldo >= 0 ? AppColors.success : AppColors.error,
+                          Icons.account_balance_wallet),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(child: _buildSearchField()),
+                      const SizedBox(width: 8),
+                      _buildFilterDropdown(_tipos, _filtroTipo, (value) {
+                        setState(() => _filtroTipo = value!);
+                        _aplicarFiltros();
+                      }, Icons.filter_list),
+                      const SizedBox(width: 8),
+                      _buildFilterDropdown(_categorias, _filtroCategoria,
+                          (value) {
+                        setState(() => _filtroCategoria = value!);
+                        _aplicarFiltros();
+                      }, Icons.category),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: _filteredLancamentos.isEmpty
+                      ? _buildEmptyState()
+                      : RefreshIndicator(
+                          onRefresh: _carregarDados,
+                          color: AppColors.primary,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 4),
+                            itemCount: _filteredLancamentos.length,
+                            itemBuilder: (context, index) {
+                              return FadeInLeft(
+                                duration: const Duration(milliseconds: 300),
+                                delay: Duration(milliseconds: index * 50),
+                                child: _buildLancamentoCard(
+                                    _filteredLancamentos[index]),
+                              );
+                            },
+                          ),
+                        ),
+                ),
+              ],
             ),
     );
   }
 
+  Widget _buildResumoCard(
+      String title, double value, Color color, IconData icon) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground(context),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 14, color: color),
+                const SizedBox(width: 4),
+                Text(title,
+                    style: TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary(context))),
+              ],
+            ),
+            const SizedBox(height: 6),
+            AnimatedCounter(
+              value: value,
+              duration: const Duration(milliseconds: 600),
+              style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.bold, color: color),
+              formatter: (val) => Formatador.moeda(val),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Container(
+      height: 42,
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border(context).withValues(alpha: 0.2)),
+      ),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (v) {
+          setState(() => _searchQuery = v);
+          _aplicarFiltros();
+        },
+        style: TextStyle(fontSize: 14, color: AppColors.textPrimary(context)),
+        decoration: InputDecoration(
+          hintText: 'Buscar...',
+          hintStyle: TextStyle(
+              color: AppColors.textSecondary(context).withValues(alpha: 0.5),
+              fontSize: 14),
+          prefixIcon: Icon(Icons.search_rounded,
+              size: 18, color: AppColors.textSecondary(context)),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: Icon(Icons.close_rounded,
+                      size: 16, color: AppColors.textSecondary(context)),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                    _aplicarFiltros();
+                  })
+              : null,
+          border: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterDropdown(List<String> items, String value,
+      Function(String?) onChanged, IconData icon) {
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border(context).withValues(alpha: 0.2)),
+      ),
+      child: DropdownButton<String>(
+        value: value,
+        underline: const SizedBox(),
+        icon: Icon(icon, size: 18, color: AppColors.textSecondary(context)),
+        style: TextStyle(fontSize: 13, color: AppColors.textPrimary(context)),
+        dropdownColor: AppColors.surface(context),
+        items: items.map((item) {
+          return DropdownMenuItem(
+            value: item,
+            child: Row(
+              children: [
+                if (item != 'Todos' && item != 'Receitas' && item != 'Despesas')
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: AppCategories.getColor(item),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                if (item != 'Todos' && item != 'Receitas' && item != 'Despesas')
+                  const SizedBox(width: 6),
+                Text(item, style: const TextStyle(fontSize: 13)),
+              ],
+            ),
+          );
+        }).toList(),
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  // 🔥 CARD COM ÍCONE DA CATEGORIA (não a seta + ou -)
   Widget _buildLancamentoCard(Map<String, dynamic> lancamento) {
     final isReceita = lancamento['tipo'] == 'receita';
     final cor = isReceita ? AppColors.success : AppColors.error;
-    final icone = isReceita ? Icons.arrow_upward : Icons.arrow_downward;
     final prefixo = isReceita ? '+' : '-';
     final valor = (lancamento['valor'] as num).toDouble();
     final data = DateTime.parse(lancamento['data'].toString());
     final categoria = lancamento['categoria'] ?? 'Outros';
-    final categoriaCor = AppCategories.getColor(categoria);
-    final isAuto =
-        (lancamento['observacao']?.contains('Pago automaticamente') ?? false);
+    final categoriaCor = _getCategoryColor(categoria);
+    final categoriaIcon = _getCategoryIconData(categoria);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: AppColors.border(context), width: 1)),
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+            color: AppColors.border(context).withValues(alpha: 0.3), width: 1),
+      ),
       elevation: 0,
       color: AppColors.cardBackground(context),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(children: [
-          Container(
-              width: 40,
-              height: 40,
+        child: Row(
+          children: [
+            // 🔥 ÍCONE DA CATEGORIA (ao invés da seta)
+            Container(
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                  color: cor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10)),
-              child: Icon(icone, color: cor, size: 20)),
-          const SizedBox(width: 12),
-          Expanded(
+                color: categoriaCor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(categoriaIcon, size: 22, color: categoriaCor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Text(lancamento['descricao'],
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    lancamento['descricao'] ?? '',
                     style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary(context))),
-                const SizedBox(height: 4),
-                Wrap(spacing: 6, runSpacing: 4, children: [
-                  Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                          color: categoriaCor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8)),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                                color: categoriaCor, shape: BoxShape.circle)),
-                        const SizedBox(width: 4),
-                        Text(categoria,
-                            style: TextStyle(
-                                fontSize: 9,
-                                color: categoriaCor,
-                                fontWeight: FontWeight.w500)),
-                      ])),
-                  Text(Formatador.data(data),
-                      style: TextStyle(
-                          fontSize: 10,
-                          color: AppColors.textSecondary(context))),
-                  if (isAuto)
-                    Container(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary(context),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                            horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                            color: AppColors.info.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8)),
-                        child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.schedule,
-                                  size: 8, color: AppColors.info),
-                              SizedBox(width: 4),
-                              Text('Automatico',
-                                  style: TextStyle(
-                                      fontSize: 9,
-                                      color: AppColors.info,
-                                      fontWeight: FontWeight.w500)),
-                            ])),
-                ]),
-              ])),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            AnimatedCounter(
-                value: valor,
-                duration: const Duration(milliseconds: 600),
-                style: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.bold, color: cor),
-                formatter: (val) => '$prefixo ${Formatador.moeda(val)}'),
-            const SizedBox(height: 8),
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              GestureDetector(
-                  onTap: () => _editarLancamento(lancamento),
-                  child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6)),
-                      child: const Icon(Icons.edit,
-                          size: 16, color: AppColors.primary))),
-              const SizedBox(width: 8),
-              GestureDetector(
-                  onTap: () => _excluirLancamento(
-                      lancamento['id'], lancamento['descricao']),
-                  child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                          color: AppColors.error.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6)),
-                      child: const Icon(Icons.delete_outline,
-                          size: 16, color: AppColors.error))),
-            ]),
-          ]),
-        ]),
+                          color: categoriaCor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          categoria,
+                          style: TextStyle(fontSize: 10, color: categoriaCor),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        Formatador.diaMes(data),
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textSecondary(context)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                AnimatedCounter(
+                  value: valor,
+                  duration: const Duration(milliseconds: 600),
+                  style: TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.bold, color: cor),
+                  formatter: (val) => '$prefixo ${Formatador.moeda(val)}',
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildActionIcon(
+                        Icons.edit_rounded, () => _editarLancamento(lancamento),
+                        color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    _buildActionIcon(
+                        Icons.delete_outline_rounded,
+                        () => _excluirLancamento(
+                            lancamento['id'], lancamento['descricao']),
+                        color: AppColors.error),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionIcon(IconData icon, VoidCallback onTap, {Color? color}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: (color ?? AppColors.primary).withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, size: 18, color: color ?? AppColors.primary),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.receipt_long_rounded,
+              size: 64,
+              color: AppColors.textSecondary(context).withValues(alpha: 0.3)),
+          const SizedBox(height: 16),
+          Text(
+            _searchQuery.isNotEmpty
+                ? 'Nenhum resultado para "$_searchQuery"'
+                : 'Nenhum lançamento',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary(context)),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _searchQuery.isNotEmpty
+                ? 'Tente outra busca'
+                : 'Toque no + para adicionar',
+            style: TextStyle(
+                fontSize: 12, color: AppColors.textSecondary(context)),
+          ),
+        ],
       ),
     );
   }

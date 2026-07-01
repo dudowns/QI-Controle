@@ -1,10 +1,11 @@
-// lib/screens/proventos.dart - VERSÃO FINAL COMPLETA E CORRIGIDA
+// lib/screens/proventos.dart - VERSÃO FINAL CORRIGIDA
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
+
 import '../constants/app_colors.dart';
 import '../widgets/app_modals.dart';
 import '../widgets/toast.dart';
@@ -21,20 +22,23 @@ class _ProventosScreenState extends State<ProventosScreen> {
 
   List<Provento> _proventos = [];
   List<Provento> _filteredProventos = [];
+  List<String> _tickersDisponiveis = [];
+
   bool _isLoading = true;
-  bool _isSyncing = false;
+  bool _isDisposed = false;
+
   String _selectedPeriod = '12M';
   String _searchQuery = '';
   String _sortBy = 'date';
-  bool _isDisposed = false;
-  bool _showChart = true;
+
+  final TextEditingController _searchController = TextEditingController();
 
   final _currencyFormatter =
       NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
-  final _dateFormatter = DateFormat('dd/MM/yyyy');
-
+  final _dateFormatter = DateFormat('dd/MM/yy');
   final List<String> _periodos = ['1M', '3M', '6M', '12M', 'ALL'];
-  final Map<String, String> _tiposProvento = {
+
+  static const Map<String, String> _tiposProvento = {
     'DIVIDENDO': 'Dividendo',
     'JCP': 'JCP',
     'RENDIMENTO': 'Rendimento',
@@ -42,178 +46,184 @@ class _ProventosScreenState extends State<ProventosScreen> {
     'OUTROS': 'Outros',
   };
 
-  List<String> _tickersDisponiveis = [];
-
-  final List<Color> _chartColors = [
-    const Color(0xFF8B5CF6),
-    const Color(0xFF3B82F6),
-    const Color(0xFF10B981),
-    const Color(0xFFF59E0B),
-    const Color(0xFFEF4444),
-    const Color(0xFFEC4899),
-    const Color(0xFF6366F1),
-    const Color(0xFF14B8A6),
-  ];
-
   @override
   void initState() {
     super.initState();
     _isDisposed = false;
-    _carregarTudo();
+    _carregarDados();
   }
 
   @override
   void dispose() {
     _isDisposed = true;
+    _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _carregarTudo() async {
-    await _carregarTickers();
-    await _carregarProventos();
-  }
-
-  Future<void> _carregarTickers() async {
-    try {
-      // ✅ CORRIGIDO: investments (sem 'i' no final)
-      final response =
-          await _supabase.from('investments').select('ticker').order('ticker');
-
-      if (!_isDisposed && mounted) {
-        final tickers = response
-            .map((item) => item['ticker'].toString().toUpperCase())
-            .toSet()
-            .toList();
-        tickers.sort();
-
-        setState(() {
-          _tickersDisponiveis = tickers;
-        });
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('❌ Erro ao carregar tickers: $e');
-    }
-  }
-
-  Future<void> _carregarProventos() async {
+  Future<void> _carregarDados() async {
     if (_isDisposed || !mounted) return;
-
     setState(() => _isLoading = true);
 
     try {
-      final response = await _supabase
-          .from('proventos')
-          .select()
-          .order('data_pagamento', ascending: false);
+      final resultados = await Future.wait([
+        _supabase.from('investments').select('ticker').order('ticker'),
+        _supabase
+            .from('proventos')
+            .select()
+            .order('data_pagamento', ascending: false),
+      ]);
 
-      if (!_isDisposed && mounted) {
-        final proventos =
-            response.map((json) => Provento.fromJson(json)).toList();
+      if (_isDisposed || !mounted) return;
 
-        setState(() {
-          _proventos = proventos;
-          _aplicarFiltros();
-          _isLoading = false;
-        });
-      }
+      final listaTickers = (resultados[0] as List)
+          .map((e) => e['ticker'].toString().toUpperCase())
+          .toSet()
+          .toList();
+      listaTickers.sort();
+
+      final listaProventos = (resultados[1] as List)
+          .map((json) => Provento.fromJson(json))
+          .toList();
+
+      setState(() {
+        _tickersDisponiveis = listaTickers;
+        _proventos = listaProventos;
+        _aplicarFiltros();
+        _isLoading = false;
+      });
     } catch (e) {
       if (!_isDisposed && mounted) {
         setState(() => _isLoading = false);
-        Toast.error(context, 'Erro ao carregar proventos');
+        Toast.error(context, 'Erro ao carregar dados');
       }
     }
   }
 
   void _aplicarFiltros() {
+    if (_isDisposed || !mounted) return;
+
     List<Provento> resultado = List.from(_proventos);
 
     if (_selectedPeriod != 'ALL') {
       final meses = int.parse(_selectedPeriod.replaceAll('M', ''));
       final agora = DateTime.now();
       final dataCorte = DateTime(agora.year, agora.month - meses + 1, 1);
-      resultado = resultado
-          .where((p) => p.dataPagamento
-              .isAfter(dataCorte.subtract(const Duration(days: 1))))
-          .toList();
+      resultado =
+          resultado.where((p) => !p.dataPagamento.isBefore(dataCorte)).toList();
     }
+
     if (_searchQuery.isNotEmpty) {
-      resultado = resultado
-          .where((p) =>
-              p.ticker.toLowerCase().contains(_searchQuery.toLowerCase()))
-          .toList();
+      final query = _searchQuery.toLowerCase();
+      resultado = resultado.where((p) {
+        return p.ticker.toLowerCase().contains(query) ||
+            (_tiposProvento[p.tipoProvento] ?? p.tipoProvento)
+                .toLowerCase()
+                .contains(query);
+      }).toList();
     }
 
     resultado.sort((a, b) {
       switch (_sortBy) {
-        case 'date':
-          return b.dataPagamento.compareTo(a.dataPagamento);
         case 'amount':
           return b.totalRecebido.compareTo(a.totalRecebido);
         case 'ticker':
-          return a.ticker.compareTo(b.ticker);
+          final comp = a.ticker.compareTo(b.ticker);
+          return comp != 0 ? comp : b.dataPagamento.compareTo(a.dataPagamento);
         default:
-          return 0;
+          return b.dataPagamento.compareTo(a.dataPagamento);
       }
     });
 
-    if (!_isDisposed && mounted) {
-      setState(() {
-        _filteredProventos = resultado;
-      });
-    }
+    setState(() => _filteredProventos = resultado);
   }
 
-  List<Map<String, dynamic>> get _dadosGrafico {
-    final Map<String, double> porTicker = {};
+  Map<String, double> _calcularEstatisticas() {
+    double recebido = 0;
+    double pendente = 0;
 
     for (var p in _filteredProventos) {
-      porTicker[p.ticker] = (porTicker[p.ticker] ?? 0) + p.totalRecebido;
+      if (p.isFuture) {
+        pendente += p.totalRecebido;
+      } else {
+        recebido += p.totalRecebido;
+      }
     }
 
-    final total = porTicker.values.fold(0.0, (a, b) => a + b);
-
-    return porTicker.entries.map((entry) {
-      return {
-        'ticker': entry.key,
-        'valor': entry.value,
-        'percentual': total > 0 ? (entry.value / total) * 100 : 0,
-      };
-    }).toList()
-      ..sort((a, b) => (b['valor'] as double).compareTo(a['valor'] as double));
+    return {'recebido': recebido, 'pendente': pendente};
   }
 
-  Future<void> _mostrarFormulario([Provento? provento]) async {
-    Map<String, dynamic>? dadosProvento;
+  List<Map<String, dynamic>> _getDadosAgrupados() {
+    final Map<String, double> mapa = {};
+    for (var p in _filteredProventos.where((p) => !p.isFuture)) {
+      mapa[p.ticker] = (mapa[p.ticker] ?? 0.0) + p.totalRecebido;
+    }
 
+    if (mapa.isEmpty) return [];
+
+    final lista =
+        mapa.entries.map((e) => {'ticker': e.key, 'valor': e.value}).toList();
+    lista
+        .sort((a, b) => (b['valor'] as double).compareTo(a['valor'] as double));
+    return lista;
+  }
+
+  List<PieChartSectionData> _buildChartSections(
+      List<Map<String, dynamic>> dados) {
+    if (dados.isEmpty) {
+      return [
+        PieChartSectionData(
+            color: Colors.grey.withOpacity(0.15),
+            value: 1,
+            radius: 8,
+            showTitle: false)
+      ];
+    }
+
+    final cores = [
+      AppColors.primary,
+      const Color(0xFF6366F1),
+      const Color(0xFF10B981),
+      const Color(0xFFF59E0B),
+      const Color(0xFFEC4899)
+    ];
+    final top5 = dados.take(5).toList();
+
+    return List.generate(top5.length, (index) {
+      return PieChartSectionData(
+          value: top5[index]['valor'],
+          color: cores[index % cores.length],
+          radius: 10,
+          showTitle: false);
+    });
+  }
+
+  Future<void> _abrirFormulario([Provento? provento]) async {
+    Map<String, dynamic>? dados;
     if (provento != null) {
-      dadosProvento = {
+      dados = {
         'ticker': provento.ticker,
         'tipo_provento': provento.tipoProvento,
         'valor_por_cota': provento.valorPorCota,
-        'quantidade': provento.quantidade ?? 1,
+        'quantidade': provento.quantidade,
         'data_pagamento': provento.dataPagamento.toIso8601String(),
         'data_com': provento.dataCom?.toIso8601String(),
         'observacao': provento.observacao,
       };
     }
 
-    final resultado = await AppModals.mostrarModalProvento(
+    final res = await AppModals.mostrarModalProvento(
       context: context,
-      provento: dadosProvento,
+      provento: dados,
       tickersDisponiveis: _tickersDisponiveis,
     );
 
-    if (resultado != null && mounted) {
-      await _salvarProvento(resultado, provento);
+    if (res != null && mounted) {
+      await _salvarProvento(res, provento);
     }
   }
 
-  Future<void> _salvarProvento(Map<String, dynamic> dados,
-      [Provento? provento]) async {
-    if (_isDisposed || !mounted) return;
-
-    setState(() => _isSyncing = true);
-
+  Future<void> _salvarProvento(
+      Map<String, dynamic> dados, Provento? provento) async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) {
@@ -223,497 +233,169 @@ class _ProventosScreenState extends State<ProventosScreen> {
 
       final valorPorCota = (dados['valor_por_cota'] as num).toDouble();
       final quantidade = (dados['quantidade'] as num?)?.toDouble() ?? 1.0;
-      final totalRecebido = valorPorCota * quantidade;
 
-      final data = {
+      final payload = {
         'user_id': user.id,
         'ticker': dados['ticker'].toString().toUpperCase(),
         'tipo_provento': dados['tipo_provento'] ?? 'DIVIDENDO',
         'valor_por_cota': valorPorCota,
         'quantidade': quantidade,
-        'total_recebido': totalRecebido,
+        'total_recebido': valorPorCota * quantidade,
         'data_pagamento': dados['data_pagamento'],
         'data_com': dados['data_com'],
+        'observacao': dados['observacao'],
         'sync_status': 'pending',
       };
 
       if (provento != null) {
-        await _supabase.from('proventos').update(data).eq('id', provento.id);
+        await _supabase.from('proventos').update(payload).eq('id', provento.id);
         Toast.success(context, '✅ Provento atualizado!');
       } else {
-        await _supabase.from('proventos').insert(data);
+        await _supabase.from('proventos').insert(payload);
         Toast.success(context, '✅ Provento adicionado!');
       }
 
-      await _carregarProventos();
+      await _carregarDados();
     } catch (e) {
-      Toast.error(context, 'Erro ao salvar');
-    } finally {
-      if (!_isDisposed && mounted) {
-        setState(() => _isSyncing = false);
-      }
+      Toast.error(context, 'Erro ao salvar provento');
     }
   }
 
-  Future<void> _deletarProvento(Provento provento) async {
+  Future<void> _excluir(Provento provento) async {
     final confirmar = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar exclusão'),
-        content: Text('Excluir provento de ${provento.ticker}?'),
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Excluir provento'),
+        content: Text('Remover provento de ${provento.ticker}?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Excluir'),
-          ),
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Excluir')),
         ],
       ),
     );
 
-    if (confirmar != true) return;
-
-    try {
-      await _supabase.from('proventos').delete().eq('id', provento.id);
-      Toast.success(context, '✅ Provento excluído!');
-      await _carregarProventos();
-    } catch (e) {
-      Toast.error(context, 'Erro ao excluir');
+    if (confirmar == true) {
+      try {
+        await _supabase.from('proventos').delete().eq('id', provento.id);
+        Toast.success(context, '✅ Provento excluído!');
+        await _carregarDados();
+      } catch (e) {
+        Toast.error(context, 'Erro ao excluir');
+      }
     }
-  }
-
-  Map<String, dynamic> _calcularEstatisticas() {
-    final total =
-        _filteredProventos.fold(0.0, (sum, p) => sum + p.totalRecebido);
-    final passados = _filteredProventos.where((p) => !p.isFuture).toList();
-    final futuros = _filteredProventos.where((p) => p.isFuture).toList();
-
-    final totalPassado = passados.fold(0.0, (sum, p) => sum + p.totalRecebido);
-    final totalFuturo = futuros.fold(0.0, (sum, p) => sum + p.totalRecebido);
-    final media =
-        _filteredProventos.isEmpty ? 0 : total / _filteredProventos.length;
-
-    return {
-      'total': total,
-      'totalPassado': totalPassado,
-      'totalFuturo': totalFuturo,
-      'media': media,
-      'quantidade': _filteredProventos.length,
-    };
   }
 
   @override
   Widget build(BuildContext context) {
     final stats = _calcularEstatisticas();
-    final dadosGrafico = _dadosGrafico;
 
     return Scaffold(
       backgroundColor: AppColors.background(context),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Barra superior
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.refresh,
-                      color: AppColors.textSecondary(context),
-                      size: 22,
-                    ),
-                    onPressed: _carregarTudo,
-                  ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.add_circle_outline,
-                      color: AppColors.primary,
-                      size: 24,
-                    ),
-                    onPressed: () => _mostrarFormulario(),
-                  ),
-                ],
-              ),
-            ),
-
-            // Filtros
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: _periodos.map((periodo) {
-                          final isSelected = _selectedPeriod == periodo;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() => _selectedPeriod = periodo);
-                                _aplicarFiltros();
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? AppColors.primary
-                                          .withValues(alpha: 0.12)
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? AppColors.primary
-                                            .withValues(alpha: 0.3)
-                                        : AppColors.divider(context)
-                                            .withValues(alpha: 0.5),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  periodo == 'ALL' ? 'Todos' : periodo,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: isSelected
-                                        ? FontWeight.w600
-                                        : FontWeight.w400,
-                                    color: isSelected
-                                        ? AppColors.primary
-                                        : AppColors.textSecondary(context),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ),
-                  PopupMenuButton<String>(
-                    onSelected: (value) {
-                      setState(() => _sortBy = value);
-                      _aplicarFiltros();
-                    },
-                    color: AppColors.surface(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      child: Icon(
-                        Icons.sort_rounded,
-                        size: 20,
-                        color: AppColors.textSecondary(context),
-                      ),
-                    ),
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: 'date',
-                        child: Text('Por data',
-                            style: TextStyle(
-                                color: AppColors.textPrimary(context))),
-                      ),
-                      PopupMenuItem(
-                        value: 'amount',
-                        child: Text('Por valor',
-                            style: TextStyle(
-                                color: AppColors.textPrimary(context))),
-                      ),
-                      PopupMenuItem(
-                        value: 'ticker',
-                        child: Text('Por ticker',
-                            style: TextStyle(
-                                color: AppColors.textPrimary(context))),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Busca
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Buscar ticker...',
-                  hintStyle: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary(context),
-                  ),
-                  prefixIcon: Icon(
-                    Icons.search,
-                    size: 18,
-                    color: AppColors.textSecondary(context),
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: AppColors.surface(context),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  isDense: true,
-                ),
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textPrimary(context),
-                ),
-                onChanged: (value) {
-                  setState(() => _searchQuery = value);
-                  _aplicarFiltros();
-                },
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Cards de estatísticas
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildStatCard(
-                      'Recebido',
-                      _currencyFormatter.format(stats['totalPassado']),
-                      Icons.trending_down,
-                      const Color(0xFF10B981),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildStatCard(
-                      'A Receber',
-                      _currencyFormatter.format(stats['totalFuturo']),
-                      Icons.calendar_today,
-                      const Color(0xFF3B82F6),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildStatCard(
-                      'Média',
-                      _currencyFormatter.format(stats['media']),
-                      Icons.equalizer,
-                      const Color(0xFFF59E0B),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Gráfico de Pizza
-            if (dadosGrafico.isNotEmpty && _filteredProventos.isNotEmpty)
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface(context),
-                  borderRadius: BorderRadius.circular(12),
-                  border:
-                      Border.all(color: AppColors.border(context), width: 0.5),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Distribuição por Ativo',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary(context),
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            _showChart
-                                ? Icons.keyboard_arrow_up
-                                : Icons.keyboard_arrow_down,
-                            size: 20,
-                            color: AppColors.textSecondary(context),
-                          ),
-                          onPressed: () {
-                            setState(() => _showChart = !_showChart);
-                          },
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
-                    ),
-                    if (_showChart) ...[
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 140,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 1,
-                              child: PieChart(
-                                PieChartData(
-                                  sectionsSpace: 2,
-                                  centerSpaceRadius: 30,
-                                  sections: dadosGrafico
-                                      .take(6)
-                                      .toList()
-                                      .asMap()
-                                      .entries
-                                      .map((entry) {
-                                    final index = entry.key;
-                                    final item = entry.value;
-                                    final valor = item['valor'] as double;
-                                    final percentual =
-                                        item['percentual'] as double;
-
-                                    return PieChartSectionData(
-                                      value: valor,
-                                      color: _chartColors[
-                                          index % _chartColors.length],
-                                      title: percentual > 5
-                                          ? '${percentual.toStringAsFixed(0)}%'
-                                          : '',
-                                      titleStyle: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                      radius: 45,
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 1,
-                              child: ListView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                itemCount: dadosGrafico.take(6).length,
-                                itemBuilder: (context, index) {
-                                  final item = dadosGrafico[index];
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 4),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 8,
-                                          height: 8,
-                                          decoration: BoxDecoration(
-                                            color: _chartColors[
-                                                index % _chartColors.length],
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Expanded(
-                                          child: Text(
-                                            item['ticker'],
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: AppColors.textSecondary(
-                                                  context),
-                                            ),
-                                          ),
-                                        ),
-                                        Text(
-                                          _currencyFormatter
-                                              .format(item['valor']),
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
-                                            color:
-                                                AppColors.textPrimary(context),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-            if (dadosGrafico.isNotEmpty) const SizedBox(height: 8),
-
-            // Lista de proventos
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _filteredProventos.isEmpty
-                      ? _buildEmptyState()
-                      : RefreshIndicator(
-                          onRefresh: _carregarTudo,
-                          color: AppColors.primary,
-                          child: ListView.builder(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 4),
-                            itemCount: _filteredProventos.length,
-                            itemBuilder: (context, index) {
-                              final provento = _filteredProventos[index];
-                              return FadeInLeft(
-                                delay: Duration(milliseconds: index * 30),
-                                child: _buildProventoCard(provento),
-                              );
-                            },
-                          ),
-                        ),
-            ),
-          ],
-        ),
+      appBar: AppBar(
+        title: Text('Meus Proventos',
+            style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: AppColors.textPrimary(context))),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+        actions: [
+          IconButton(
+              onPressed: _carregarDados,
+              icon: Icon(Icons.refresh_rounded,
+                  color: AppColors.textSecondary(context), size: 22)),
+          IconButton(
+              onPressed: () => _abrirFormulario(),
+              icon: const Icon(Icons.add_circle_outline_rounded,
+                  color: AppColors.primary, size: 26)),
+          const SizedBox(width: 4),
+        ],
       ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                    child: FadeInDown(child: _buildCompactDashboard(stats))),
+                SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _HeaderDelegate(
+                        height: 115, child: _buildFilterSection())),
+                if (_filteredProventos.isEmpty)
+                  SliverFillRemaining(child: _buildEmptyState())
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 5, 16, 80),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) =>
+                            _buildSlimCard(_filteredProventos[index], index),
+                        childCount: _filteredProventos.length,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 
-  Widget _buildStatCard(
-      String title, String value, IconData icon, Color color) {
+  Widget _buildCompactDashboard(Map<String, double> stats) {
+    final dadosPie = _getDadosAgrupados();
+    final total = (stats['recebido'] ?? 0.0) + (stats['pendente'] ?? 0.0);
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.cardBackground(context),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border(context), width: 0.5),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border(context).withValues(alpha: 0.05)),
+        boxShadow: [
+          BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 4))
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 4),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: AppColors.textSecondary(context),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary(context),
+          SizedBox(
+              height: 100,
+              width: 100,
+              child: PieChart(PieChartData(
+                  sectionsSpace: 3,
+                  centerSpaceRadius: 28,
+                  sections: _buildChartSections(dadosPie)))),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('PATRIMÔNIO EM PROVENTOS',
+                    style: TextStyle(
+                        color: AppColors.textSecondary(context),
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5)),
+                const SizedBox(height: 2),
+                Text(_currencyFormatter.format(total),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 18)),
+                const SizedBox(height: 14),
+                _buildSummaryRow(
+                    'Recebido', stats['recebido'] ?? 0, Colors.green),
+                const SizedBox(height: 5),
+                _buildSummaryRow(
+                    'A Receber', stats['pendente'] ?? 0, Colors.blue),
+              ],
             ),
           ),
         ],
@@ -721,148 +403,297 @@ class _ProventosScreenState extends State<ProventosScreen> {
     );
   }
 
-  Widget _buildProventoCard(Provento provento) {
-    final isFuture = provento.isFuture;
-    final iconColor =
-        isFuture ? const Color(0xFF3B82F6) : const Color(0xFF10B981);
+  Widget _buildSummaryRow(String label, double valor, Color color) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(children: [
+          Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 6),
+          Text(label,
+              style: TextStyle(
+                  color: AppColors.textSecondary(context), fontSize: 10)),
+        ]),
+        Text(_currencyFormatter.format(valor),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+      ],
+    );
+  }
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: AppColors.border(context), width: 0.5),
-      ),
-      elevation: 0,
-      color: AppColors.cardBackground(context),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                isFuture ? Icons.calendar_today : Icons.payments,
-                color: iconColor,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    provento.ticker,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary(context),
+  Widget _buildFilterSection() {
+    return Container(
+      color: AppColors.background(context),
+      padding: const EdgeInsets.only(top: 10, bottom: 5),
+      child: Column(
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: _periodos.map((p) {
+                final isSel = _selectedPeriod == p;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: InkWell(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      setState(() => _selectedPeriod = p);
+                      _aplicarFiltros();
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: isSel
+                            ? AppColors.primary
+                            : AppColors.cardBackground(context),
+                        borderRadius: BorderRadius.circular(10),
+                        border: isSel
+                            ? null
+                            : Border.all(
+                                color:
+                                    AppColors.border(context).withValues(alpha: 0.3)),
+                      ),
+                      child: Text(p == 'ALL' ? 'TUDO' : p,
+                          style: TextStyle(
+                              color: isSel
+                                  ? Colors.white
+                                  : AppColors.textSecondary(context),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10)),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          _tiposProvento[provento.tipoProvento] ??
-                              provento.tipoProvento,
-                          style: const TextStyle(
-                            fontSize: 9,
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        _dateFormatter.format(provento.dataPagamento),
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: AppColors.textSecondary(context),
-                        ),
-                      ),
-                      if (isFuture)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color:
-                                const Color(0xFF3B82F6).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'Futuro',
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: Color(0xFF3B82F6),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
+                );
+              }).toList(),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Row(
               children: [
-                Text(
-                  _currencyFormatter.format(provento.totalRecebido),
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: iconColor,
+                Expanded(
+                  child: Container(
+                    height: 38,
+                    decoration: BoxDecoration(
+                        color: AppColors.cardBackground(context),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: AppColors.border(context).withValues(alpha: 0.2))),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) {
+                        setState(() => _searchQuery = v);
+                        _aplicarFiltros();
+                      },
+                      style: TextStyle(
+                          fontSize: 13, color: AppColors.textPrimary(context)),
+                      decoration: InputDecoration(
+                        hintText: 'Buscar ticker...',
+                        hintStyle: TextStyle(
+                            color: AppColors.textSecondary(context)
+                                .withValues(alpha: 0.5),
+                            fontSize: 13),
+                        prefixIcon: Icon(Icons.search_rounded,
+                            size: 16, color: AppColors.textSecondary(context)),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: Icon(Icons.close_rounded,
+                                    size: 14,
+                                    color: AppColors.textSecondary(context)),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                  _aplicarFiltros();
+                                })
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 11, horizontal: 12),
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    GestureDetector(
-                      onTap: () => _mostrarFormulario(provento),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(Icons.edit,
-                            size: 16, color: AppColors.primary),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => _deletarProvento(provento),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(Icons.delete_outline,
-                            size: 16, color: AppColors.error),
-                      ),
-                    ),
+                const SizedBox(width: 8),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    HapticFeedback.lightImpact();
+                    setState(() => _sortBy = value);
+                    _aplicarFiltros();
+                  },
+                  color: AppColors.surface(context),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Container(
+                    height: 38,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                        color: AppColors.cardBackground(context),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: AppColors.border(context).withValues(alpha: 0.2))),
+                    child: Icon(Icons.sort_rounded,
+                        size: 20, color: AppColors.textSecondary(context)),
+                  ),
+                  itemBuilder: (context) => [
+                    _buildPopupItem('Data', 'date', Icons.calendar_today),
+                    _buildPopupItem('Valor', 'amount', Icons.attach_money),
+                    _buildPopupItem('Ticker', 'ticker', Icons.tag),
                   ],
                 ),
               ],
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _buildPopupItem(
+      String label, String value, IconData icon) {
+    final isSelected = _sortBy == value;
+    return PopupMenuItem(
+      value: value,
+      child: Row(children: [
+        Icon(icon,
+            size: 18,
+            color: isSelected
+                ? AppColors.primary
+                : AppColors.textSecondary(context)),
+        const SizedBox(width: 8),
+        Text(label,
+            style: TextStyle(
+                color: isSelected
+                    ? AppColors.primary
+                    : AppColors.textPrimary(context),
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 13)),
+        if (isSelected) ...[
+          const Spacer(),
+          const Icon(Icons.check, size: 16, color: AppColors.primary)
+        ],
+      ]),
+    );
+  }
+
+  Widget _buildSlimCard(Provento provento, int index) {
+    final bool eFuturo = provento.isFuture;
+    final Color accentColor =
+        eFuturo ? const Color(0xFF3B82F6) : const Color(0xFF10B981);
+
+    return FadeInLeft(
+      duration: const Duration(milliseconds: 300),
+      delay: Duration(milliseconds: index * 30),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+            color: AppColors.cardBackground(context),
+            borderRadius: BorderRadius.circular(15),
+            border:
+                Border.all(color: AppColors.border(context).withValues(alpha: 0.1))),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: () => _abrirFormulario(provento),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  height: 38,
+                  width: 38,
+                  decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: 0.1),
+                      shape: BoxShape.circle),
+                  alignment: Alignment.center,
+                  child: Text(
+                      provento.ticker.isNotEmpty
+                          ? provento.ticker[0].toUpperCase()
+                          : '?',
+                      style: TextStyle(
+                          color: accentColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(provento.ticker,
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: AppColors.textPrimary(context))),
+                      const SizedBox(height: 3),
+                      Row(children: [
+                        _buildMiniBadge(
+                            _tiposProvento[provento.tipoProvento] ??
+                                provento.tipoProvento,
+                            AppColors.primary.withValues(alpha: 0.7)),
+                        const SizedBox(width: 6),
+                        Text(_dateFormatter.format(provento.dataPagamento),
+                            style: TextStyle(
+                                color: AppColors.textSecondary(context),
+                                fontSize: 10)),
+                        if (eFuturo) ...[
+                          const SizedBox(width: 6),
+                          _buildMiniBadge('A receber', const Color(0xFF3B82F6))
+                        ],
+                      ]),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(_currencyFormatter.format(provento.totalRecebido),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: accentColor,
+                            fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      _buildMiniIconButton(
+                          Icons.edit_rounded,
+                          Colors.grey.shade400,
+                          () => _abrirFormulario(provento)),
+                      const SizedBox(width: 8),
+                      _buildMiniIconButton(Icons.delete_outline_rounded,
+                          Colors.red.shade300, () => _excluir(provento)),
+                    ]),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildMiniBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(6)),
+      child: Text(text,
+          style: TextStyle(
+              fontSize: 9, color: color, fontWeight: FontWeight.w600)),
+    );
+  }
+
+  Widget _buildMiniIconButton(IconData icon, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: Icon(icon, size: 17, color: color)),
     );
   }
 
@@ -870,42 +701,47 @@ class _ProventosScreenState extends State<ProventosScreen> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.payments_outlined,
-              size: 64,
-              color: AppColors.textSecondary(context).withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Nenhum provento',
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(Icons.payments_outlined,
+              size: 48,
+              color: AppColors.textSecondary(context).withValues(alpha: 0.3)),
+          const SizedBox(height: 12),
+          Text('Nenhum provento',
               style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary(context),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary(context))),
+          const SizedBox(height: 4),
+          Text(
               _searchQuery.isNotEmpty
                   ? 'Nenhum resultado para "$_searchQuery"'
                   : 'Toque em + para adicionar',
-              textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary(context),
-              ),
-            ),
-          ],
-        ),
+                  fontSize: 12, color: AppColors.textSecondary(context))),
+        ]),
       ),
     );
   }
 }
 
-// 📦 MODELO PROVENTO
+class _HeaderDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  final double height;
+
+  _HeaderDelegate({required this.child, required this.height});
+
+  @override
+  double get minExtent => height;
+  @override
+  double get maxExtent => height;
+  @override
+  Widget build(
+          BuildContext context, double shrinkOffset, bool overlapsContent) =>
+      child;
+  @override
+  bool shouldRebuild(_HeaderDelegate oldDelegate) => true;
+}
+
 class Provento {
   final String id;
   final String ticker;
@@ -918,35 +754,28 @@ class Provento {
   final bool isFuture;
   final String? observacao;
 
-  Provento({
-    required this.id,
-    required this.ticker,
-    required this.tipoProvento,
-    required this.valorPorCota,
-    this.quantidade,
-    required this.totalRecebido,
-    required this.dataPagamento,
-    this.dataCom,
-    required this.isFuture,
-    this.observacao,
-  });
+  Provento(
+      {required this.id,
+      required this.ticker,
+      required this.tipoProvento,
+      required this.valorPorCota,
+      this.quantidade,
+      required this.totalRecebido,
+      required this.dataPagamento,
+      this.dataCom,
+      required this.isFuture,
+      this.observacao});
 
   factory Provento.fromJson(Map<String, dynamic> json) {
-    DateTime dataPagamento;
-    try {
-      dataPagamento = json['data_pagamento'] != null
-          ? DateTime.parse(json['data_pagamento'].toString())
-          : DateTime.now();
-    } catch (e) {
-      dataPagamento = DateTime.now();
-    }
-
+    final d = json['data_pagamento'] != null
+        ? DateTime.parse(json['data_pagamento'].toString())
+        : DateTime.now();
     DateTime? dataCom;
     try {
       dataCom = json['data_com'] != null
           ? DateTime.parse(json['data_com'].toString())
           : null;
-    } catch (e) {
+    } catch (_) {
       dataCom = null;
     }
 
@@ -957,9 +786,9 @@ class Provento {
       valorPorCota: (json['valor_por_cota'] as num?)?.toDouble() ?? 0.0,
       quantidade: (json['quantidade'] as num?)?.toDouble(),
       totalRecebido: (json['total_recebido'] as num?)?.toDouble() ?? 0.0,
-      dataPagamento: dataPagamento,
+      dataPagamento: d,
       dataCom: dataCom,
-      isFuture: dataPagamento.isAfter(DateTime.now()),
+      isFuture: d.isAfter(DateTime.now()),
       observacao: json['observacao']?.toString(),
     );
   }

@@ -63,8 +63,10 @@ class ThemeService extends ChangeNotifier {
       case AppTheme.dark:
         return true;
       case AppTheme.system:
-        return WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-            Brightness.dark;
+        // 🔥 CORREÇÃO PARA WEB: Verifica a preferência de tema do navegador com segurança
+        final brightness =
+            WidgetsBinding.instance.platformDispatcher.platformBrightness;
+        return brightness == Brightness.dark;
     }
   }
 

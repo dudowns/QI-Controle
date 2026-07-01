@@ -1,11 +1,7 @@
 // lib/models/renda_fixa_model.dart
 import 'package:flutter/material.dart';
 
-enum Indexador {
-  preFixado,
-  posFixadoCDI,
-  ipca,
-}
+enum Indexador { preFixado, posFixadoCDI, ipca }
 
 class RendaFixaModel {
   final String? id;
@@ -25,7 +21,7 @@ class RendaFixaModel {
   final bool liquidezDiaria;
   final bool isIsento;
   final String status;
-  final String? observacao; // 🔥 NOVO CAMPO PARA HISTÓRICO DE APORTES
+  final String? observacao;
 
   RendaFixaModel({
     this.id,
@@ -51,15 +47,17 @@ class RendaFixaModel {
   factory RendaFixaModel.fromJson(Map<String, dynamic> json) {
     return RendaFixaModel(
       id: json['id']?.toString(),
-      nome: json['nome']?.toString() ?? '',
-      tipoRenda: json['tipo_renda']?.toString() ?? '',
+      nome: (json['nome'] as String?) ?? '',
+      tipoRenda: (json['tipo_renda'] as String?) ?? '',
       valorAplicado: (json['valor'] as num?)?.toDouble() ?? 0.0,
       taxa: (json['taxa'] as num?)?.toDouble() ?? 0.0,
       dataAplicacao: json['data_aplicacao'] != null
-          ? DateTime.parse(json['data_aplicacao'] as String)
+          ? DateTime.tryParse(json['data_aplicacao'].toString()) ??
+                DateTime.now()
           : DateTime.now(),
       dataVencimento: json['data_vencimento'] != null
-          ? DateTime.parse(json['data_vencimento'] as String)
+          ? DateTime.tryParse(json['data_vencimento'].toString()) ??
+                DateTime.now()
           : DateTime.now(),
       diasUteis: (json['dias'] as num?)?.toInt() ?? 0,
       rendimentoBruto: (json['rendimento_bruto'] as num?)?.toDouble(),
@@ -70,7 +68,7 @@ class RendaFixaModel {
       indexador: _getIndexadorFromString(json['indexador'] as String?),
       liquidezDiaria: json['liquidez'] == 'Diária',
       isIsento: json['is_lci'] == 1,
-      status: json['status']?.toString() ?? 'ativo',
+      status: (json['status'] as String?) ?? 'ativo',
       observacao: json['observacao']?.toString(),
     );
   }

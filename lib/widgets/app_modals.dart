@@ -5,8 +5,15 @@ import '../constants/app_colors.dart';
 import '../constants/app_categories.dart';
 import '../utils/formatters.dart';
 import '../services/theme_service.dart';
+import '../widgets/toast.dart';
 
 class AppModals {
+  // ========== CORES PADRÃO ==========
+  static const Color _primaryColor = AppColors.primary;
+  static const Color _secondaryColor = AppColors.secondary;
+  static const Color _errorColor = AppColors.error;
+  static const Color _successColor = AppColors.success;
+
   // ========== 1. MODAL DE LANÇAMENTO ==========
   static Future<Map<String, dynamic>?> mostrarModalLancamento({
     required BuildContext context,
@@ -46,7 +53,8 @@ class AppModals {
             backgroundColor: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+              constraints: const BoxConstraints(
+                  maxWidth: 500, maxHeight: 550), // 🔥 Altura reduzida
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -65,13 +73,11 @@ class AppModals {
                       isEditing ? 'Editar Lançamento' : 'Novo Lançamento',
                       context,
                       isDark: isDark),
-                  Divider(
-                      height: 1,
-                      color:
-                          isDark ? Colors.grey[800] : const Color(0xFFEEEEEE)),
+                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(
+                          16), // 🔥 Padding reduzido de 20 para 16
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -79,74 +85,71 @@ class AppModals {
                             children: [
                               Expanded(
                                   child: _buildTipoBotao(
-                                label: 'Receita',
-                                value: 'receita',
-                                icon: Icons.trending_up,
-                                selected: tipo == 'receita',
-                                onTap: () => setState(() => tipo = 'receita'),
-                                isDark: isDark,
-                              )),
+                                      label: 'Receita',
+                                      value: 'receita',
+                                      icon: Icons.trending_up,
+                                      selected: tipo == 'receita',
+                                      onTap: () =>
+                                          setState(() => tipo = 'receita'),
+                                      isDark: isDark)),
                               const SizedBox(width: 12),
                               Expanded(
                                   child: _buildTipoBotao(
-                                label: 'Despesa',
-                                value: 'gasto',
-                                icon: Icons.trending_down,
-                                selected: tipo == 'gasto',
-                                onTap: () => setState(() => tipo = 'gasto'),
-                                isDark: isDark,
-                              )),
+                                      label: 'Despesa',
+                                      value: 'gasto',
+                                      icon: Icons.trending_down,
+                                      selected: tipo == 'gasto',
+                                      onTap: () =>
+                                          setState(() => tipo = 'gasto'),
+                                      isDark: isDark)),
                             ],
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 12),
                           _buildTextField(descricaoCtrl, 'Descrição',
                               isDark: isDark),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _buildTextField(valorCtrl, 'Valor',
                               isDark: isDark, prefix: 'R\$ ', isNumber: true),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _buildDropdownCategoria(categoria, tipo == 'receita',
                               (value) => setState(() => categoria = value),
                               isDark: isDark),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _buildDatePicker(context, data,
                               (date) => setState(() => data = date),
                               isDark: isDark),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _buildTextField(
                               observacaoCtrl, 'Observação (opcional)',
                               isDark: isDark, maxLines: 2),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
                           _buildButtons(
-                            context: context,
-                            onCancel: () => Navigator.pop(context),
-                            onConfirm: () {
-                              if (descricaoCtrl.text.isEmpty ||
-                                  valorCtrl.text.isEmpty) {
-                                _showSnackBar(
-                                    context, 'Preencha descrição e valor');
-                                return;
-                              }
-                              final resultado = {
-                                'descricao': descricaoCtrl.text,
-                                'valor': double.parse(
-                                    valorCtrl.text.replaceAll(',', '.')),
-                                'tipo': tipo,
-                                'categoria': categoria,
-                                'data': data.toIso8601String(),
-                                'observacao': observacaoCtrl.text,
-                              };
-                              if (isEditing) {
-                                final id = lancamento['id'];
-                                if (id != null) {
-                                  resultado['id'] = id;
+                              context: context,
+                              onCancel: () => Navigator.pop(context),
+                              onConfirm: () {
+                                if (descricaoCtrl.text.isEmpty ||
+                                    valorCtrl.text.isEmpty) {
+                                  _showSnackBar(
+                                      context, 'Preencha descrição e valor');
+                                  return;
                                 }
-                              }
-                              Navigator.pop(context, resultado);
-                            },
-                            isEditing: isEditing,
-                            isDark: isDark,
-                          ),
+                                final resultado = {
+                                  'descricao': descricaoCtrl.text,
+                                  'valor': double.parse(
+                                      valorCtrl.text.replaceAll(',', '.')),
+                                  'tipo': tipo,
+                                  'categoria': categoria,
+                                  'data': data.toIso8601String(),
+                                  'observacao': observacaoCtrl.text,
+                                };
+                                if (isEditing) {
+                                  final id = lancamento['id'];
+                                  if (id != null) resultado['id'] = id;
+                                }
+                                Navigator.pop(context, resultado);
+                              },
+                              isEditing: isEditing,
+                              isDark: isDark),
                         ],
                       ),
                     ),
@@ -171,24 +174,21 @@ class AppModals {
     final tickerCtrl =
         TextEditingController(text: investimento?['ticker'] ?? '');
     final quantidadeCtrl = TextEditingController(
-      text: investimento != null && investimento['quantidade'] != null
-          ? (investimento['quantidade'] as num).toString()
-          : '',
-    );
+        text: investimento != null && investimento['quantidade'] != null
+            ? (investimento['quantidade'] as num).toString()
+            : '');
     final precoMedioCtrl = TextEditingController(
-      text: investimento != null && investimento['preco_medio'] != null
-          ? (investimento['preco_medio'] as num)
-              .toStringAsFixed(2)
-              .replaceAll('.', ',')
-          : '',
-    );
+        text: investimento != null && investimento['preco_medio'] != null
+            ? (investimento['preco_medio'] as num)
+                .toStringAsFixed(2)
+                .replaceAll('.', ',')
+            : '');
     final precoAtualCtrl = TextEditingController(
-      text: investimento != null && investimento['preco_atual'] != null
-          ? (investimento['preco_atual'] as num)
-              .toStringAsFixed(2)
-              .replaceAll('.', ',')
-          : '',
-    );
+        text: investimento != null && investimento['preco_atual'] != null
+            ? (investimento['preco_atual'] as num)
+                .toStringAsFixed(2)
+                .replaceAll('.', ',')
+            : '');
 
     String tipoSelecionado = investimento?['tipo'] ?? 'ACAO';
     final List<String> tipos = ['ACAO', 'FII', 'CRIPTO', 'RENDA_FIXA'];
@@ -213,7 +213,8 @@ class AppModals {
             backgroundColor: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+              constraints: const BoxConstraints(
+                  maxWidth: 500, maxHeight: 550), // 🔥 Altura reduzida
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -231,81 +232,72 @@ class AppModals {
                       isEditing ? 'Editar Investimento' : 'Novo Investimento',
                       context,
                       isDark: isDark),
-                  Divider(
-                      height: 1,
-                      color:
-                          isDark ? Colors.grey[800] : const Color(0xFFEEEEEE)),
+                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(16), // 🔥 Padding reduzido
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildTextField(tickerCtrl, 'Ticker',
                               isDark: isDark, hint: 'Ex: PETR4, VISC11'),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _buildDropdownTipos(
                               tipoSelecionado,
                               tipos,
                               (value) =>
                                   setState(() => tipoSelecionado = value),
                               isDark: isDark),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _buildTextField(quantidadeCtrl, 'Quantidade',
                               isDark: isDark, isNumber: true),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _buildTextField(precoMedioCtrl, 'Preço Médio',
                               isDark: isDark, prefix: 'R\$ ', isNumber: true),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _buildTextField(
                               precoAtualCtrl, 'Preço Atual (opcional)',
                               isDark: isDark, prefix: 'R\$ ', isNumber: true),
+                          const SizedBox(height: 12),
+                          _buildDatePicker(context, dataCompra,
+                              (date) => setState(() => dataCompra = date),
+                              label: 'Data da Compra',
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                              isDark: isDark),
                           const SizedBox(height: 16),
-                          _buildDatePicker(
-                            context,
-                            dataCompra,
-                            (date) => setState(() => dataCompra = date),
-                            label: 'Data da Compra',
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime.now(),
-                            isDark: isDark,
-                          ),
-                          const SizedBox(height: 24),
                           _buildButtons(
-                            context: context,
-                            onCancel: () => Navigator.pop(context),
-                            onConfirm: () {
-                              if (tickerCtrl.text.isEmpty ||
-                                  quantidadeCtrl.text.isEmpty ||
-                                  precoMedioCtrl.text.isEmpty) {
-                                _showSnackBar(context,
-                                    'Preencha todos os campos obrigatórios');
-                                return;
-                              }
-                              final resultado = {
-                                'ticker': tickerCtrl.text.toUpperCase(),
-                                'tipo': tipoSelecionado,
-                                'quantidade': double.parse(
-                                    quantidadeCtrl.text.replaceAll(',', '.')),
-                                'preco_medio': double.parse(
-                                    precoMedioCtrl.text.replaceAll(',', '.')),
-                                'preco_atual': precoAtualCtrl.text.isNotEmpty
-                                    ? double.parse(precoAtualCtrl.text
-                                        .replaceAll(',', '.'))
-                                    : null,
-                                'data_compra': dataCompra.toIso8601String(),
-                              };
-                              if (isEditing) {
-                                final id = investimento['id'];
-                                if (id != null) {
-                                  resultado['id'] = id;
+                              context: context,
+                              onCancel: () => Navigator.pop(context),
+                              onConfirm: () {
+                                if (tickerCtrl.text.isEmpty ||
+                                    quantidadeCtrl.text.isEmpty ||
+                                    precoMedioCtrl.text.isEmpty) {
+                                  _showSnackBar(context,
+                                      'Preencha todos os campos obrigatórios');
+                                  return;
                                 }
-                              }
-                              Navigator.pop(context, resultado);
-                            },
-                            isEditing: isEditing,
-                            isDark: isDark,
-                          ),
+                                final resultado = {
+                                  'ticker': tickerCtrl.text.toUpperCase(),
+                                  'tipo': tipoSelecionado,
+                                  'quantidade': double.parse(
+                                      quantidadeCtrl.text.replaceAll(',', '.')),
+                                  'preco_medio': double.parse(
+                                      precoMedioCtrl.text.replaceAll(',', '.')),
+                                  'preco_atual': precoAtualCtrl.text.isNotEmpty
+                                      ? double.parse(precoAtualCtrl.text
+                                          .replaceAll(',', '.'))
+                                      : null,
+                                  'data_compra': dataCompra.toIso8601String(),
+                                };
+                                if (isEditing) {
+                                  final id = investimento['id'];
+                                  if (id != null) resultado['id'] = id;
+                                }
+                                Navigator.pop(context, resultado);
+                              },
+                              isEditing: isEditing,
+                              isDark: isDark),
                         ],
                       ),
                     ),
@@ -332,17 +324,15 @@ class AppModals {
         text: provento?['ticker'] ??
             (tickersDisponiveis.isNotEmpty ? tickersDisponiveis.first : ''));
     final valorCtrl = TextEditingController(
-      text: provento != null && provento['valor_por_cota'] != null
-          ? (provento['valor_por_cota'] as num)
-              .toStringAsFixed(2)
-              .replaceAll('.', ',')
-          : '',
-    );
+        text: provento != null && provento['valor_por_cota'] != null
+            ? (provento['valor_por_cota'] as num)
+                .toStringAsFixed(2)
+                .replaceAll('.', ',')
+            : '');
     final quantidadeCtrl = TextEditingController(
-      text: provento != null && provento['quantidade'] != null
-          ? (provento['quantidade'] as num).toString()
-          : '1',
-    );
+        text: provento != null && provento['quantidade'] != null
+            ? (provento['quantidade'] as num).toString()
+            : '1');
 
     DateTime dataPagamento =
         provento != null && provento['data_pagamento'] != null
@@ -377,7 +367,8 @@ class AppModals {
             backgroundColor: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 650),
+              constraints: const BoxConstraints(
+                  maxWidth: 500, maxHeight: 550), // 🔥 Altura reduzida
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -394,13 +385,10 @@ class AppModals {
                   _buildHeader(
                       isEditing ? 'Editar Provento' : 'Novo Provento', context,
                       isDark: isDark),
-                  Divider(
-                      height: 1,
-                      color:
-                          isDark ? Colors.grey[800] : const Color(0xFFEEEEEE)),
+                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(16), // 🔥 Padding reduzido
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -413,81 +401,75 @@ class AppModals {
                           if (tickersDisponiveis.isEmpty)
                             _buildTextField(tickerCtrl, 'Ticker',
                                 isDark: isDark, hint: 'Ex: PETR4'),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _buildDropdownString(
                               'Tipo',
                               tipoProvento,
                               tiposProvento,
                               (value) => setState(() => tipoProvento = value),
                               isDark: isDark),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _buildTextField(valorCtrl, 'Valor por cota',
                               isDark: isDark, prefix: 'R\$ ', isNumber: true),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _buildTextField(quantidadeCtrl, 'Quantidade',
                               isDark: isDark, isNumber: true),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _buildDatePicker(context, dataPagamento,
                               (date) => setState(() => dataPagamento = date),
                               label: 'Data de pagamento', isDark: isDark),
                           const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Checkbox(
+                          Row(children: [
+                            Checkbox(
                                 value: temDataCom,
                                 onChanged: (value) =>
                                     setState(() => temDataCom = value ?? false),
-                                activeColor: const Color(0xFF7B2CBF),
-                              ),
-                              Text('Possui data COM',
-                                  style: TextStyle(
-                                      color: isDark
-                                          ? Colors.white
-                                          : const Color(0xFF333333))),
-                            ],
-                          ),
+                                activeColor: _primaryColor),
+                            Text('Possui data COM',
+                                style: TextStyle(
+                                    color: isDark
+                                        ? Colors.white
+                                        : const Color(0xFF333333))),
+                          ]),
                           if (temDataCom) ...[
                             const SizedBox(height: 8),
                             _buildDatePicker(context, dataCom ?? DateTime.now(),
                                 (date) => setState(() => dataCom = date),
                                 label: 'Data COM', isDark: isDark),
                           ],
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
                           _buildButtons(
-                            context: context,
-                            onCancel: () => Navigator.pop(context),
-                            onConfirm: () {
-                              if (tickerCtrl.text.isEmpty ||
-                                  valorCtrl.text.isEmpty ||
-                                  quantidadeCtrl.text.isEmpty) {
-                                _showSnackBar(context,
-                                    'Preencha todos os campos obrigatórios');
-                                return;
-                              }
-                              final resultado = {
-                                'ticker': tickerCtrl.text.toUpperCase(),
-                                'tipo_provento': tipoProvento,
-                                'valor_por_cota': double.parse(
-                                    valorCtrl.text.replaceAll(',', '.')),
-                                'quantidade': double.parse(
-                                    quantidadeCtrl.text.replaceAll(',', '.')),
-                                'data_pagamento':
-                                    dataPagamento.toIso8601String(),
-                                'data_com': temDataCom && dataCom != null
-                                    ? dataCom!.toIso8601String()
-                                    : null,
-                              };
-                              if (isEditing) {
-                                final id = provento['id'];
-                                if (id != null) {
-                                  resultado['id'] = id;
+                              context: context,
+                              onCancel: () => Navigator.pop(context),
+                              onConfirm: () {
+                                if (tickerCtrl.text.isEmpty ||
+                                    valorCtrl.text.isEmpty ||
+                                    quantidadeCtrl.text.isEmpty) {
+                                  _showSnackBar(context,
+                                      'Preencha todos os campos obrigatórios');
+                                  return;
                                 }
-                              }
-                              Navigator.pop(context, resultado);
-                            },
-                            isEditing: isEditing,
-                            isDark: isDark,
-                          ),
+                                final resultado = {
+                                  'ticker': tickerCtrl.text.toUpperCase(),
+                                  'tipo_provento': tipoProvento,
+                                  'valor_por_cota': double.parse(
+                                      valorCtrl.text.replaceAll(',', '.')),
+                                  'quantidade': double.parse(
+                                      quantidadeCtrl.text.replaceAll(',', '.')),
+                                  'data_pagamento':
+                                      dataPagamento.toIso8601String(),
+                                  'data_com': temDataCom && dataCom != null
+                                      ? dataCom!.toIso8601String()
+                                      : null,
+                                };
+                                if (isEditing) {
+                                  final id = provento['id'];
+                                  if (id != null) resultado['id'] = id;
+                                }
+                                Navigator.pop(context, resultado);
+                              },
+                              isEditing: isEditing,
+                              isDark: isDark),
                         ],
                       ),
                     ),
@@ -501,20 +483,24 @@ class AppModals {
     );
   }
 
-  // ========== 4. MODAL DE CONTA DO MÊS ==========
+  // ========== 4. MODAL DE CONTA DO MÊS (Compacto) ==========
   static Future<Map<String, dynamic>?> mostrarModalConta({
     required BuildContext context,
     Map<String, dynamic>? conta,
+    Function? onSalvo,
   }) async {
     final isEditing = conta != null;
     final isDark = ThemeService().isDarkMode;
 
     final nomeCtrl = TextEditingController(text: conta?['nome'] ?? '');
     final valorCtrl = TextEditingController(
-      text: conta != null && conta['valor'] != null
-          ? (conta['valor'] as num).toStringAsFixed(2).replaceAll('.', ',')
-          : '',
-    );
+        text: conta != null && conta['valor'] != null
+            ? (conta['valor'] as num).toStringAsFixed(2).replaceAll('.', ',')
+            : '');
+    final parcelasCtrl = TextEditingController(
+        text: conta != null && conta['parcelas_total'] != null
+            ? conta['parcelas_total'].toString()
+            : '');
 
     int diaVencimento = conta?['dia_vencimento'] ?? 1;
     String tipo = conta?['tipo'] ?? 'mensal';
@@ -522,7 +508,6 @@ class AppModals {
     DateTime dataInicio = conta != null && conta['data_inicio'] != null
         ? DateTime.parse(conta['data_inicio'])
         : DateTime.now();
-    int? parcelasTotal = conta?['parcelas_total'];
 
     final List<int> dias = List.generate(31, (i) => i + 1);
     final List<String> tipos = ['mensal', 'parcelada'];
@@ -538,6 +523,7 @@ class AppModals {
       'Saúde',
       'Educação',
       'Cartão de Crédito',
+      'Empréstimo', // 🔥 Adicionado aqui com acento (ou sem acento, como preferir)
       'Financiamento',
       'Outros'
     ];
@@ -557,7 +543,8 @@ class AppModals {
             backgroundColor: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 650),
+              constraints: const BoxConstraints(
+                  maxWidth: 500, maxHeight: 550), // 🔥 Altura reduzida
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -574,83 +561,85 @@ class AppModals {
                   _buildHeader(
                       isEditing ? 'Editar Conta' : 'Nova Conta', context,
                       isDark: isDark),
-                  Divider(
-                      height: 1,
-                      color:
-                          isDark ? Colors.grey[800] : const Color(0xFFEEEEEE)),
+                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(16), // 🔥 Padding reduzido
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildTextField(nomeCtrl, 'Nome da conta',
                               isDark: isDark, hint: 'Ex: Netflix, Aluguel'),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
                           _buildTextField(valorCtrl, 'Valor',
                               isDark: isDark, prefix: 'R\$ ', isNumber: true),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
                           _buildDropdownDias(diaVencimento, dias,
                               (value) => setState(() => diaVencimento = value),
                               isDark: isDark),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
                           _buildDropdownString('Tipo', tipo, tipos,
                               (value) => setState(() => tipo = value),
                               isDark: isDark),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
                           _buildDropdownString(
                               'Categoria',
                               categoria,
                               categorias,
                               (value) => setState(() => categoria = value),
                               isDark: isDark),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
                           _buildDatePicker(context, dataInicio,
                               (date) => setState(() => dataInicio = date),
                               label: 'Data de início', isDark: isDark),
                           if (tipo == 'parcelada') ...[
-                            const SizedBox(height: 16),
-                            _buildTextField(
-                                TextEditingController(
-                                    text: parcelasTotal?.toString() ?? ''),
-                                'Total de parcelas',
-                                isDark: isDark,
-                                isNumber: true),
+                            const SizedBox(height: 10),
+                            _buildTextField(parcelasCtrl, 'Total de parcelas',
+                                isDark: isDark, isNumber: true),
                           ],
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
                           _buildButtons(
-                            context: context,
-                            onCancel: () => Navigator.pop(context),
-                            onConfirm: () {
-                              if (nomeCtrl.text.isEmpty ||
-                                  valorCtrl.text.isEmpty) {
-                                _showSnackBar(context, 'Preencha nome e valor');
-                                return;
-                              }
-                              final resultado = {
-                                'nome': nomeCtrl.text,
-                                'valor': double.parse(
-                                    valorCtrl.text.replaceAll(',', '.')),
-                                'dia_vencimento': diaVencimento,
-                                'tipo': tipo,
-                                'categoria': categoria,
-                                'data_inicio': dataInicio.toIso8601String(),
-                              };
-                              if (tipo == 'parcelada' &&
-                                  parcelasTotal != null) {
-                                resultado['parcelas_total'] = parcelasTotal;
-                              }
-                              if (isEditing) {
-                                final id = conta['id'];
-                                if (id != null) {
-                                  resultado['id'] = id;
+                              context: context,
+                              onCancel: () => Navigator.pop(context),
+                              onConfirm: () {
+                                if (nomeCtrl.text.isEmpty ||
+                                    valorCtrl.text.isEmpty) {
+                                  _showSnackBar(
+                                      context, 'Preencha nome e valor');
+                                  return;
                                 }
-                              }
-                              Navigator.pop(context, resultado);
-                            },
-                            isEditing: isEditing,
-                            isDark: isDark,
-                          ),
+                                final resultado = <String, dynamic>{
+                                  'nome': nomeCtrl.text,
+                                  'valor': double.parse(
+                                      valorCtrl.text.replaceAll(',', '.')),
+                                  'dia_vencimento': diaVencimento,
+                                  'tipo': tipo,
+                                  'categoria': categoria,
+                                  'data_inicio': dataInicio.toIso8601String(),
+                                };
+                                if (tipo == 'parcelada') {
+                                  final pTotal =
+                                      int.tryParse(parcelasCtrl.text);
+                                  if (pTotal != null && pTotal > 0) {
+                                    resultado['parcelas_total'] = pTotal;
+                                    resultado['parcelas_pagas'] = 0;
+                                  } else {
+                                    _showSnackBar(context,
+                                        'Digite um número válido de parcelas');
+                                    return;
+                                  }
+                                }
+                                if (isEditing) {
+                                  final idOriginal = conta['id'];
+                                  if (idOriginal != null) {
+                                    resultado['id'] = idOriginal.toString();
+                                  }
+                                }
+                                if (onSalvo != null) onSalvo();
+                                Navigator.pop(context, resultado);
+                              },
+                              isEditing: isEditing,
+                              isDark: isDark),
                         ],
                       ),
                     ),
@@ -675,12 +664,11 @@ class AppModals {
     final tituloCtrl = TextEditingController(text: meta?['titulo'] ?? '');
     final descricaoCtrl = TextEditingController(text: meta?['descricao'] ?? '');
     final valorCtrl = TextEditingController(
-      text: meta != null && meta['valor_objetivo'] != null
-          ? (meta['valor_objetivo'] as num)
-              .toStringAsFixed(2)
-              .replaceAll('.', ',')
-          : '',
-    );
+        text: meta != null && meta['valor_objetivo'] != null
+            ? (meta['valor_objetivo'] as num)
+                .toStringAsFixed(2)
+                .replaceAll('.', ',')
+            : '');
 
     DateTime dataFim = meta != null && meta['data_fim'] != null
         ? DateTime.parse(meta['data_fim'])
@@ -727,7 +715,8 @@ class AppModals {
             backgroundColor: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+              constraints: const BoxConstraints(
+                  maxWidth: 500, maxHeight: 550), // 🔥 Altura reduzida
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -743,13 +732,10 @@ class AppModals {
                 children: [
                   _buildHeader(isEditing ? 'Editar Meta' : 'Nova Meta', context,
                       isDark: isDark),
-                  Divider(
-                      height: 1,
-                      color:
-                          isDark ? Colors.grey[800] : const Color(0xFFEEEEEE)),
+                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(16), // 🔥 Padding reduzido
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -770,58 +756,55 @@ class AppModals {
                                     iconeSelecionado = icone;
                                   }),
                               isDark: isDark),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           _buildTextField(tituloCtrl, 'Título',
                               isDark: isDark, hint: 'Ex: Viagem para a praia'),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
                           _buildTextField(descricaoCtrl, 'Descrição (opcional)',
                               isDark: isDark, maxLines: 2),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
                           _buildTextField(valorCtrl, 'Valor da meta',
                               isDark: isDark, prefix: 'R\$ ', isNumber: true),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
                           _buildDatePicker(context, dataFim,
                               (date) => setState(() => dataFim = date),
                               label: 'Data limite',
                               firstDate: DateTime.now(),
                               isDark: isDark),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
                           _buildButtons(
-                            context: context,
-                            onCancel: () => Navigator.pop(context),
-                            onConfirm: () {
-                              if (tituloCtrl.text.isEmpty ||
-                                  valorCtrl.text.isEmpty) {
-                                _showSnackBar(
-                                    context, 'Preencha título e valor');
-                                return;
-                              }
-                              final valor = double.parse(
-                                  valorCtrl.text.replaceAll(',', '.'));
-                              if (valor <= 0) {
-                                _showSnackBar(
-                                    context, 'Digite um valor válido');
-                                return;
-                              }
-                              final resultado = {
-                                'titulo': tituloCtrl.text,
-                                'descricao': descricaoCtrl.text,
-                                'valor_objetivo': valor,
-                                'data_fim': dataFim.toIso8601String(),
-                                'cor': corSelecionada,
-                                'icone': iconeSelecionado,
-                              };
-                              if (isEditing) {
-                                final id = meta['id'];
-                                if (id != null) {
-                                  resultado['id'] = id;
+                              context: context,
+                              onCancel: () => Navigator.pop(context),
+                              onConfirm: () {
+                                if (tituloCtrl.text.isEmpty ||
+                                    valorCtrl.text.isEmpty) {
+                                  _showSnackBar(
+                                      context, 'Preencha título e valor');
+                                  return;
                                 }
-                              }
-                              Navigator.pop(context, resultado);
-                            },
-                            isEditing: isEditing,
-                            isDark: isDark,
-                          ),
+                                final valor = double.parse(
+                                    valorCtrl.text.replaceAll(',', '.'));
+                                if (valor <= 0) {
+                                  _showSnackBar(
+                                      context, 'Digite um valor válido');
+                                  return;
+                                }
+                                final resultado = {
+                                  'titulo': tituloCtrl.text,
+                                  'descricao': descricaoCtrl.text,
+                                  'valor_objetivo': valor,
+                                  'data_fim': dataFim.toIso8601String(),
+                                  'cor': corSelecionada,
+                                  'icone': iconeSelecionado,
+                                };
+                                if (isEditing) {
+                                  final id = meta['id'];
+                                  if (id != null) resultado['id'] = id;
+                                }
+                                Navigator.pop(context, resultado);
+                              },
+                              isEditing: isEditing,
+                              isDark: isDark),
                         ],
                       ),
                     ),
@@ -863,7 +846,8 @@ class AppModals {
             backgroundColor: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(maxWidth: 450, maxHeight: 480),
+              constraints: const BoxConstraints(
+                  maxWidth: 450, maxHeight: 450), // 🔥 Altura reduzida
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -878,25 +862,20 @@ class AppModals {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildHeader('Adicionar Depósito', context, isDark: isDark),
-                  Divider(
-                      height: 1,
-                      color:
-                          isDark ? Colors.grey[800] : const Color(0xFFEEEEEE)),
+                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(16), // 🔥 Padding reduzido
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF7B2CBF)
-                                  .withValues(alpha: 0.05),
+                              color: _primaryColor.withValues(alpha: 0.05),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                  color: const Color(0xFF7B2CBF)
-                                      .withValues(alpha: 0.2)),
+                                  color: _primaryColor.withValues(alpha: 0.2)),
                             ),
                             child: Column(
                               children: [
@@ -926,46 +905,45 @@ class AppModals {
                                       Text(Formatador.moeda(valorRestante),
                                           style: const TextStyle(
                                               fontWeight: FontWeight.bold,
-                                              color: Color(0xFF7B2CBF),
+                                              color: _primaryColor,
                                               fontSize: 16)),
                                     ]),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 12),
                           _buildTextField(valorCtrl, 'Valor do depósito',
                               isDark: isDark, prefix: 'R\$ ', isNumber: true),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
                           _buildTextField(
                               observacaoCtrl, 'Observação (opcional)',
                               isDark: isDark, maxLines: 2),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
                           _buildButtons(
-                            context: context,
-                            onCancel: () => Navigator.pop(context),
-                            onConfirm: () {
-                              if (valorCtrl.text.isEmpty) {
-                                _showSnackBar(context, 'Digite o valor');
-                                return;
-                              }
-                              final valor = double.parse(
-                                  valorCtrl.text.replaceAll(',', '.'));
-                              if (valor <= 0) {
-                                _showSnackBar(context, 'Valor inválido');
-                                return;
-                              }
-                              if (valor > valorRestante) {
-                                _showSnackBar(context,
-                                    'Valor excede a meta (Máx: ${Formatador.moeda(valorRestante)})');
-                                return;
-                              }
-                              Navigator.pop(context, {
-                                'valor': valor,
-                                'observacao': observacaoCtrl.text
-                              });
-                            },
-                            isDark: isDark,
-                          ),
+                              context: context,
+                              onCancel: () => Navigator.pop(context),
+                              onConfirm: () {
+                                if (valorCtrl.text.isEmpty) {
+                                  _showSnackBar(context, 'Digite o valor');
+                                  return;
+                                }
+                                final valor = double.parse(
+                                    valorCtrl.text.replaceAll(',', '.'));
+                                if (valor <= 0) {
+                                  _showSnackBar(context, 'Valor inválido');
+                                  return;
+                                }
+                                if (valor > valorRestante) {
+                                  _showSnackBar(context,
+                                      'Valor excede a meta (Máx: ${Formatador.moeda(valorRestante)})');
+                                  return;
+                                }
+                                Navigator.pop(context, {
+                                  'valor': valor,
+                                  'observacao': observacaoCtrl.text
+                                });
+                              },
+                              isDark: isDark),
                         ],
                       ),
                     ),
@@ -979,8 +957,7 @@ class AppModals {
     );
   }
 
-  // ========== COMPONENTES REUTILIZÁVEIS ATUALIZADOS ==========
-
+  // ========== COMPONENTES REUTILIZÁVEIS ==========
   static Widget _buildHeader(String title, BuildContext context,
       {required bool isDark}) {
     return Padding(
@@ -994,10 +971,10 @@ class AppModals {
                   fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white : const Color(0xFF1A1A1A))),
           GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Icon(Icons.close,
-                size: 20, color: isDark ? Colors.grey[400] : Colors.grey[500]),
-          ),
+              onTap: () => Navigator.pop(context),
+              child: Icon(Icons.close,
+                  size: 20,
+                  color: isDark ? Colors.grey[400] : Colors.grey[500])),
         ],
       ),
     );
@@ -1023,19 +1000,16 @@ class AppModals {
         prefixStyle: TextStyle(
             color: isDark ? Colors.grey[400] : const Color(0xFF666666)),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-              color: isDark ? Colors.grey[700]! : const Color(0xFFE0E0E0)),
-        ),
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(
+                color: isDark ? Colors.grey[700]! : const Color(0xFFE0E0E0))),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-              color: isDark ? Colors.grey[700]! : const Color(0xFFE0E0E0)),
-        ),
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(
+                color: isDark ? Colors.grey[700]! : const Color(0xFFE0E0E0))),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFF7B2CBF), width: 1.5),
-        ),
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: _primaryColor, width: 1.5)),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         filled: true,
@@ -1064,10 +1038,9 @@ class AppModals {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          border:
-              Border.all(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
-          borderRadius: BorderRadius.circular(10),
-        ),
+            border: Border.all(
+                color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(10)),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -1082,12 +1055,11 @@ class AppModals {
                         fontSize: 13,
                         color: isDark ? Colors.grey[400] : Colors.grey[600])),
                 const SizedBox(width: 8),
-                Text(
-                  Formatador.data(date),
-                  style: TextStyle(
-                      fontSize: 14,
-                      color: isDark ? Colors.white : const Color(0xFF333333)),
-                ),
+                Text(Formatador.data(date),
+                    style: TextStyle(
+                        fontSize: 14,
+                        color:
+                            isDark ? Colors.white : const Color(0xFF333333))),
               ],
             ),
             Icon(Icons.arrow_drop_down,
@@ -1098,29 +1070,27 @@ class AppModals {
     );
   }
 
-  static Widget _buildTipoBotao({
-    required String label,
-    required String value,
-    required IconData icon,
-    required bool selected,
-    required VoidCallback onTap,
-    required bool isDark,
-  }) {
+  static Widget _buildTipoBotao(
+      {required String label,
+      required String value,
+      required IconData icon,
+      required bool selected,
+      required VoidCallback onTap,
+      required bool isDark}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFF7B2CBF).withValues(alpha: 0.08)
+              ? _primaryColor.withValues(alpha: 0.08)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected
-                ? const Color(0xFF7B2CBF)
-                : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
-            width: selected ? 1.5 : 1,
-          ),
+              color: selected
+                  ? _primaryColor
+                  : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
+              width: selected ? 1.5 : 1),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1128,17 +1098,16 @@ class AppModals {
             Icon(icon,
                 size: 18,
                 color: selected
-                    ? const Color(0xFF7B2CBF)
+                    ? _primaryColor
                     : (isDark ? Colors.grey[400] : Colors.grey[600])),
             const SizedBox(width: 6),
             Text(label,
                 style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                  color: selected
-                      ? const Color(0xFF7B2CBF)
-                      : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                )),
+                    fontSize: 14,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                    color: selected
+                        ? _primaryColor
+                        : (isDark ? Colors.grey[400] : Colors.grey[600]))),
           ],
         ),
       ),
@@ -1153,10 +1122,9 @@ class AppModals {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
-        border:
-            Border.all(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
-        borderRadius: BorderRadius.circular(10),
-      ),
+          border:
+              Border.all(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(10)),
       child: DropdownButton<String>(
         value: value,
         isExpanded: true,
@@ -1173,13 +1141,11 @@ class AppModals {
             child: Row(
               children: [
                 Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: AppCategories.getColor(cat),
-                    shape: BoxShape.circle,
-                  ),
-                ),
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                        color: AppCategories.getColor(cat),
+                        shape: BoxShape.circle)),
                 const SizedBox(width: 8),
                 Text(cat,
                     style: TextStyle(
@@ -1200,10 +1166,9 @@ class AppModals {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
-        border:
-            Border.all(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
-        borderRadius: BorderRadius.circular(10),
-      ),
+          border:
+              Border.all(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(10)),
       child: DropdownButton<String>(
         value: value,
         isExpanded: true,
@@ -1216,11 +1181,10 @@ class AppModals {
         dropdownColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
         items: tipos.map((tipo) {
           return DropdownMenuItem(
-            value: tipo,
-            child: Text(TipoInvestimento.getNomeAmigavel(tipo),
-                style: TextStyle(
-                    color: isDark ? Colors.white : const Color(0xFF333333))),
-          );
+              value: tipo,
+              child: Text(TipoInvestimento.getNomeAmigavel(tipo),
+                  style: TextStyle(
+                      color: isDark ? Colors.white : const Color(0xFF333333))));
         }).toList(),
         onChanged: (value) => onChanged(value ?? 'ACAO'),
       ),
@@ -1242,10 +1206,9 @@ class AppModals {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            border: Border.all(
-                color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
-            borderRadius: BorderRadius.circular(10),
-          ),
+              border: Border.all(
+                  color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(10)),
           child: DropdownButton<String>(
             value: value,
             isExpanded: true,
@@ -1287,10 +1250,9 @@ class AppModals {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            border: Border.all(
-                color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
-            borderRadius: BorderRadius.circular(10),
-          ),
+              border: Border.all(
+                  color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(10)),
           child: DropdownButton<int>(
             value: value,
             isExpanded: true,
@@ -1332,10 +1294,9 @@ class AppModals {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            border: Border.all(
-                color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
-            borderRadius: BorderRadius.circular(10),
-          ),
+              border: Border.all(
+                  color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(10)),
           child: DropdownButton<String>(
             value: controller.text.isNotEmpty ? controller.text : null,
             isExpanded: true,
@@ -1391,11 +1352,10 @@ class AppModals {
                     : (isDark ? Colors.grey[800] : Colors.grey[100]),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: isSelected
-                      ? opcao['color'] as Color
-                      : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
-                  width: isSelected ? 2 : 1,
-                ),
+                    color: isSelected
+                        ? opcao['color'] as Color
+                        : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
+                    width: isSelected ? 2 : 1),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1406,17 +1366,15 @@ class AppModals {
                           : (isDark ? Colors.grey[400] : Colors.grey[600]),
                       size: 24),
                   const SizedBox(height: 4),
-                  Text(
-                    opcao['nome'],
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isSelected
-                          ? opcao['color'] as Color
-                          : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                      fontWeight:
-                          isSelected ? FontWeight.bold : FontWeight.normal,
-                    ),
-                  ),
+                  Text(opcao['nome'],
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: isSelected
+                              ? opcao['color'] as Color
+                              : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal)),
                 ],
               ),
             ),
@@ -1426,13 +1384,12 @@ class AppModals {
     );
   }
 
-  static Widget _buildButtons({
-    required BuildContext context,
-    required VoidCallback onCancel,
-    required VoidCallback onConfirm,
-    bool isEditing = false,
-    required bool isDark,
-  }) {
+  static Widget _buildButtons(
+      {required BuildContext context,
+      required VoidCallback onCancel,
+      required VoidCallback onConfirm,
+      bool isEditing = false,
+      required bool isDark}) {
     return Row(
       children: [
         Expanded(
@@ -1454,7 +1411,7 @@ class AppModals {
           child: ElevatedButton(
             onPressed: onConfirm,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7B2CBF),
+              backgroundColor: _primaryColor,
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
@@ -1470,12 +1427,10 @@ class AppModals {
   }
 
   static void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2)));
   }
 
   static IconData _getIconeParaTipo(String tipo) {

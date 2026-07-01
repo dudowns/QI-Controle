@@ -8,7 +8,8 @@ class StorageService {
 
   Future<File?> pickImage() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      // ✅ API CORRETA PARA TODAS AS VERSÕES DO file_picker
+      final result = await FilePicker.pickFiles(
         type: FileType.image,
         allowMultiple: false,
       );

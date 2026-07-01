@@ -1,21 +1,24 @@
 ﻿// lib/database/db_helper.dart
 import 'dart:math';
-import 'package:path/path.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:path/path.dart' as p;
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+// 🔥 CORREÇÃO DOS 6 ERROS: Importações diretas e seguras
+import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' as ffi;
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart' as web_sqflite;
+
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter/foundation.dart';
 import '../services/performance_service.dart';
 import '../services/logger_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// ========== ENUM PARA STATUS DE PAGAMENTO ==========
 enum StatusPagamento {
   pendente,
   pago,
   atrasado,
 }
 
-// ========== CLASSE DE CACHE ==========
 class CacheEntry {
   final dynamic data;
   final DateTime timestamp;
@@ -26,7 +29,6 @@ class CacheEntry {
       DateTime.now().difference(timestamp) < DBHelper.cacheValidity;
 }
 
-// ========== ENUM PARA ORDENAÇÃO ==========
 enum OrdemLancamento {
   dataDesc,
   dataAsc,
@@ -34,7 +36,6 @@ enum OrdemLancamento {
   valorAsc,
 }
 
-// ========== DBHELPER PRINCIPAL ==========
 class DBHelper {
   static final DBHelper _instance = DBHelper._internal();
   factory DBHelper() => _instance;
@@ -64,10 +65,26 @@ class DBHelper {
   Future<Database> get database async {
     if (_database != null) return _database!;
 
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+    String path;
 
-    _database = await _initDB().timeout(dbTimeout, onTimeout: () {
+    if (kIsWeb) {
+      // 🌐 WEB: Configuração para Web
+      LoggerService.info('🌐 Web detectado: Usando banco virtual.');
+      databaseFactory = web_sqflite.databaseFactoryFfiWeb;
+      path = 'financeiro.db';
+    } else {
+      // 🪟 DESKTOP: Configuração para Windows
+      LoggerService.info('🖥️ Desktop detectado: Inicializando FFI.');
+      ffi.sqfliteFfiInit();
+      databaseFactory = ffi.databaseFactoryFfi;
+
+      final appDir = await getApplicationSupportDirectory();
+      path = p.join(appDir.path, 'financeiro.db');
+    }
+
+    LoggerService.info('📁 Banco de dados em: $path');
+
+    _database = await _initDB(path).timeout(dbTimeout, onTimeout: () {
       LoggerService.error('⏱️ Timeout ao inicializar banco de dados');
       throw Exception(
           '⏱️ Timeout: Inicialização do banco de dados excedeu $dbTimeout');
@@ -75,12 +92,7 @@ class DBHelper {
     return _database!;
   }
 
-  Future<Database> _initDB() async {
-    final appDir = await getApplicationSupportDirectory();
-    final path = join(appDir.path, 'financeiro.db');
-
-    LoggerService.info('📁 Banco de dados em: $path');
-
+  Future<Database> _initDB(String path) async {
     return await openDatabase(
       path,
       version: 32,
@@ -100,214 +112,201 @@ class DBHelper {
   Future<void> _onCreate(Database db, int version) async {
     LoggerService.info('🔨 Criando tabelas versão $version');
 
-    await db.execute('''
-      CREATE TABLE $tabelaLancamentos(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        remote_id TEXT,
-        user_id TEXT,
-        valor REAL NOT NULL,
-        descricao TEXT NOT NULL,
-        tipo TEXT NOT NULL,
-        categoria TEXT NOT NULL,
-        data TEXT NOT NULL,
-        observacao TEXT,
-        sync_status TEXT DEFAULT 'pending',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        deleted_at TEXT
-      )
-    ''');
+    await db.execute("CREATE TABLE IF NOT EXISTS lancamentos ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "remote_id TEXT, "
+        "user_id TEXT, "
+        "valor REAL NOT NULL, "
+        "descricao TEXT NOT NULL, "
+        "tipo TEXT NOT NULL, "
+        "categoria TEXT NOT NULL, "
+        "data TEXT NOT NULL, "
+        "observacao TEXT, "
+        "sync_status TEXT DEFAULT 'pending', "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "updated_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "deleted_at TEXT, "
+        "criado_em TEXT, "
+        "atualizado_em TEXT)");
 
-    await db.execute('''
-      CREATE TABLE $tabelaMetas(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        remote_id TEXT,
-        user_id TEXT,
-        titulo TEXT NOT NULL,
-        descricao TEXT,
-        valor_objetivo REAL NOT NULL,
-        valor_atual REAL DEFAULT 0,
-        data_inicio TEXT NOT NULL,
-        data_fim TEXT NOT NULL,
-        cor TEXT,
-        icone TEXT,
-        concluida INTEGER DEFAULT 0,
-        sync_status TEXT DEFAULT 'pending',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        deleted_at TEXT
-      )
-    ''');
+    await db.execute("CREATE TABLE IF NOT EXISTS metas ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "remote_id TEXT, "
+        "user_id TEXT, "
+        "titulo TEXT NOT NULL, "
+        "descricao TEXT, "
+        "valor_objetivo REAL NOT NULL, "
+        "valor_atual REAL DEFAULT 0, "
+        "data_inicio TEXT NOT NULL, "
+        "data_fim TEXT NOT NULL, "
+        "cor TEXT, "
+        "icone TEXT, "
+        "concluida INTEGER DEFAULT 0, "
+        "sync_status TEXT DEFAULT 'pending', "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "updated_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "deleted_at TEXT, "
+        "criado_em TEXT, "
+        "atualizado_em TEXT)");
 
-    await db.execute('''
-      CREATE TABLE $tabelaDepositosMeta(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        remote_id TEXT,
-        user_id TEXT,
-        meta_id INTEGER NOT NULL,
-        valor REAL NOT NULL,
-        data_deposito TEXT NOT NULL,
-        observacao TEXT,
-        sync_status TEXT DEFAULT 'pending',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        deleted_at TEXT,
-        FOREIGN KEY (meta_id) REFERENCES $tabelaMetas(id) ON DELETE CASCADE
-      )
-    ''');
+    await db.execute("CREATE TABLE IF NOT EXISTS depositos_meta ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "remote_id TEXT, "
+        "user_id TEXT, "
+        "meta_id INTEGER NOT NULL, "
+        "valor REAL NOT NULL, "
+        "data_deposito TEXT NOT NULL, "
+        "observacao TEXT, "
+        "sync_status TEXT DEFAULT 'pending', "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "updated_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "deleted_at TEXT, "
+        "criado_em TEXT, "
+        "atualizado_em TEXT, "
+        "FOREIGN KEY (meta_id) REFERENCES metas(id) ON DELETE CASCADE)");
 
-    await db.execute('''
-      CREATE TABLE $tabelaInvestimentos(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        remote_id TEXT,
-        user_id TEXT,
-        ticker TEXT NOT NULL,
-        tipo TEXT NOT NULL,
-        tipo_transacao TEXT DEFAULT 'COMPRA',
-        quantidade REAL NOT NULL,
-        preco_medio REAL NOT NULL,
-        preco_atual REAL,
-        data_compra TEXT,
-        corretora TEXT,
-        setor TEXT,
-        dividend_yield REAL,
-        ultima_atualizacao TEXT,
-        sync_status TEXT DEFAULT 'pending',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        deleted_at TEXT
-      )
-    ''');
+    await db.execute("CREATE TABLE IF NOT EXISTS investments ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "remote_id TEXT, "
+        "user_id TEXT, "
+        "ticker TEXT NOT NULL, "
+        "tipo TEXT NOT NULL, "
+        "tipo_transacao TEXT DEFAULT 'COMPRA', "
+        "quantidade REAL NOT NULL, "
+        "preco_medio REAL NOT NULL, "
+        "preco_atual REAL, "
+        "data_compra TEXT, "
+        "corretora TEXT, "
+        "setor TEXT, "
+        "dividend_yield REAL, "
+        "ultima_atualizacao TEXT, "
+        "sync_status TEXT DEFAULT 'pending', "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "updated_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "deleted_at TEXT, "
+        "criado_em TEXT, "
+        "atualizado_em TEXT)");
 
-    await db.execute('''
-      CREATE TABLE $tabelaProventos(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        remote_id TEXT,
-        user_id TEXT,
-        ticker TEXT NOT NULL,
-        tipo_provento TEXT,
-        valor_por_cota REAL NOT NULL,
-        quantidade REAL DEFAULT 1,
-        data_pagamento TEXT NOT NULL,
-        data_com TEXT,
-        total_recebido REAL,
-        sync_automatico INTEGER DEFAULT 0,
-        sync_status TEXT DEFAULT 'pending',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        deleted_at TEXT
-      )
-    ''');
+    await db.execute("CREATE TABLE IF NOT EXISTS proventos ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "remote_id TEXT, "
+        "user_id TEXT, "
+        "ticker TEXT NOT NULL, "
+        "tipo_provento TEXT, "
+        "valor_por_cota REAL NOT NULL, "
+        "quantidade REAL DEFAULT 1, "
+        "data_pagamento TEXT NOT NULL, "
+        "data_com TEXT, "
+        "total_recebido REAL, "
+        "sync_automatico INTEGER DEFAULT 0, "
+        "sync_status TEXT DEFAULT 'pending', "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "updated_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "deleted_at TEXT, "
+        "criado_em TEXT, "
+        "atualizado_em TEXT)");
 
-    await db.execute('''
-      CREATE TABLE $tabelaRendaFixa(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        remote_id TEXT,
-        user_id TEXT,
-        nome TEXT NOT NULL,
-        tipo_renda TEXT NOT NULL,
-        valor REAL NOT NULL,
-        taxa REAL NOT NULL,
-        data_aplicacao TEXT NOT NULL,
-        data_vencimento TEXT NOT NULL,
-        dias INTEGER,
-        rendimento_bruto REAL,
-        iof REAL,
-        ir REAL,
-        rendimento_liquido REAL,
-        valor_final REAL,
-        indexador TEXT,
-        liquidez TEXT DEFAULT 'Diária',
-        is_lci INTEGER DEFAULT 0,
-        status TEXT DEFAULT 'ativo',
-        observacao TEXT,
-        sync_status TEXT DEFAULT 'pending',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        deleted_at TEXT
-      )
-    ''');
+    await db.execute("CREATE TABLE IF NOT EXISTS renda_fixa ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "remote_id TEXT, "
+        "user_id TEXT, "
+        "nome TEXT NOT NULL, "
+        "tipo_renda TEXT NOT NULL, "
+        "valor REAL NOT NULL, "
+        "taxa REAL NOT NULL, "
+        "data_aplicacao TEXT NOT NULL, "
+        "data_vencimento TEXT NOT NULL, "
+        "dias INTEGER, "
+        "rendimento_bruto REAL, "
+        "iof REAL, "
+        "ir REAL, "
+        "rendimento_liquido REAL, "
+        "valor_final REAL, "
+        "indexador TEXT, "
+        "liquidez TEXT DEFAULT 'Diária', "
+        "is_lci INTEGER DEFAULT 0, "
+        "status TEXT DEFAULT 'ativo', "
+        "observacao TEXT, "
+        "sync_status TEXT DEFAULT 'pending', "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "updated_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "deleted_at TEXT, "
+        "criado_em TEXT, "
+        "atualizado_em TEXT)");
 
-    await db.execute('''
-      CREATE TABLE $tabelaContas(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        remote_id TEXT,
-        user_id TEXT,
-        nome TEXT NOT NULL,
-        valor REAL NOT NULL,
-        dia_vencimento INTEGER NOT NULL,
-        tipo TEXT NOT NULL,
-        categoria TEXT,
-        ativa INTEGER DEFAULT 1,
-        parcelas_total INTEGER,
-        parcelas_pagas INTEGER DEFAULT 0,
-        data_inicio TEXT,
-        data_fim TEXT,
-        sync_status TEXT DEFAULT 'pending',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        deleted_at TEXT
-      )
-    ''');
+    await db.execute("CREATE TABLE IF NOT EXISTS contas ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "remote_id TEXT, "
+        "user_id TEXT, "
+        "nome TEXT NOT NULL, "
+        "valor REAL NOT NULL, "
+        "dia_vencimento INTEGER NOT NULL, "
+        "tipo TEXT NOT NULL, "
+        "categoria TEXT, "
+        "ativa INTEGER DEFAULT 1, "
+        "parcelas_total INTEGER, "
+        "parcelas_pagas INTEGER DEFAULT 0, "
+        "data_inicio TEXT, "
+        "data_fim TEXT, "
+        "sync_status TEXT DEFAULT 'pending', "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "updated_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "deleted_at TEXT, "
+        "criado_em TEXT, "
+        "atualizado_em TEXT)");
 
-    await db.execute('''
-      CREATE TABLE $tabelaPagamentos(
-        id TEXT PRIMARY KEY,
-        remote_id TEXT,
-        user_id TEXT,
-        conta_id TEXT NOT NULL,
-        ano_mes INTEGER NOT NULL,
-        valor REAL NOT NULL,
-        data_pagamento TEXT,
-        status INTEGER NOT NULL,
-        lancamento_id TEXT,
-        sync_status TEXT DEFAULT 'pending',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        deleted_at TEXT
-      )
-    ''');
+    await db.execute("CREATE TABLE IF NOT EXISTS pagamentos_mensais ("
+        "id TEXT PRIMARY KEY, "
+        "remote_id TEXT, "
+        "user_id TEXT, "
+        "conta_id TEXT NOT NULL, "
+        "ano_mes INTEGER NOT NULL, "
+        "valor REAL NOT NULL, "
+        "data_pagamento TEXT, "
+        "status INTEGER NOT NULL, "
+        "lancamento_id TEXT, "
+        "sync_status TEXT DEFAULT 'pending', "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "updated_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "deleted_at TEXT, "
+        "criado_em TEXT, "
+        "atualizado_em TEXT)");
 
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS $tabelaContasFixas(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL,
-        valor_total REAL NOT NULL,
-        total_parcelas INTEGER NOT NULL,
-        data_inicio TEXT NOT NULL,
-        categoria TEXT,
-        observacao TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        deleted_at TEXT
-      )
-    ''');
+    await db.execute("CREATE TABLE IF NOT EXISTS contas_fixas ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "nome TEXT NOT NULL, "
+        "valor_total REAL NOT NULL, "
+        "total_parcelas INTEGER NOT NULL, "
+        "data_inicio TEXT NOT NULL, "
+        "categoria TEXT, "
+        "observacao TEXT, "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "updated_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "deleted_at TEXT, "
+        "criado_em TEXT, "
+        "atualizado_em TEXT)");
 
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS $tabelaParcelas(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        conta_id INTEGER NOT NULL,
-        numero INTEGER NOT NULL,
-        data_vencimento TEXT NOT NULL,
-        status INTEGER NOT NULL,
-        data_pagamento TEXT,
-        valor_pago REAL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        deleted_at TEXT,
-        FOREIGN KEY (conta_id) REFERENCES $tabelaContasFixas(id) ON DELETE CASCADE
-      )
-    ''');
+    await db.execute("CREATE TABLE IF NOT EXISTS parcelas ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "conta_id INTEGER NOT NULL, "
+        "numero INTEGER NOT NULL, "
+        "data_vencimento TEXT NOT NULL, "
+        "status INTEGER NOT NULL, "
+        "data_pagamento TEXT, "
+        "valor_pago REAL, "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "updated_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "deleted_at TEXT, "
+        "criado_em TEXT, "
+        "atualizado_em TEXT, "
+        "FOREIGN KEY (conta_id) REFERENCES contas_fixas(id) ON DELETE CASCADE)");
 
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS integridade_logs(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        tipo TEXT NOT NULL,
-        mensagem TEXT NOT NULL,
-        detalhes TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    ''');
+    await db.execute("CREATE TABLE IF NOT EXISTS integridade_logs ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "tipo TEXT NOT NULL, "
+        "mensagem TEXT NOT NULL, "
+        "detalhes TEXT, "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 
     await _criarIndices(db);
     await _criarIndicesCompostos(db);
@@ -321,170 +320,166 @@ class DBHelper {
         indicesExistentes.map((e) => e['name'] as String).toList();
 
     if (!nomesIndices.contains('idx_lancamentos_data')) {
-      await db.execute(
-          'CREATE INDEX idx_lancamentos_data ON $tabelaLancamentos(data)');
+      await db
+          .execute('CREATE INDEX idx_lancamentos_data ON lancamentos(data)');
     }
     if (!nomesIndices.contains('idx_lancamentos_tipo')) {
-      await db.execute(
-          'CREATE INDEX idx_lancamentos_tipo ON $tabelaLancamentos(tipo)');
+      await db
+          .execute('CREATE INDEX idx_lancamentos_tipo ON lancamentos(tipo)');
     }
     if (!nomesIndices.contains('idx_lancamentos_categoria')) {
       await db.execute(
-          'CREATE INDEX idx_lancamentos_categoria ON $tabelaLancamentos(categoria)');
+          'CREATE INDEX idx_lancamentos_categoria ON lancamentos(categoria)');
     }
     if (!nomesIndices.contains('idx_lancamentos_sync_status')) {
       await db.execute(
-          'CREATE INDEX idx_lancamentos_sync_status ON $tabelaLancamentos(sync_status)');
+          'CREATE INDEX idx_lancamentos_sync_status ON lancamentos(sync_status)');
     }
     if (!nomesIndices.contains('idx_metas_concluida')) {
-      await db.execute(
-          'CREATE INDEX idx_metas_concluida ON $tabelaMetas(concluida)');
+      await db.execute('CREATE INDEX idx_metas_concluida ON metas(concluida)');
     }
     if (!nomesIndices.contains('idx_metas_data_fim')) {
-      await db
-          .execute('CREATE INDEX idx_metas_data_fim ON $tabelaMetas(data_fim)');
+      await db.execute('CREATE INDEX idx_metas_data_fim ON metas(data_fim)');
     }
     if (!nomesIndices.contains('idx_metas_sync_status')) {
-      await db.execute(
-          'CREATE INDEX idx_metas_sync_status ON $tabelaMetas(sync_status)');
+      await db
+          .execute('CREATE INDEX idx_metas_sync_status ON metas(sync_status)');
     }
     if (!nomesIndices.contains('idx_investimentos_ticker')) {
       await db.execute(
-          'CREATE INDEX idx_investimentos_ticker ON $tabelaInvestimentos(ticker)');
+          'CREATE INDEX idx_investimentos_ticker ON investments(ticker)');
     }
     if (!nomesIndices.contains('idx_investimentos_tipo')) {
-      await db.execute(
-          'CREATE INDEX idx_investimentos_tipo ON $tabelaInvestimentos(tipo)');
+      await db
+          .execute('CREATE INDEX idx_investimentos_tipo ON investments(tipo)');
     }
     if (!nomesIndices.contains('idx_investimentos_sync_status')) {
       await db.execute(
-          'CREATE INDEX idx_investimentos_sync_status ON $tabelaInvestimentos(sync_status)');
+          'CREATE INDEX idx_investimentos_sync_status ON investments(sync_status)');
     }
     if (!nomesIndices.contains('idx_investimentos_user_id')) {
       await db.execute(
-          'CREATE INDEX idx_investimentos_user_id ON $tabelaInvestimentos(user_id)');
+          'CREATE INDEX idx_investimentos_user_id ON investments(user_id)');
     }
     if (!nomesIndices.contains('idx_investimentos_deleted_at')) {
       await db.execute(
-          'CREATE INDEX idx_investimentos_deleted_at ON $tabelaInvestimentos(deleted_at)');
+          'CREATE INDEX idx_investimentos_deleted_at ON investments(deleted_at)');
     }
     if (!nomesIndices.contains('idx_proventos_data_pagamento')) {
       await db.execute(
-          'CREATE INDEX idx_proventos_data_pagamento ON $tabelaProventos(data_pagamento)');
+          'CREATE INDEX idx_proventos_data_pagamento ON proventos(data_pagamento)');
     }
     if (!nomesIndices.contains('idx_proventos_ticker')) {
-      await db.execute(
-          'CREATE INDEX idx_proventos_ticker ON $tabelaProventos(ticker)');
+      await db
+          .execute('CREATE INDEX idx_proventos_ticker ON proventos(ticker)');
     }
     if (!nomesIndices.contains('idx_proventos_sync_status')) {
       await db.execute(
-          'CREATE INDEX idx_proventos_sync_status ON $tabelaProventos(sync_status)');
+          'CREATE INDEX idx_proventos_sync_status ON proventos(sync_status)');
     }
     if (!nomesIndices.contains('idx_proventos_deleted_at')) {
       await db.execute(
-          'CREATE INDEX idx_proventos_deleted_at ON $tabelaProventos(deleted_at)');
+          'CREATE INDEX idx_proventos_deleted_at ON proventos(deleted_at)');
     }
     if (!nomesIndices.contains('idx_renda_fixa_vencimento')) {
       await db.execute(
-          'CREATE INDEX idx_renda_fixa_vencimento ON $tabelaRendaFixa(data_vencimento)');
+          'CREATE INDEX idx_renda_fixa_vencimento ON renda_fixa(data_vencimento)');
     }
     if (!nomesIndices.contains('idx_renda_fixa_status')) {
-      await db.execute(
-          'CREATE INDEX idx_renda_fixa_status ON $tabelaRendaFixa(status)');
+      await db
+          .execute('CREATE INDEX idx_renda_fixa_status ON renda_fixa(status)');
     }
     if (!nomesIndices.contains('idx_renda_fixa_sync_status')) {
       await db.execute(
-          'CREATE INDEX idx_renda_fixa_sync_status ON $tabelaRendaFixa(sync_status)');
+          'CREATE INDEX idx_renda_fixa_sync_status ON renda_fixa(sync_status)');
     }
     if (!nomesIndices.contains('idx_renda_fixa_user_id')) {
       await db.execute(
-          'CREATE INDEX idx_renda_fixa_user_id ON $tabelaRendaFixa(user_id)');
+          'CREATE INDEX idx_renda_fixa_user_id ON renda_fixa(user_id)');
     }
     if (!nomesIndices.contains('idx_renda_fixa_deleted_at')) {
       await db.execute(
-          'CREATE INDEX idx_renda_fixa_deleted_at ON $tabelaRendaFixa(deleted_at)');
+          'CREATE INDEX idx_renda_fixa_deleted_at ON renda_fixa(deleted_at)');
     }
     if (!nomesIndices.contains('idx_pagamentos_conta')) {
       await db.execute(
-          'CREATE INDEX idx_pagamentos_conta ON $tabelaPagamentos(conta_id)');
+          'CREATE INDEX idx_pagamentos_conta ON pagamentos_mensais(conta_id)');
     }
     if (!nomesIndices.contains('idx_pagamentos_mes')) {
       await db.execute(
-          'CREATE INDEX idx_pagamentos_mes ON $tabelaPagamentos(ano_mes)');
+          'CREATE INDEX idx_pagamentos_mes ON pagamentos_mensais(ano_mes)');
     }
     if (!nomesIndices.contains('idx_pagamentos_status')) {
       await db.execute(
-          'CREATE INDEX idx_pagamentos_status ON $tabelaPagamentos(status)');
+          'CREATE INDEX idx_pagamentos_status ON pagamentos_mensais(status)');
     }
     if (!nomesIndices.contains('idx_pagamentos_user_id')) {
       await db.execute(
-          'CREATE INDEX idx_pagamentos_user_id ON $tabelaPagamentos(user_id)');
+          'CREATE INDEX idx_pagamentos_user_id ON pagamentos_mensais(user_id)');
     }
     if (!nomesIndices.contains('idx_pagamentos_deleted_at')) {
       await db.execute(
-          'CREATE INDEX idx_pagamentos_deleted_at ON $tabelaPagamentos(deleted_at)');
+          'CREATE INDEX idx_pagamentos_deleted_at ON pagamentos_mensais(deleted_at)');
     }
     if (!nomesIndices.contains('idx_contas_ativa')) {
-      await db.execute('CREATE INDEX idx_contas_ativa ON $tabelaContas(ativa)');
+      await db.execute('CREATE INDEX idx_contas_ativa ON contas(ativa)');
     }
     if (!nomesIndices.contains('idx_contas_sync_status')) {
       await db.execute(
-          'CREATE INDEX idx_contas_sync_status ON $tabelaContas(sync_status)');
+          'CREATE INDEX idx_contas_sync_status ON contas(sync_status)');
     }
     if (!nomesIndices.contains('idx_contas_user_id')) {
-      await db
-          .execute('CREATE INDEX idx_contas_user_id ON $tabelaContas(user_id)');
+      await db.execute('CREATE INDEX idx_contas_user_id ON contas(user_id)');
     }
     if (!nomesIndices.contains('idx_contas_deleted_at')) {
-      await db.execute(
-          'CREATE INDEX idx_contas_deleted_at ON $tabelaContas(deleted_at)');
+      await db
+          .execute('CREATE INDEX idx_contas_deleted_at ON contas(deleted_at)');
     }
     if (!nomesIndices.contains('idx_lancamentos_user_id')) {
       await db.execute(
-          'CREATE INDEX idx_lancamentos_user_id ON $tabelaLancamentos(user_id)');
+          'CREATE INDEX idx_lancamentos_user_id ON lancamentos(user_id)');
     }
     if (!nomesIndices.contains('idx_lancamentos_deleted_at')) {
       await db.execute(
-          'CREATE INDEX idx_lancamentos_deleted_at ON $tabelaLancamentos(deleted_at)');
+          'CREATE INDEX idx_lancamentos_deleted_at ON lancamentos(deleted_at)');
     }
     if (!nomesIndices.contains('idx_metas_deleted_at')) {
-      await db.execute(
-          'CREATE INDEX idx_metas_deleted_at ON $tabelaMetas(deleted_at)');
+      await db
+          .execute('CREATE INDEX idx_metas_deleted_at ON metas(deleted_at)');
     }
     if (!nomesIndices.contains('idx_contas_fixas_data_inicio')) {
       await db.execute(
-          'CREATE INDEX idx_contas_fixas_data_inicio ON $tabelaContasFixas(data_inicio)');
+          'CREATE INDEX idx_contas_fixas_data_inicio ON contas_fixas(data_inicio)');
     }
     if (!nomesIndices.contains('idx_parcelas_conta_id')) {
-      await db.execute(
-          'CREATE INDEX idx_parcelas_conta_id ON $tabelaParcelas(conta_id)');
+      await db
+          .execute('CREATE INDEX idx_parcelas_conta_id ON parcelas(conta_id)');
     }
     if (!nomesIndices.contains('idx_parcelas_status')) {
-      await db.execute(
-          'CREATE INDEX idx_parcelas_status ON $tabelaParcelas(status)');
+      await db.execute('CREATE INDEX idx_parcelas_status ON parcelas(status)');
     }
     if (!nomesIndices.contains('idx_parcelas_data_vencimento')) {
       await db.execute(
-          'CREATE INDEX idx_parcelas_data_vencimento ON $tabelaParcelas(data_vencimento)');
+          'CREATE INDEX idx_parcelas_data_vencimento ON parcelas(data_vencimento)');
     }
   }
 
   Future<void> _criarIndicesCompostos(Database db) async {
     LoggerService.info('🔧 Criando índices compostos para performance...');
     await db.execute(
-        '''CREATE INDEX IF NOT EXISTS idx_lancamentos_data_tipo ON $tabelaLancamentos(data, tipo)''');
+        'CREATE INDEX IF NOT EXISTS idx_lancamentos_data_tipo ON lancamentos(data, tipo)');
     await db.execute(
-        '''CREATE INDEX IF NOT EXISTS idx_lancamentos_data_categoria ON $tabelaLancamentos(data, categoria)''');
+        'CREATE INDEX IF NOT EXISTS idx_lancamentos_data_categoria ON lancamentos(data, categoria)');
     await db.execute(
-        '''CREATE INDEX IF NOT EXISTS idx_lancamentos_tipo_categoria ON $tabelaLancamentos(tipo, categoria)''');
+        'CREATE INDEX IF NOT EXISTS idx_lancamentos_tipo_categoria ON lancamentos(tipo, categoria)');
     await db.execute(
-        '''CREATE INDEX IF NOT EXISTS idx_lancamentos_data_tipo_valor ON $tabelaLancamentos(data, tipo, valor)''');
+        'CREATE INDEX IF NOT EXISTS idx_lancamentos_data_tipo_valor ON lancamentos(data, tipo, valor)');
     await db.execute(
-        '''CREATE INDEX IF NOT EXISTS idx_pagamentos_ano_mes_status ON $tabelaPagamentos(ano_mes, status)''');
+        'CREATE INDEX IF NOT EXISTS idx_pagamentos_ano_mes_status ON pagamentos_mensais(ano_mes, status)');
     await db.execute(
-        '''CREATE INDEX IF NOT EXISTS idx_contas_ativa_tipo ON $tabelaContas(ativa, tipo)''');
+        'CREATE INDEX IF NOT EXISTS idx_contas_ativa_tipo ON contas(ativa, tipo)');
     await db.execute(
-        '''CREATE INDEX IF NOT EXISTS idx_metas_concluida_data_fim ON $tabelaMetas(concluida, data_fim)''');
+        'CREATE INDEX IF NOT EXISTS idx_metas_concluida_data_fim ON metas(concluida, data_fim)');
     LoggerService.success('✅ Índices compostos criados!');
   }
 
@@ -517,9 +512,9 @@ class DBHelper {
     }
     if (oldVersion < 30) {
       final oldData = await db.query(tabelaPagamentos);
-      await db.execute('DROP TABLE IF EXISTS $tabelaPagamentos');
+      await db.execute('DROP TABLE IF EXISTS pagamentos_mensais');
       await db.execute(
-          '''CREATE TABLE $tabelaPagamentos(id TEXT PRIMARY KEY, remote_id TEXT, user_id TEXT, conta_id TEXT NOT NULL, ano_mes INTEGER NOT NULL, valor REAL NOT NULL, data_pagamento TEXT, status INTEGER NOT NULL, lancamento_id TEXT, sync_status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, deleted_at TEXT)''');
+          'CREATE TABLE pagamentos_mensais(id TEXT PRIMARY KEY, remote_id TEXT, user_id TEXT, conta_id TEXT NOT NULL, ano_mes INTEGER NOT NULL, valor REAL NOT NULL, data_pagamento TEXT, status INTEGER NOT NULL, lancamento_id TEXT, sync_status TEXT DEFAULT \'pending\', created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, deleted_at TEXT, criado_em TEXT, atualizado_em TEXT)');
       for (var row in oldData) {
         try {
           await db.insert(tabelaPagamentos, {
@@ -569,7 +564,7 @@ class DBHelper {
       final tamanhoAnterior = _queryCache.length;
       _queryCache.clear();
       LoggerService.info(
-          '🗑️ Cache limpo (${tamanhoAnterior} entradas removidas)');
+          '🗑️ Cache limpo ($tamanhoAnterior entradas removidas)');
     }
   }
 
@@ -615,13 +610,26 @@ class DBHelper {
     PerformanceService.start('db_update_$table');
     final db = await database;
     try {
-      data['updated_at'] = _agoraBrasil();
-      data.remove('user_id');
-      data['sync_status'] = 'pending';
-      data.remove('deleted_at');
-      final result = await db.update(table, data,
-          where: 'id = ? OR remote_id = ?',
-          whereArgs: [id, id]).timeout(dbTimeout);
+      final Map<String, dynamic> dataToUpdate = Map<String, dynamic>.from(data);
+      dataToUpdate.remove('id');
+      dataToUpdate.remove('user_id');
+      dataToUpdate.remove('created_at');
+      dataToUpdate.remove('deleted_at');
+      dataToUpdate['updated_at'] = _agoraBrasil();
+      dataToUpdate['sync_status'] = 'pending';
+      final result = await db.update(
+        table,
+        dataToUpdate,
+        where: 'id = ?',
+        whereArgs: [id],
+      ).timeout(dbTimeout);
+      if (result == 0) {
+        LoggerService.warning(
+            '⚠️ UPDATE: Nenhuma linha alterada para o ID "$id" na tabela "$table".');
+      } else {
+        LoggerService.info(
+            '💾 UPDATE SUCESSO: Tabela "$table", ID "$id" alterado.');
+      }
       _clearTableCache(table);
       PerformanceService.stop('db_update_$table');
       return result;
@@ -722,7 +730,6 @@ class DBHelper {
 
   Future<int> updateLancamento(Map<String, dynamic> l) async {
     final id = l['id'];
-    l.remove('id');
     return await update(tabelaLancamentos, l, id);
   }
 
@@ -743,7 +750,6 @@ class DBHelper {
           orderBy: 'data_pagamento DESC', useCache: true);
   Future<int> updateProvento(Map<String, dynamic> p) async {
     final id = p['id'];
-    p.remove('id');
     if (p['ticker'] != null) p['ticker'] = p['ticker'].toString().toUpperCase();
     return await update(tabelaProventos, p, id);
   }
@@ -766,7 +772,6 @@ class DBHelper {
 
   Future<int> updateInvestimento(Map<String, dynamic> i) async {
     final id = i['id'];
-    i.remove('id');
     i['ultima_atualizacao'] = _agoraBrasil();
     return await update(tabelaInvestimentos, i, id);
   }
@@ -787,7 +792,6 @@ class DBHelper {
 
   Future<int> updateMeta(Map<String, dynamic> m) async {
     final id = m['id'];
-    m.remove('id');
     return await update(tabelaMetas, m, id);
   }
 
@@ -805,7 +809,7 @@ class DBHelper {
   Future<double> getTotalDepositosByMetaId(dynamic metaId) async {
     final db = await database;
     final r = await db.rawQuery(
-        'SELECT SUM(valor) as total FROM $tabelaDepositosMeta WHERE meta_id = ? AND (deleted_at IS NULL)',
+        'SELECT SUM(valor) as total FROM depositos_meta WHERE meta_id = ? AND (deleted_at IS NULL)',
         [metaId]).timeout(dbTimeout);
     return (r.first['total'] as num?)?.toDouble() ?? 0.0;
   }
@@ -826,7 +830,6 @@ class DBHelper {
 
   Future<int> updateRendaFixa(Map<String, dynamic> r) async {
     final id = r['id'];
-    r.remove('id');
     return await update(tabelaRendaFixa, r, id);
   }
 
@@ -932,10 +935,11 @@ class DBHelper {
       final db = await database;
       final anoMes = ano * 100 + mes;
       final resultados = await db.rawQuery(
-          '''SELECT p.id, p.conta_id, p.ano_mes, p.valor, p.data_pagamento, p.status, p.lancamento_id, c.nome as conta_nome, c.dia_vencimento, c.categoria, c.tipo as conta_tipo, c.parcelas_total, c.parcelas_pagas FROM $tabelaPagamentos p INNER JOIN $tabelaContas c ON p.conta_id = c.id WHERE p.ano_mes = ? AND (p.deleted_at IS NULL) AND (c.deleted_at IS NULL) ORDER BY CASE WHEN p.status = 0 THEN 1 WHEN p.status = 2 THEN 2 ELSE 3 END, c.dia_vencimento ASC LIMIT 500''',
+          'SELECT p.id, p.conta_id, p.ano_mes, p.valor, p.data_pagamento, p.status, p.lancamento_id, c.nome as conta_nome, c.dia_vencimento, c.categoria, c.tipo as conta_tipo, c.parcelas_total, c.parcelas_pagas FROM pagamentos_mensais p INNER JOIN contas c ON p.conta_id = c.id WHERE p.ano_mes = ? AND (p.deleted_at IS NULL) AND (c.deleted_at IS NULL) ORDER BY CASE WHEN p.status = 0 THEN 1 WHEN p.status = 2 THEN 2 ELSE 3 END, c.dia_vencimento ASC LIMIT 500',
           [anoMes]).timeout(dbTimeout);
-      if (useCache)
+      if (useCache) {
         _queryCache[cacheKey] = CacheEntry(resultados, DateTime.now());
+      }
       PerformanceService.stop('db_query_pagamentos_mes');
       return resultados;
     } finally {
@@ -989,8 +993,9 @@ class DBHelper {
 
   Future<Map<String, dynamic>> getResumoContasDoMes(int ano, int mes) async {
     final cacheKey = 'resumo_contas_${ano}_$mes';
-    if (_queryCache.containsKey(cacheKey) && _queryCache[cacheKey]!.isValid)
+    if (_queryCache.containsKey(cacheKey) && _queryCache[cacheKey]!.isValid) {
       return Map<String, dynamic>.from(_queryCache[cacheKey]!.data);
+    }
     final pagamentos = await getPagamentosDoMes(ano, mes, useCache: false);
     double totalPendente = 0, totalPago = 0;
     int qtdPendente = 0, qtdPago = 0, qtdAtrasado = 0;
@@ -1006,8 +1011,9 @@ class DBHelper {
         qtdPendente++;
         final anoMes = p['ano_mes'] as int;
         final dia = p['dia_vencimento'] as int;
-        if (DateTime(anoMes ~/ 100, anoMes % 100, dia).isBefore(hoje))
+        if (DateTime(anoMes ~/ 100, anoMes % 100, dia).isBefore(hoje)) {
           qtdAtrasado++;
+        }
       }
     }
     final result = {
@@ -1063,7 +1069,9 @@ class DBHelper {
     DateTime atual = inicio;
     while (atual.isBefore(fim) || atual.isAtSameMomentAs(fim)) {
       if (atual.weekday != DateTime.saturday &&
-          atual.weekday != DateTime.sunday) dias++;
+          atual.weekday != DateTime.sunday) {
+        dias++;
+      }
       atual = atual.add(const Duration(days: 1));
     }
     return dias;
@@ -1071,8 +1079,10 @@ class DBHelper {
 
   DateTime _proximoDiaUtil(DateTime inicio, int dias) {
     DateTime data = inicio.add(Duration(days: dias));
-    while (data.weekday == DateTime.saturday || data.weekday == DateTime.sunday)
+    while (
+        data.weekday == DateTime.saturday || data.weekday == DateTime.sunday) {
       data = data.add(const Duration(days: 1));
+    }
     return data;
   }
 
@@ -1148,7 +1158,7 @@ class DBHelper {
     final tamanhoAnterior = _queryCache.length;
     _queryCache.clear();
     LoggerService.info(
-        '🗑️ Cache completamente limpo (${tamanhoAnterior} entradas removidas)');
+        '🗑️ Cache completamente limpo ($tamanhoAnterior entradas removidas)');
   }
 
   Future<void> otimizarBanco() async {
@@ -1163,20 +1173,21 @@ class DBHelper {
   Future<Map<String, dynamic>> getResumoMensalOtimizado(
       int ano, int mes) async {
     final cacheKey = 'resumo_mensal_${ano}_$mes';
-    if (_queryCache.containsKey(cacheKey) && _queryCache[cacheKey]!.isValid)
+    if (_queryCache.containsKey(cacheKey) && _queryCache[cacheKey]!.isValid) {
       return Map<String, dynamic>.from(_queryCache[cacheKey]!.data);
+    }
     final db = await database;
     final startDate = DateTime(ano, mes, 1);
     final endDate = DateTime(ano, mes + 1, 0);
     final result = await db.rawQuery(
-        '''SELECT COALESCE(SUM(CASE WHEN tipo = 'receita' THEN valor ELSE 0 END), 0) as total_receitas, COALESCE(SUM(CASE WHEN tipo = 'gasto' THEN valor ELSE 0 END), 0) as total_gastos, COALESCE(SUM(CASE WHEN tipo = 'investimento' THEN valor ELSE 0 END), 0) as total_investimentos, COUNT(CASE WHEN tipo = 'receita' THEN 1 END) as qtd_receitas, COUNT(CASE WHEN tipo = 'gasto' THEN 1 END) as qtd_gastos, COUNT(CASE WHEN tipo = 'investimento' THEN 1 END) as qtd_investimentos FROM $tabelaLancamentos WHERE data BETWEEN ? AND ? AND (deleted_at IS NULL)''',
+        'SELECT COALESCE(SUM(CASE WHEN tipo = \'receita\' THEN valor ELSE 0 END), 0) as total_receitas, COALESCE(SUM(CASE WHEN tipo = \'gasto\' THEN valor ELSE 0 END), 0) as total_gastos, COALESCE(SUM(CASE WHEN tipo = \'investimento\' THEN valor ELSE 0 END), 0) as total_investimentos, COUNT(CASE WHEN tipo = \'receita\' THEN 1 END) as qtd_receitas, COUNT(CASE WHEN tipo = \'gasto\' THEN 1 END) as qtd_gastos, COUNT(CASE WHEN tipo = \'investimento\' THEN 1 END) as qtd_investimentos FROM lancamentos WHERE data BETWEEN ? AND ? AND (deleted_at IS NULL)',
         [
           startDate.toIso8601String(),
           endDate.toIso8601String()
         ]).timeout(dbTimeout);
     final resumo = result.first;
     final topCategorias = await db.rawQuery(
-        '''SELECT categoria, SUM(valor) as total FROM $tabelaLancamentos WHERE data BETWEEN ? AND ? AND tipo = 'gasto' AND (deleted_at IS NULL) GROUP BY categoria ORDER BY total DESC LIMIT 5''',
+        'SELECT categoria, SUM(valor) as total FROM lancamentos WHERE data BETWEEN ? AND ? AND tipo = \'gasto\' AND (deleted_at IS NULL) GROUP BY categoria ORDER BY total DESC LIMIT 5',
         [
           startDate.toIso8601String(),
           endDate.toIso8601String()
@@ -1251,8 +1262,9 @@ class DBHelper {
         'lancamentos_paginados_${pagina}_${tipo}_${categoria}_${dataInicio}_${dataFim}_$ordem';
     if (useCache &&
         _queryCache.containsKey(cacheKey) &&
-        _queryCache[cacheKey]!.isValid)
+        _queryCache[cacheKey]!.isValid) {
       return List<Map<String, dynamic>>.from(_queryCache[cacheKey]!.data);
+    }
     final result = await db
         .query(tabelaLancamentos,
             where: where,

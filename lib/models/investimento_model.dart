@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 
 class Investimento {
-  final String? id; // UUID do Supabase
+  final String? id;
   final String ticker;
   final String tipo;
   final double quantidade;
@@ -34,11 +34,9 @@ class Investimento {
 
   factory Investimento.fromJson(Map<String, dynamic> json) {
     return Investimento(
-      // 🔥 Forçamos a conversão para String para evitar erro de UUID/int
       id: json['id']?.toString(),
-      ticker: json['ticker']?.toString().toUpperCase() ?? '',
-      tipo: json['tipo']?.toString().toUpperCase() ?? '',
-      // 🔥 Usamos (as num?) antes do toDouble() para aceitar int ou double do Supabase
+      ticker: (json['ticker'] as String?)?.toUpperCase() ?? '',
+      tipo: (json['tipo'] as String?)?.toUpperCase() ?? '',
       quantidade: (json['quantidade'] as num?)?.toDouble() ?? 0.0,
       precoMedio: (json['preco_medio'] as num?)?.toDouble() ?? 0.0,
       precoAtual: (json['preco_atual'] as num?)?.toDouble(),
@@ -62,7 +60,6 @@ class Investimento {
       'dividend_yield': dividendYield,
     };
 
-    // Adiciona o id apenas se ele existir (para updates)
     if (id != null) map['id'] = id;
 
     return map;
@@ -95,7 +92,6 @@ class Investimento {
   }
 }
 
-// 🔥 CLASSE TIPO INVESTIMENTO
 class TipoInvestimento {
   static const String acao = 'ACAO';
   static const String fii = 'FII';
@@ -137,4 +133,3 @@ class TipoInvestimento {
     }
   }
 }
-

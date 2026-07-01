@@ -47,4 +47,8 @@ coverage/
 macos/Pods/
 
 # Linux
-linux/flutter/ephemeral/
+linux/flutter/ephemeral/"build/" 
+".dart_tool/" 
+".flutter-plugins" 
+".flutter-plugins-dependencies" 
+"pubspec.lock" 

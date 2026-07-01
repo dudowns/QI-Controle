@@ -134,8 +134,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       decoration: InputDecoration(
                         labelText: 'E-mail',
                         hintText: 'seu@email.com',
-                        labelStyle: TextStyle(color: AppColors.primary),
-                        prefixIcon: Icon(Icons.email_outlined,
+                        labelStyle: const TextStyle(color: AppColors.primary),
+                        prefixIcon: const Icon(Icons.email_outlined,
                             color: AppColors.primary),
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16)),
@@ -146,7 +146,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide:
-                              BorderSide(color: AppColors.primary, width: 2),
+                              const BorderSide(color: AppColors.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
@@ -180,7 +180,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     const SizedBox(height: 16),
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: Text('VOLTAR PARA LOGIN',
+                      child: const Text('VOLTAR PARA LOGIN',
                           style: TextStyle(color: AppColors.primary)),
                     ),
                   ],

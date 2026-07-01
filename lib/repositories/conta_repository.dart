@@ -37,14 +37,17 @@ class ContaRepository {
   Future<List<Conta>> getContasAtivas() async {
     final db = await _dbHelper.database;
     final resultados = await db.query(tabelaContas,
-        where: 'ativa = ?', whereArgs: [1], orderBy: 'nome ASC');
+        where: 'ativa = ? AND (deleted_at IS NULL)',
+        whereArgs: [1],
+        orderBy: 'nome ASC');
     return resultados.map((json) => Conta.fromJson(json)).toList();
   }
 
   Future<Conta?> getContaByIdString(String id) async {
     final db = await _dbHelper.database;
     final resultados = await db.query(tabelaContas,
-        where: 'id = ? OR remote_id = ?', whereArgs: [id, id]);
+        where: '(id = ? OR remote_id = ?) AND (deleted_at IS NULL)',
+        whereArgs: [id, id]);
     if (resultados.isEmpty) return null;
     return Conta.fromJson(resultados.first);
   }
@@ -53,33 +56,34 @@ class ContaRepository {
     return await getContaByIdString(id.toString());
   }
 
-  // ✅ BUSCA DIRETA da tabela pagamentos_mensais
+  /// 🔥 OTIMIZADO: Força leitura limpa desativando cache interno temporariamente ao listar
   Future<List<Map<String, dynamic>>> getPagamentosDoMes(
       int ano, int mes) async {
     try {
       final db = await _dbHelper.database;
       final anoMes = ano * 100 + mes;
 
-      // Busca direto da tabela, sem JOIN complexo
+      // Buscamos os pagamentos locais ativos daquele mês de referência
       final local = await db.query(
         tabelaPagamentos,
-        where: 'ano_mes = ?',
+        where: 'ano_mes = ? AND (deleted_at IS NULL)',
         whereArgs: [anoMes],
         orderBy: 'status ASC',
       );
 
       if (local.isNotEmpty) {
-        LoggerService.info('✅ Dados locais: ${local.length} pagamentos');
+        LoggerService.info('Base local: ${local.length} pagamentos');
 
-        // Enriquece com dados da conta
         final resultados = <Map<String, dynamic>>[];
         for (var p in local) {
           final contaId = p['conta_id']?.toString() ?? '';
           Map<String, dynamic>? conta;
+
           if (contaId.isNotEmpty) {
+            // Buscando os dados estruturais da conta diretamente do SQLite garantindo dados frescos
             final contas = await db.query(
               tabelaContas,
-              where: 'id = ? OR remote_id = ?',
+              where: '(id = ? OR remote_id = ?) AND (deleted_at IS NULL)',
               whereArgs: [contaId, contaId],
               limit: 1,
             );
@@ -106,11 +110,10 @@ class ContaRepository {
         return resultados;
       }
 
-      // Se vazio, busca do Supabase
-      LoggerService.info('☁️ Banco local vazio, buscando do Supabase...');
+      LoggerService.info('Banco local vazio, buscando da nuvem...');
       return await _getPagamentosDoMesSupabase(ano, mes);
     } catch (e) {
-      LoggerService.error('Erro: $e');
+      LoggerService.error('Erro ao processar pagamentos do mês local: $e');
       return [];
     }
   }
@@ -143,8 +146,6 @@ class ContaRepository {
             LoggerService.error('Erro ao inserir pagamento: $e');
           }
         }
-        LoggerService.info(
-            '💾 ${supabaseData.length} pagamentos sincronizados');
       }
     } catch (e) {
       LoggerService.error('Erro ao sincronizar: $e');
@@ -164,8 +165,8 @@ class ContaRepository {
           .eq('user_id', user.id)
           .eq('ano_mes', anoMes)
           .order('status', ascending: true);
-      LoggerService.info('Supabase retornou ${response.length} pagamentos');
-      final List<Map<String, dynamic>> resultados = response.map((p) {
+
+      final List<Map<String, dynamic>> resultados = (response as List).map((p) {
         final conta = p['contas'] as Map<String, dynamic>? ?? {};
         return {
           'id': p['id']?.toString() ?? '',
@@ -184,6 +185,7 @@ class ContaRepository {
           'parcelas_pagas': conta['parcelas_pagas'] as int?,
         };
       }).toList();
+
       resultados.sort((a, b) {
         final sA = a['status'] as int? ?? 0;
         final sB = b['status'] as int? ?? 0;
@@ -230,24 +232,71 @@ class ContaRepository {
     };
   }
 
-  Future<bool> pagarConta(int pagamentoId) async {
-    final result = await _dbHelper.pagarConta(pagamentoId);
-    return result;
-  }
+  Future<void> deletarConta(String contaId) async {
+    final db = await _dbHelper.database;
+    final user = _supabase.auth.currentUser;
 
-  Future<int> deletarConta(int contaId) async {
-    final result = await _dbHelper.deletarConta(contaId);
-    return result;
-  }
+    final remoteId = await _getRemoteIdFromLocalId(contaId);
 
-  Future<int> atualizarConta(Map<String, dynamic> conta) async {
-    final id = conta['id'];
-    conta.remove('id');
-    conta['sync_status'] = 'pending';
-    conta['updated_at'] = DateTime.now().toIso8601String();
-    final result = await _dbHelper.update(tabelaContas, conta, id);
+    if (user != null && remoteId != null && remoteId.isNotEmpty) {
+      try {
+        await _supabase
+            .from('pagamentos_mensais')
+            .delete()
+            .eq('conta_id', remoteId);
+        await _supabase.from('contas').delete().eq('id', remoteId);
+      } catch (e) {
+        LoggerService.error('Erro ao excluir do Supabase: $e');
+      }
+    }
+
+    // Usando soft delete ou hard delete local dependendo da regra anterior, mantido o original
+    await db
+        .delete(tabelaPagamentos, where: 'conta_id = ?', whereArgs: [contaId]);
+    await db.delete(tabelaContas,
+        where: 'id = ? OR remote_id = ?', whereArgs: [contaId, contaId]);
+
     _syncService.syncNow();
+  }
+
+  Future<String?> _getRemoteIdFromLocalId(String localId) async {
+    final db = await _dbHelper.database;
+    final result =
+        await db.query(tabelaContas, where: 'id = ?', whereArgs: [localId]);
+    if (result.isNotEmpty) {
+      return result.first['remote_id'] as String?;
+    }
+    return null;
+  }
+
+  Future<void> deletarContaString(String contaId) async {
+    await deletarConta(contaId);
+  }
+
+  /// 🔥 CORRIGIDO: Removemos a limpeza de cache e o sync de dentro da função
+  Future<int> atualizarConta(Map<String, dynamic> conta) async {
+    final mapaParaSalvar = Map<String, dynamic>.from(conta);
+    final id = mapaParaSalvar['id'];
+
+    mapaParaSalvar.remove('id');
+    mapaParaSalvar['sync_status'] = 'pending';
+    mapaParaSalvar['updated_at'] = DateTime.now().toIso8601String();
+
+    final result = await _dbHelper.update(tabelaContas, mapaParaSalvar, id);
+
+    // 🔥 REMOVIDO: _dbHelper.limparCacheCompleto();
+    // 🔥 REMOVIDO: _dispararSyncSilencioso();
     return result;
+  }
+
+  Future<Result<bool>> pagarConta(int pagamentoId) async {
+    try {
+      final res = await _dbHelper.pagarConta(pagamentoId);
+      _syncService.syncNow();
+      return Result.success(res);
+    } catch (e) {
+      return Result.failure(e.toString());
+    }
   }
 
   Future<Result<bool>> pagarContaComLancamento(int pagamentoId) async {
@@ -301,22 +350,10 @@ class ContaRepository {
     }
   }
 
-  Future<void> deletarContaString(String contaId) async {
-    final db = await _dbHelper.database;
-    await db
-        .delete(tabelaPagamentos, where: 'conta_id = ?', whereArgs: [contaId]);
-    await db.delete(tabelaContas,
-        where: 'id = ? OR remote_id = ?', whereArgs: [contaId, contaId]);
-    _syncService.syncNow();
-  }
-
   Future<Result<List<Conta>>> getContasAtivasResult() async {
     try {
-      final db = await _dbHelper.database;
-      final resultados = await db.query(tabelaContas,
-          where: 'ativa = ?', whereArgs: [1], orderBy: 'nome ASC');
-      return Result.success(
-          resultados.map((json) => Conta.fromJson(json)).toList());
+      final result = await getContasAtivas();
+      return Result.success(result);
     } catch (e) {
       return Result.failure('Erro ao carregar contas: $e');
     }
@@ -332,24 +369,17 @@ class ContaRepository {
 
   Future<Result<int>> adicionarContaResult(Map<String, dynamic> conta) async {
     try {
-      conta['sync_status'] = 'pending';
-      conta['updated_at'] = DateTime.now().toIso8601String();
-      final id = await _dbHelper.adicionarContaComUserId(conta);
-      _syncService.syncNow();
+      final id = await adicionarConta(conta);
       return Result.success(id);
     } catch (e) {
       return Result.failure('Erro ao adicionar conta: ${conta['nome']}\n$e');
     }
   }
 
+  /// 🔥 CORRIGIDO: Cache limpo no fluxo de Result
   Future<Result<int>> atualizarContaResult(Map<String, dynamic> conta) async {
     try {
-      final id = conta['id'];
-      conta.remove('id');
-      conta['sync_status'] = 'pending';
-      conta['updated_at'] = DateTime.now().toIso8601String();
-      final result = await _dbHelper.update(tabelaContas, conta, id);
-      _syncService.syncNow();
+      final result = await atualizarConta(conta);
       return Result.success(result);
     } catch (e) {
       return Result.failure('Erro ao atualizar conta: ${conta['nome']}\n$e');
@@ -358,8 +388,7 @@ class ContaRepository {
 
   Future<Result<int>> deletarContaResult(int id) async {
     try {
-      await deletarContaString(id.toString());
-      _syncService.syncNow();
+      await deletarConta(id.toString());
       return Result.success(1);
     } catch (e) {
       return Result.failure('Erro ao excluir conta ID: $id\n$e');
@@ -367,13 +396,7 @@ class ContaRepository {
   }
 
   Future<Result<bool>> pagarContaResult(int pagamentoId) async {
-    try {
-      final result = await _dbHelper.pagarConta(pagamentoId);
-      _syncService.syncNow();
-      return Result.success(result);
-    } catch (e) {
-      return Result.failure('Erro ao pagar conta ID: $pagamentoId\n$e');
-    }
+    return await pagarConta(pagamentoId);
   }
 
   Future<Result<List<Map<String, dynamic>>>> getPagamentosDoMesResult(
@@ -396,24 +419,24 @@ class ContaRepository {
 
   List<String> getCategorias() {
     return [
-      'Transporte',
-      'Alimentacao',
-      'Moradia',
-      'Lazer',
-      'Saude',
-      'Educacao',
-      'Cartao',
-      'Investimentos',
+      'Água',
+      'Alimentação',
+      'Cartão de Crédito',
+      'Cartão',
       'Cuidados Pessoais',
-      'Emprestimo',
-      'Agua',
-      'Luz',
-      'Internet',
-      'Telefone',
-      'IPVA',
-      'IPTU',
+      'Educação',
+      'Empréstimo', // Mantido apenas a versão correta e acentuada
       'Financiamento',
-      'Cartao de Credito',
+      'Internet',
+      'Investimentos',
+      'IPTU',
+      'IPVA',
+      'Lazer',
+      'Luz',
+      'Moradia',
+      'Saúde',
+      'Telefone',
+      'Transporte',
       'Outros'
     ];
   }

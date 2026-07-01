@@ -1,6 +1,7 @@
 // lib/widgets/adicionar_aporte_modal.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:animate_do/animate_do.dart';
 import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
 
@@ -29,15 +30,20 @@ class AdicionarAporteModal extends StatefulWidget {
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (context) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        child: AdicionarAporteModal(
-          investimentoNome: investimentoNome,
-          valorAtual: valorAtual,
-          onConfirm: onConfirm,
+      builder: (context) => FadeInDown(
+        duration: const Duration(milliseconds: 400),
+        child: Dialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: AdicionarAporteModal(
+            investimentoNome: investimentoNome,
+            valorAtual: valorAtual,
+            onConfirm: onConfirm,
+          ),
         ),
       ),
     );
@@ -110,8 +116,7 @@ class _AdicionarAporteModalState extends State<AdicionarAporteModal> {
                                   const Text('Valor atual:'),
                                   Text(Formatador.moeda(widget.valorAtual),
                                       style: const TextStyle(
-                                          fontWeight:
-                                              FontWeight.bold)), // ✅ CORRIGIDO
+                                          fontWeight: FontWeight.bold)),
                                 ]),
                           ])),
                       const SizedBox(height: 20),
@@ -130,8 +135,9 @@ class _AdicionarAporteModalState extends State<AdicionarAporteModal> {
                         validator: (v) {
                           if (v == null || v.isEmpty) return 'Digite o valor';
                           final valor = double.tryParse(v.replaceAll(',', '.'));
-                          if (valor == null || valor <= 0)
+                          if (valor == null || valor <= 0) {
                             return 'Valor invalido';
+                          }
                           return null;
                         },
                       ),

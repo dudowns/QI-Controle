@@ -1,9 +1,8 @@
 // lib/models/movimentacao_model.dart
-
 class Movimentacao {
-  final String? id; // 🔥 UUID do Supabase
+  final String? id;
   final String ticker;
-  final String tipo; // 'COMPRA' ou 'VENDA'
+  final String tipo;
   final double quantidade;
   final double preco;
   final double taxa;
@@ -26,17 +25,14 @@ class Movimentacao {
 
   factory Movimentacao.fromJson(Map<String, dynamic> json) {
     return Movimentacao(
-      // 🔥 Forçamos String para o ID (UUID)
       id: json['id']?.toString(),
-      ticker: json['ticker']?.toString() ?? '',
-      tipo: json['tipo']?.toString() ?? 'COMPRA',
-      // 🔥 Conversão robusta para evitar erro de 'int' vs 'double'
+      ticker: (json['ticker'] as String?) ?? '',
+      tipo: (json['tipo'] as String?) ?? 'COMPRA',
       quantidade: (json['quantidade'] as num?)?.toDouble() ?? 0.0,
       preco: (json['preco'] as num?)?.toDouble() ?? 0.0,
       taxa: (json['taxa'] as num?)?.toDouble() ?? 0.0,
-      // Verificação de segurança na data
       data: json['data'] != null
-          ? DateTime.parse(json['data'] as String)
+          ? DateTime.tryParse(json['data'].toString()) ?? DateTime.now()
           : DateTime.now(),
       observacao: json['observacao']?.toString(),
     );
@@ -53,7 +49,6 @@ class Movimentacao {
       'observacao': observacao,
     };
 
-    // Adiciona o id apenas se ele não for nulo (para atualizações)
     if (id != null) {
       map['id'] = id;
     }
@@ -64,4 +59,3 @@ class Movimentacao {
   bool get isCompra => tipo.toUpperCase() == 'COMPRA';
   bool get isVenda => tipo.toUpperCase() == 'VENDA';
 }
-

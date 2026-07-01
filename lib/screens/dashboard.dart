@@ -47,6 +47,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final List<Map<String, dynamic>> _evolucaoMensal = [];
   List<Map<String, dynamic>> _ultimosLancamentos = [];
 
+  // 🆕 Controle de visualização
+  bool _forceMobileView = false;
+
   final NumberFormat _realFormat = NumberFormat.currency(
     locale: 'pt_BR',
     symbol: 'R\$',
@@ -79,6 +82,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() => _isLoading = true);
 
     try {
+      await _contaRepository.sincronizarPagamentosDoMes(
+        _mesSelecionado.year,
+        _mesSelecionado.month,
+      );
+
       final metricas = await _dashboardService.getMetricasRapidas();
       _totalReceitas = (metricas['receitas_mes'] ?? 0).toDouble();
       _totalDespesas = (metricas['despesas_mes'] ?? 0).toDouble();
@@ -92,13 +100,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           (contasPendentes['valor_total'] ?? 0.0).toDouble();
       _quantidadeContas = (contasPendentes['quantidade'] ?? 0) as int;
 
-      // ✅ Usa repositórios
       _lancamentos = await _lancamentoRepository.getAllLancamentos();
       _metas = await _metaRepository.getAllMetas();
       _contas = await _contaRepository.getPagamentosDoMes(
           _mesSelecionado.year, _mesSelecionado.month);
 
-      // Carregar investimentos
       final db = await _contaRepository.getDatabase();
       final transacoes =
           await db.query('investments', orderBy: 'data_compra ASC');
@@ -327,88 +333,281 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _irParaLancamentos() => Navigator.pushNamed(context, '/lancamentos');
 
+  // =============================================
+  // 🎯 BUILD PRINCIPAL COM DETECÇÃO + TOGGLE
+  // =============================================
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
-    return RefreshIndicator(
-      onRefresh: _carregarDados,
-      color: AppColors.primary,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          TweenAnimationBuilder(
-            tween: Tween<double>(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 600),
-            curve: Curves.easeOutCubic,
-            builder: (c, o, child) => Opacity(
-                opacity: o,
-                child: Transform.translate(
-                    offset: Offset(0, 50 * (1 - o)), child: child)),
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = _forceMobileView || screenWidth < 768;
+
+    return Column(
+      children: [
+        // 🆕 Barra de controle Desktop/Mobile
+        _buildViewModeToggle(),
+        // Conteúdo principal
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _carregarDados,
+            color: AppColors.primary,
+            child: isMobile ? _buildMobileLayout() : _buildDesktopLayout(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // =============================================
+  // 🕹️ TOGGLE DESKTOP/MOBILE
+  // =============================================
+  Widget _buildViewModeToggle() {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground(context),
+        border: Border(
+          bottom: BorderSide(color: AppColors.border(context)),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Status atual
+          Row(
+            children: [
+              Icon(
+                _forceMobileView ? Icons.phone_android : Icons.desktop_windows,
+                size: 18,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _forceMobileView
+                    ? 'Modo Mobile'
+                    : (isMobile ? 'Mobile (Auto)' : 'Desktop'),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary(context),
+                ),
+              ),
+            ],
+          ),
+          // Botões toggle
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface(context),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.border(context)),
+            ),
             child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [_buildMonthSelector()]),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildToggleButton(
+                  icon: Icons.desktop_windows,
+                  label: 'Desktop',
+                  isActive: !_forceMobileView,
+                  onTap: () => setState(() => _forceMobileView = false),
+                ),
+                _buildToggleButton(
+                  icon: Icons.phone_android,
+                  label: 'Mobile',
+                  isActive: _forceMobileView,
+                  onTap: () => setState(() => _forceMobileView = true),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
-          TweenAnimationBuilder(
-            tween: Tween<double>(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 700),
-            curve: Curves.easeOutCubic,
-            builder: (c, o, child) => Opacity(
-                opacity: o,
-                child: Transform.translate(
-                    offset: Offset(0, 50 * (1 - o)), child: child)),
-            child: Row(children: [
-              _buildStatCard('Receitas', _totalReceitas, AppColors.success,
-                  Icons.trending_up),
-              const SizedBox(width: 12),
-              _buildStatCard('Despesas', _totalDespesas, AppColors.error,
-                  Icons.trending_down),
-              const SizedBox(width: 12),
-              _buildStatCard('Contas Pendentes', _totalContasPendentes,
-                  AppColors.warning, Icons.receipt,
-                  subtitle: '$_quantidadeContas conta(s)'),
-              const SizedBox(width: 12),
-              _buildStatCard('Patrimonio', _patrimonio, AppColors.primary,
-                  Icons.account_balance,
-                  subtitle: '$_metasAtivas meta(s) ativa(s)'),
-            ]),
-          ),
-          const SizedBox(height: 20),
-          TweenAnimationBuilder(
-            tween: Tween<double>(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 800),
-            curve: Curves.easeOutCubic,
-            builder: (c, o, child) => Opacity(
-                opacity: o,
-                child: Transform.translate(
-                    offset: Offset(0, 50 * (1 - o)), child: child)),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(flex: 6, child: _buildExpensesSection()),
-              const SizedBox(width: 16),
-              Expanded(
-                  flex: 4,
-                  child: Column(children: [
-                    _buildIncomeExpenseChart(),
-                    const SizedBox(height: 12),
-                    _buildStatsCard()
-                  ])),
-            ]),
-          ),
-          const SizedBox(height: 20),
-          TweenAnimationBuilder(
-            tween: Tween<double>(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 900),
-            curve: Curves.easeOutCubic,
-            builder: (c, o, child) => Opacity(
-                opacity: o,
-                child: Transform.translate(
-                    offset: Offset(0, 50 * (1 - o)), child: child)),
-            child: _buildUltimasTransacoesSection(),
-          ),
-        ]),
+        ],
       ),
     );
   }
+
+  Widget _buildToggleButton({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color:
+                    isActive ? Colors.white : AppColors.textSecondary(context),
+              ),
+              if (MediaQuery.of(context).size.width > 400) ...[
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: isActive
+                        ? Colors.white
+                        : AppColors.textSecondary(context),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // =============================================
+  // 🖥️ LAYOUT DESKTOP - ORIGINAL INTACTO
+  // =============================================
+  Widget _buildDesktopLayout() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        TweenAnimationBuilder(
+          tween: Tween<double>(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeOutCubic,
+          builder: (c, o, child) => Opacity(
+              opacity: o,
+              child: Transform.translate(
+                  offset: Offset(0, 50 * (1 - o)), child: child)),
+          child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [_buildMonthSelector()]),
+        ),
+        const SizedBox(height: 16),
+        TweenAnimationBuilder(
+          tween: Tween<double>(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 700),
+          curve: Curves.easeOutCubic,
+          builder: (c, o, child) => Opacity(
+              opacity: o,
+              child: Transform.translate(
+                  offset: Offset(0, 50 * (1 - o)), child: child)),
+          child: Row(children: [
+            _buildStatCard('Receitas', _totalReceitas, AppColors.success,
+                Icons.trending_up),
+            const SizedBox(width: 12),
+            _buildStatCard('Despesas', _totalDespesas, AppColors.error,
+                Icons.trending_down),
+            const SizedBox(width: 12),
+            _buildStatCard('Contas Pendentes', _totalContasPendentes,
+                AppColors.warning, Icons.receipt,
+                subtitle: '$_quantidadeContas conta(s)'),
+            const SizedBox(width: 12),
+            _buildStatCard('Patrimonio', _patrimonio, AppColors.primary,
+                Icons.account_balance,
+                subtitle: '$_metasAtivas meta(s) ativa(s)'),
+          ]),
+        ),
+        const SizedBox(height: 20),
+        TweenAnimationBuilder(
+          tween: Tween<double>(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.easeOutCubic,
+          builder: (c, o, child) => Opacity(
+              opacity: o,
+              child: Transform.translate(
+                  offset: Offset(0, 50 * (1 - o)), child: child)),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(flex: 6, child: _buildExpensesSection()),
+            const SizedBox(width: 16),
+            Expanded(
+                flex: 4,
+                child: Column(children: [
+                  _buildIncomeExpenseChart(),
+                  const SizedBox(height: 12),
+                  _buildStatsCard()
+                ])),
+          ]),
+        ),
+        const SizedBox(height: 20),
+        TweenAnimationBuilder(
+          tween: Tween<double>(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 900),
+          curve: Curves.easeOutCubic,
+          builder: (c, o, child) => Opacity(
+              opacity: o,
+              child: Transform.translate(
+                  offset: Offset(0, 50 * (1 - o)), child: child)),
+          child: _buildUltimasTransacoesSection(),
+        ),
+      ]),
+    );
+  }
+
+  // =============================================
+  // 📱 LAYOUT MOBILE - NOVO E ADAPTADO
+  // =============================================
+  Widget _buildMobileLayout() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Seletor de mês centralizado
+        Center(child: _buildMonthSelector()),
+        const SizedBox(height: 16),
+
+        // Cards em grid 2x2
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          childAspectRatio: 1.5,
+          children: [
+            _buildStatCard('Receitas', _totalReceitas, AppColors.success,
+                Icons.trending_up),
+            _buildStatCard('Despesas', _totalDespesas, AppColors.error,
+                Icons.trending_down),
+            _buildStatCard('Contas Pendentes', _totalContasPendentes,
+                AppColors.warning, Icons.receipt,
+                subtitle: '$_quantidadeContas conta(s)'),
+            _buildStatCard('Patrimonio', _patrimonio, AppColors.primary,
+                Icons.account_balance,
+                subtitle: '$_metasAtivas meta(s)'),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Gráfico de pizza - full width
+        _buildExpensesSection(),
+        const SizedBox(height: 16),
+
+        // Gráfico de barras
+        _buildIncomeExpenseChart(),
+        const SizedBox(height: 12),
+
+        // Stats card
+        _buildStatsCard(),
+        const SizedBox(height: 16),
+
+        // Últimas transações
+        _buildUltimasTransacoesSection(),
+      ]),
+    );
+  }
+
+  // =============================================
+  // 🔧 WIDGETS REUTILIZÁVEIS
+  // =============================================
 
   Widget _buildMonthSelector() {
     return Container(
@@ -814,10 +1013,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           fontSize: 12,
                           color: AppColors.textSecondary(context)))))
         else
-          ..._ultimosLancamentos
-              .map((t) => Material(
-                  color: Colors.transparent, child: _buildTransacaoItem(t)))
-              .toList(),
+          ..._ultimosLancamentos.map((t) => Material(
+              color: Colors.transparent, child: _buildTransacaoItem(t))),
       ]),
     );
   }

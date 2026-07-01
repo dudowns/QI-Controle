@@ -264,12 +264,13 @@ class _DetalhesRendaFixaScreenState extends State<DetalhesRendaFixaScreen> {
                                                     _evolucao[value.toInt()]
                                                         ['data'] as DateTime;
                                                 if (_evolucao.length > 15) {
-                                                  if (value.toInt() % 3 == 0)
+                                                  if (value.toInt() % 3 == 0) {
                                                     return Text(
                                                         DateFormat('dd/MM')
                                                             .format(data),
                                                         style: const TextStyle(
                                                             fontSize: 9));
+                                                  }
                                                 } else {
                                                   return Text(
                                                       DateFormat('dd/MM')

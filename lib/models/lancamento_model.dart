@@ -1,12 +1,8 @@
 // lib/models/lancamento_model.dart
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-enum TipoLancamento {
-  receita,
-  gasto,
-}
+enum TipoLancamento { receita, gasto }
 
 extension TipoLancamentoExtension on TipoLancamento {
   String get nome {
@@ -45,7 +41,7 @@ extension TipoLancamentoExtension on TipoLancamento {
 }
 
 class Lancamento {
-  final String? id; // 🔥 Alterado de int? para String? (UUID)
+  final String? id;
   final String descricao;
   final TipoLancamento tipo;
   final String categoria;
@@ -67,31 +63,28 @@ class Lancamento {
     this.updatedAt,
   });
 
-  // Para converter do JSON do banco (Supabase)
   factory Lancamento.fromJson(Map<String, dynamic> json) {
     return Lancamento(
-      // 🔥 Forçamos String para o ID
       id: json['id']?.toString(),
-      descricao: json['descricao']?.toString() ?? '',
+      descricao: (json['descricao'] as String?) ?? '',
       tipo: TipoLancamentoExtension.fromString(
-          json['tipo']?.toString() ?? 'gasto'),
-      categoria: json['categoria']?.toString() ?? 'Geral',
-      // 🔥 Garantimos que qualquer número do banco vire double no Flutter
+        (json['tipo'] as String?) ?? 'gasto',
+      ),
+      categoria: (json['categoria'] as String?) ?? 'Geral',
       valor: (json['valor'] as num?)?.toDouble() ?? 0.0,
       data: json['data'] != null
-          ? DateTime.parse(json['data'] as String)
+          ? DateTime.tryParse(json['data'].toString()) ?? DateTime.now()
           : DateTime.now(),
       observacao: json['observacao']?.toString(),
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? DateTime.tryParse(json['created_at'].toString())
           : null,
       updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
+          ? DateTime.tryParse(json['updated_at'].toString())
           : null,
     );
   }
 
-  // Para converter para JSON (salvar no banco)
   Map<String, dynamic> toJson() {
     final map = {
       'descricao': descricao,
@@ -102,7 +95,6 @@ class Lancamento {
       'observacao': observacao,
     };
 
-    // Adiciona o id apenas se ele não for nulo (para atualizações)
     if (id != null) {
       map['id'] = id;
     }
@@ -110,9 +102,8 @@ class Lancamento {
     return map;
   }
 
-  // Cópia com alterações (útil para edição)
   Lancamento copyWith({
-    String? id, // 🔥 Alterado para String?
+    String? id,
     String? descricao,
     TipoLancamento? tipo,
     String? categoria,
@@ -135,7 +126,6 @@ class Lancamento {
     );
   }
 
-  // Validações
   bool get isValido {
     return descricao.isNotEmpty &&
         valor > 0 &&
@@ -143,4 +133,3 @@ class Lancamento {
         data.isBefore(DateTime.now().add(const Duration(days: 365)));
   }
 }
-

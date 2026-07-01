@@ -157,8 +157,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       decoration: InputDecoration(
                         labelText: 'Nome (opcional)',
                         hintText: 'Seu nome',
-                        labelStyle: TextStyle(color: AppColors.primary),
-                        prefixIcon: Icon(Icons.person_outline,
+                        labelStyle: const TextStyle(color: AppColors.primary),
+                        prefixIcon: const Icon(Icons.person_outline,
                             color: AppColors.primary),
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16)),
@@ -169,7 +169,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide:
-                              BorderSide(color: AppColors.primary, width: 2),
+                              const BorderSide(color: AppColors.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
@@ -182,8 +182,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       decoration: InputDecoration(
                         labelText: 'Nome de usuário (para login)',
                         hintText: 'seu_username',
-                        labelStyle: TextStyle(color: AppColors.primary),
-                        prefixIcon: Icon(Icons.alternate_email,
+                        labelStyle: const TextStyle(color: AppColors.primary),
+                        prefixIcon: const Icon(Icons.alternate_email,
                             color: AppColors.primary),
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16)),
@@ -194,7 +194,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide:
-                              BorderSide(color: AppColors.primary, width: 2),
+                              const BorderSide(color: AppColors.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
@@ -207,8 +207,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       decoration: InputDecoration(
                         labelText: 'E-mail',
                         hintText: 'seu@email.com',
-                        labelStyle: TextStyle(color: AppColors.primary),
-                        prefixIcon: Icon(Icons.email_outlined,
+                        labelStyle: const TextStyle(color: AppColors.primary),
+                        prefixIcon: const Icon(Icons.email_outlined,
                             color: AppColors.primary),
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16)),
@@ -219,7 +219,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide:
-                              BorderSide(color: AppColors.primary, width: 2),
+                              const BorderSide(color: AppColors.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
@@ -232,9 +232,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       decoration: InputDecoration(
                         labelText: 'Senha',
                         hintText: '••••••••',
-                        labelStyle: TextStyle(color: AppColors.primary),
+                        labelStyle: const TextStyle(color: AppColors.primary),
                         prefixIcon:
-                            Icon(Icons.lock_outline, color: AppColors.primary),
+                            const Icon(Icons.lock_outline, color: AppColors.primary),
                         suffixIcon: IconButton(
                           icon: Icon(
                               _mostrarSenha
@@ -253,7 +253,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide:
-                              BorderSide(color: AppColors.primary, width: 2),
+                              const BorderSide(color: AppColors.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
@@ -266,9 +266,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       decoration: InputDecoration(
                         labelText: 'Confirmar Senha',
                         hintText: '••••••••',
-                        labelStyle: TextStyle(color: AppColors.primary),
+                        labelStyle: const TextStyle(color: AppColors.primary),
                         prefixIcon:
-                            Icon(Icons.lock_outline, color: AppColors.primary),
+                            const Icon(Icons.lock_outline, color: AppColors.primary),
                         suffixIcon: IconButton(
                           icon: Icon(
                               _mostrarConfirmar
@@ -287,7 +287,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide:
-                              BorderSide(color: AppColors.primary, width: 2),
+                              const BorderSide(color: AppColors.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
@@ -330,7 +330,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           onPressed: () => Navigator.pop(context),
                           style: TextButton.styleFrom(
                               padding: EdgeInsets.zero, minimumSize: Size.zero),
-                          child: Text('FAZER LOGIN',
+                          child: const Text('FAZER LOGIN',
                               style: TextStyle(
                                   color: AppColors.primary,
                                   fontWeight: FontWeight.bold,

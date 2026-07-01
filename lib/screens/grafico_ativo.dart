@@ -219,12 +219,13 @@ class _GraficoAtivoScreenState extends State<GraficoAtivoScreen> {
                                             dadosHistoricos![value.toInt()]
                                                 ['data'];
                                         if (dadosHistoricos!.length > 20) {
-                                          if (value.toInt() % 5 == 0)
+                                          if (value.toInt() % 5 == 0) {
                                             return Text(
                                                 DateFormat('dd/MM')
                                                     .format(data),
                                                 style: const TextStyle(
                                                     fontSize: 9));
+                                          }
                                         } else {
                                           return Text(
                                               DateFormat('dd/MM').format(data),

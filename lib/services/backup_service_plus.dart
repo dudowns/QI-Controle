@@ -1,11 +1,11 @@
-// lib/services/backup_service_plus.dart
+// lib/services/backup_service_plus.dart - CORRIGIDO
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
 import '../database/db_helper.dart';
 import '../services/logger_service.dart';
-import '../utils/formatters.dart'; // ✅ Usar formatters.dart (unificado)
+import '../utils/formatters.dart';
 
 class BackupServicePlus {
   static final BackupServicePlus _instance = BackupServicePlus._internal();
@@ -124,7 +124,7 @@ class BackupServicePlus {
       final dados = {
         'metadata': {
           'versao': '3.0',
-          'data_exportacao': DateTime.now().toIso8601String(), // ✅ Simplificado
+          'data_exportacao': DateTime.now().toIso8601String(),
           'total_lancamentos': lancamentos.length,
           'total_investimentos': investimentos.length,
           'total_proventos': proventos.length,
@@ -141,7 +141,8 @@ class BackupServicePlus {
       };
 
       LoggerService.success(
-          '✅ Exportação concluída: ${lancamentos.length} lançamentos, ${contas.length} contas');
+        '✅ Exportação concluída: ${lancamentos.length} lançamentos, ${contas.length} contas',
+      );
       return dados;
     } catch (e) {
       LoggerService.error('❌ Erro ao exportar dados', e);
@@ -155,7 +156,6 @@ class BackupServicePlus {
     final contas = await database.query(DBHelper.tabelaContas);
     final pagamentos = await database.query(DBHelper.tabelaPagamentos);
 
-    // ✅ CORRIGIDO: conta_id agora é String (UUID)
     final Map<String, List<Map<String, dynamic>>> pagamentosPorConta = {};
     for (var p in pagamentos) {
       final contaId = p['conta_id']?.toString() ?? '';
@@ -165,10 +165,7 @@ class BackupServicePlus {
 
     return contas.map((conta) {
       final contaId = conta['id']?.toString() ?? '';
-      return {
-        ...conta,
-        'pagamentos': pagamentosPorConta[contaId] ?? [],
-      };
+      return {...conta, 'pagamentos': pagamentosPorConta[contaId] ?? []};
     }).toList();
   }
 
@@ -176,10 +173,10 @@ class BackupServicePlus {
   Future<String?> salvarBackupEmArquivo() async {
     try {
       final dados = await exportarTodosDados();
-      final backupPath = await _getBackupPath(); // ✅ Dinâmico!
+      final backupPath = await _getBackupPath();
 
       const fileName = 'backup_financeiro.json';
-      final file = File('$backupPath/$fileName'); // ✅ Usa / em vez de \\
+      final file = File('$backupPath/$fileName');
 
       final jsonString = jsonEncode(dados);
       await file.writeAsString(jsonString, encoding: utf8);
@@ -195,7 +192,7 @@ class BackupServicePlus {
   // 🔥 CORRIGIDO: Usa caminho dinâmico
   Future<bool> backupExiste() async {
     try {
-      final backupPath = await _getBackupPath(); // ✅ Dinâmico!
+      final backupPath = await _getBackupPath();
       final file = File('$backupPath/backup_financeiro.json');
       return await file.exists();
     } catch (e) {
@@ -207,7 +204,7 @@ class BackupServicePlus {
   // 🔥 CORRIGIDO: Usa caminho dinâmico
   Future<Map<String, dynamic>?> getInfoBackup() async {
     try {
-      final backupPath = await _getBackupPath(); // ✅ Dinâmico!
+      final backupPath = await _getBackupPath();
       final file = File('$backupPath/backup_financeiro.json');
 
       if (!await file.exists()) {
@@ -230,8 +227,10 @@ class BackupServicePlus {
   }
 
   // 🔥 CORRIGIDO: Aceita qualquer caminho de arquivo
-  Future<bool> restaurarBackup(String caminhoArquivo,
-      {bool limparAntes = false}) async {
+  Future<bool> restaurarBackup(
+    String caminhoArquivo, {
+    bool limparAntes = false,
+  }) async {
     try {
       final file = File(caminhoArquivo);
       if (!await file.exists()) {
@@ -323,7 +322,7 @@ class BackupServicePlus {
               for (var p in pagamentos) {
                 final pagamento = Map<String, dynamic>.from(p);
                 pagamento.remove('id');
-                pagamento['conta_id'] = contaId.toString(); // ✅ String
+                pagamento['conta_id'] = contaId.toString();
                 await database.insert(DBHelper.tabelaPagamentos, pagamento);
               }
             }
@@ -336,7 +335,8 @@ class BackupServicePlus {
       }
 
       LoggerService.success(
-          '✅ Backup restaurado! $totalInserido registros inseridos');
+        '✅ Backup restaurado! $totalInserido registros inseridos',
+      );
       return true;
     } catch (e) {
       LoggerService.error('❌ Erro ao restaurar backup', e);
@@ -347,7 +347,7 @@ class BackupServicePlus {
   // 🔥 CORRIGIDO: Usa caminho dinâmico
   Future<List<File>> listarBackups() async {
     try {
-      final backupPath = await _getBackupPath(); // ✅ Dinâmico!
+      final backupPath = await _getBackupPath();
       final backupDir = Directory(backupPath);
 
       if (!await backupDir.exists()) {
@@ -359,16 +359,15 @@ class BackupServicePlus {
         return [file];
       }
 
-      // 🔥 NOVO: Lista TODOS os arquivos .json na pasta de backup
       final files = await backupDir
           .list()
           .where((entity) => entity is File && entity.path.endsWith('.json'))
           .map((entity) => entity as File)
           .toList();
 
-      // Ordenar por data de modificação (mais recente primeiro)
-      files
-          .sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+      files.sort(
+        (a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()),
+      );
 
       return files;
     } catch (e) {

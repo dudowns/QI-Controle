@@ -2,9 +2,11 @@
 import 'package:flutter/material.dart';
 import '../database/db_helper.dart';
 import '../services/logger_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DashboardService {
   final DBHelper _dbHelper = DBHelper();
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   Future<Map<String, dynamic>> getMetricasRapidas() async {
     final db = await _dbHelper.database;
@@ -34,7 +36,7 @@ class DashboardService {
     }
   }
 
-  // ✅ NOVO MÉTODO: Buscar contas pendentes por mês específico
+  // ✅ MÉTODO COM FALLBACK PARA SUPABASE
   Future<Map<String, dynamic>> getContasPendentesPorMes(
       int ano, int mes) async {
     final db = await _dbHelper.database;
@@ -44,6 +46,7 @@ class DashboardService {
       LoggerService.info(
           '🔍 Buscando contas pendentes para $ano/$mes (anoMes=$anoMes)');
 
+      // 🔥 TENTA NO SQLITE PRIMEIRO
       final result = await db.rawQuery('''
         SELECT 
           COUNT(*) as quantidade,
@@ -52,8 +55,27 @@ class DashboardService {
         WHERE status = 0 AND ano_mes = ?
       ''', [anoMes]).timeout(const Duration(seconds: 5));
 
-      final quantidade = (result.first['quantidade'] as int?) ?? 0;
-      final valorTotal = (result.first['valor_total'] as num?)?.toDouble() ?? 0;
+      int quantidade = (result.first['quantidade'] as int?) ?? 0;
+      double valorTotal =
+          (result.first['valor_total'] as num?)?.toDouble() ?? 0;
+
+      // 🔥 SE SQLITE RETORNOU 0, TENTA NO SUPABASE
+      if (quantidade == 0 && valorTotal == 0) {
+        LoggerService.info('🔍 SQLite vazio, buscando no Supabase...');
+        final user = _supabase.auth.currentUser;
+        if (user != null) {
+          final supabaseResult = await _supabase
+              .from('pagamentos_mensais')
+              .select('valor, status')
+              .eq('user_id', user.id)
+              .eq('ano_mes', anoMes)
+              .eq('status', 0);
+
+          quantidade = supabaseResult.length;
+          valorTotal = supabaseResult.fold<double>(0,
+              (sum, item) => sum + ((item['valor'] as num?)?.toDouble() ?? 0));
+        }
+      }
 
       LoggerService.info(
           '📊 Encontradas $quantidade contas pendentes (R\$ $valorTotal)');

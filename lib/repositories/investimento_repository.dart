@@ -2,15 +2,21 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/investimento_model.dart';
 import '../database/db_helper.dart';
+import 'package:sqflite/sqflite.dart';
 
 class InvestimentoRepository {
   final _supabase = Supabase.instance.client;
   final DBHelper _dbHelper = DBHelper();
 
+  // ✅ ADICIONADO - Método para acessar o banco local
+  Future<Database> getDatabase() async {
+    return await _dbHelper.database;
+  }
+
   Future<List<Investimento>> getAllInvestimentosModel() async {
     try {
       final response = await _supabase
-          .from('investments') // ✅ TROCADO PARA investments
+          .from('investments')
           .select()
           .order('ticker', ascending: true);
 
@@ -33,9 +39,7 @@ class InvestimentoRepository {
 
   Future<void> insertInvestimentoModel(Investimento investimento) async {
     try {
-      await _supabase
-          .from('investments')
-          .insert(investimento.toJson()); // ✅ TROCADO
+      await _supabase.from('investments').insert(investimento.toJson());
     } catch (e) {
       await _dbHelper.insert(
           DBHelper.tabelaInvestimentos, investimento.toJson());
@@ -45,7 +49,7 @@ class InvestimentoRepository {
   Future<void> updateInvestimentoModel(Investimento investimento) async {
     try {
       await _supabase
-          .from('investments') // ✅ TROCADO
+          .from('investments')
           .update(investimento.toJson())
           .eq('id', investimento.id ?? '');
     } catch (e) {
@@ -61,7 +65,7 @@ class InvestimentoRepository {
 
   Future<void> deleteInvestimentoModel(String id) async {
     try {
-      await _supabase.from('investments').delete().eq('id', id); // ✅ TROCADO
+      await _supabase.from('investments').delete().eq('id', id);
     } catch (e) {
       await _dbHelper.delete(DBHelper.tabelaInvestimentos, id);
     }

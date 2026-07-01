@@ -126,7 +126,7 @@ class _MetasScreenState extends State<MetasScreen> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        _getTipoMeta(tipoSelecionado).cor.withOpacity(0.8),
+                        _getTipoMeta(tipoSelecionado).cor.withValues(alpha: 0.8),
                         _getTipoMeta(tipoSelecionado).cor,
                       ],
                     ),
@@ -171,7 +171,7 @@ class _MetasScreenState extends State<MetasScreen> {
                                 horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
                               color: selecionado
-                                  ? tipo.cor.withOpacity(0.15)
+                                  ? tipo.cor.withValues(alpha: 0.15)
                                   : Colors.grey[100],
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
@@ -599,7 +599,7 @@ class _MetasScreenState extends State<MetasScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.primary.withOpacity(0.8), AppColors.primary],
+          colors: [AppColors.primary.withValues(alpha: 0.8), AppColors.primary],
         ),
         borderRadius: BorderRadius.circular(16),
       ),
@@ -623,7 +623,7 @@ class _MetasScreenState extends State<MetasScreen> {
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: (progressoGeral / 100).clamp(0.0, 1.0),
-                      backgroundColor: Colors.white.withOpacity(0.3),
+                      backgroundColor: Colors.white.withValues(alpha: 0.3),
                       color: Colors.white,
                       minHeight: 6,
                     ),
@@ -658,7 +658,7 @@ class _MetasScreenState extends State<MetasScreen> {
         ),
         Text(
           label,
-          style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 11),
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 11),
         ),
       ],
     );
@@ -709,10 +709,10 @@ class _MetasScreenState extends State<MetasScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: AppColors.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.flag, size: 64, color: AppColors.primary),
+            child: const Icon(Icons.flag, size: 64, color: AppColors.primary),
           ),
           const SizedBox(height: 16),
           Text(
@@ -753,14 +753,14 @@ class _MetasScreenState extends State<MetasScreen> {
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 3,
-      shadowColor: tipoMeta.cor.withOpacity(0.3),
+      shadowColor: tipoMeta.cor.withValues(alpha: 0.3),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
             colors: [
               Colors.white,
-              tipoMeta.cor.withOpacity(0.02),
+              tipoMeta.cor.withValues(alpha: 0.02),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -779,7 +779,7 @@ class _MetasScreenState extends State<MetasScreen> {
                   height: 36,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [tipoMeta.cor.withOpacity(0.7), tipoMeta.cor],
+                      colors: [tipoMeta.cor.withValues(alpha: 0.7), tipoMeta.cor],
                     ),
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -871,7 +871,7 @@ class _MetasScreenState extends State<MetasScreen> {
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
-                value: (progresso.clamp(0.0, 1.0) as num).toDouble(),
+                value: (progresso.clamp(0.0, 1.0)).toDouble(),
                 backgroundColor: Colors.grey[200],
                 valueColor: AlwaysStoppedAnimation<Color>(
                   estaConcluida ? Colors.green : tipoMeta.cor,

@@ -48,7 +48,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
           children: [
             // Fundo escuro
             Positioned.fill(
-              child: Container(color: Colors.black.withOpacity(0.4)),
+              child: Container(color: Colors.black.withValues(alpha: 0.4)),
             ),
             // Card do dropdown
             Positioned(
@@ -67,7 +67,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withOpacity(0.2),
+                          color: AppColors.primary.withValues(alpha: 0.2),
                           blurRadius: 30,
                           offset: const Offset(0, 10),
                         ),
@@ -91,7 +91,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
+                                  color: Colors.white.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: const Icon(
@@ -135,7 +135,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
                                 child: Container(
                                   padding: const EdgeInsets.all(6),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
+                                    color: Colors.white.withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: const Icon(
@@ -161,14 +161,14 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
                                         padding: const EdgeInsets.all(20),
                                         decoration: BoxDecoration(
                                           color: AppColors.primary
-                                              .withOpacity(0.1),
+                                              .withValues(alpha: 0.1),
                                           shape: BoxShape.circle,
                                         ),
                                         child: Icon(
                                           Icons.notifications_none_rounded,
                                           size: 48,
                                           color: AppColors.primary
-                                              .withOpacity(0.5),
+                                              .withValues(alpha: 0.5),
                                         ),
                                       ),
                                       const SizedBox(height: 16),
@@ -219,7 +219,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
                               border: Border(
                                 top: BorderSide(
                                   color: AppColors.border(context)
-                                      .withOpacity(0.5),
+                                      .withValues(alpha: 0.5),
                                 ),
                               ),
                             ),
@@ -321,7 +321,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Material(
-        color: lida ? Colors.transparent : cor.withOpacity(0.05),
+        color: lida ? Colors.transparent : cor.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: () {
@@ -337,7 +337,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
               borderRadius: BorderRadius.circular(14),
               border: lida
                   ? null
-                  : Border.all(color: cor.withOpacity(0.3), width: 1),
+                  : Border.all(color: cor.withValues(alpha: 0.3), width: 1),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -348,7 +348,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
                   height: 40,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [cor.withOpacity(0.7), cor],
+                      colors: [cor.withValues(alpha: 0.7), cor],
                     ),
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -366,7 +366,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: cor.withOpacity(0.1),
+                              color: cor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -383,7 +383,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
                             Container(
                               width: 6,
                               height: 6,
-                              decoration: BoxDecoration(
+                              decoration: const BoxDecoration(
                                 color: AppColors.primary,
                                 shape: BoxShape.circle,
                               ),
@@ -450,7 +450,7 @@ class _NotificacaoBotaoState extends State<NotificacaoBotao> {
         Container(
           margin: const EdgeInsets.only(right: 4),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
+            color: Colors.white.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(20),
           ),
           child: IconButton(

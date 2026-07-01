@@ -1,7 +1,7 @@
 // lib/services/sync_service.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
+// import 'package:connectivity_plus/connectivity_plus.dart'; // 🔥 COMENTADO PARA SEMPRE
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'sync_manager.dart';
 import 'logger_service.dart';
@@ -12,18 +12,18 @@ class SyncService extends ChangeNotifier {
   SyncService._internal();
 
   final SyncManager _syncManager = SyncManager();
-  final Connectivity _connectivity = Connectivity();
+  // final Connectivity _connectivity = Connectivity(); // 🔥 REMOVIDO
 
   bool _isInitialized = false;
   bool _isSyncing = false;
   Timer? _debounceTimer;
   DateTime? _lastSyncTime;
-  StreamSubscription? _connectivitySubscription;
-  bool _isConnected = false;
+  // StreamSubscription? _connectivitySubscription; // 🔥 REMOVIDO
+  bool _isConnected = true; // 🔥 SEMPRE CONSIDERA CONECTADO
   bool _hasUser = false;
 
   static const _debounceDelay = Duration(seconds: 2);
-  static const _minSyncInterval = Duration(minutes: 1);
+  static const _minSyncInterval = Duration(minutes: 2);
 
   bool get isSyncing => _isSyncing;
 
@@ -37,18 +37,8 @@ class SyncService extends ChangeNotifier {
 
     _checkUserAndSetup();
 
-    _connectivitySubscription =
-        _connectivity.onConnectivityChanged.listen((results) {
-      final isConnected = results.any((r) => r != ConnectivityResult.none);
-      if (isConnected && !_isConnected) {
-        LoggerService.info('🌐 Conexão RESTABELECIDA');
-        _isConnected = true;
-        _debouncedSync();
-      } else if (!isConnected && _isConnected) {
-        LoggerService.info('📵 Conexão PERDIDA');
-        _isConnected = false;
-      }
-    });
+    // 🔥 CONEXÃO COM INTERNET REMOVIDA (NÃO USA MAIS connectivity_plus)
+    // _connectivitySubscription = ...
 
     Supabase.instance.client.auth.onAuthStateChange.listen((event) {
       if (event.session != null && !_hasUser) {
@@ -61,23 +51,12 @@ class SyncService extends ChangeNotifier {
       }
     });
 
-    _checkInitialState();
+    // _checkInitialState() // 🔥 REMOVIDO
     LoggerService.success('✅ SyncService inicializado com sucesso');
   }
 
-  Future<void> _checkInitialState() async {
-    try {
-      final results = await _connectivity.checkConnectivity();
-      _isConnected = results.any((r) => r != ConnectivityResult.none);
-      final user = Supabase.instance.client.auth.currentUser;
-      _hasUser = user != null;
-      LoggerService.info(
-          '📡 Estado inicial: Conectado=$_isConnected, Logado=$_hasUser');
-      if (_isConnected && _hasUser) _debouncedSync();
-    } catch (e) {
-      LoggerService.error('❌ Erro ao verificar estado inicial: $e');
-    }
-  }
+  // 🔥 MÉTODO REMOVIDO: Não precisa mais verificar internet
+  // Future<void> _checkInitialState() async { ... }
 
   void _checkUserAndSetup() {
     final user = Supabase.instance.client.auth.currentUser;
@@ -95,10 +74,12 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<void> syncNow() async {
-    if (!_isConnected) {
-      LoggerService.info('📵 Sem conexão, ignorando sync');
-      return;
-    }
+    // 🔥 VERIFICAÇÃO DE INTERNET REMOVIDA (AQUI É O PULO DO GATO)
+    // if (!_isConnected) {
+    //   LoggerService.info('📵 Sem conexão, ignorando sync');
+    //   return;
+    // }
+
     if (!_hasUser) {
       LoggerService.info('👤 Sem usuário logado, ignorando sync');
       return;
@@ -124,12 +105,56 @@ class SyncService extends ChangeNotifier {
       LoggerService.success(
           '✅ Sincronização concluída em ${DateTime.now().difference(_lastSyncTime!).inSeconds}s');
       notifyListeners();
-    } catch (e, stack) {
+    } catch (e) {
       LoggerService.error('❌ Erro na sincronização: $e', e);
     } finally {
       _isSyncing = false;
       notifyListeners();
     }
+  }
+
+  // 🔥 MÉTODO PARA FORÇAR SINCRONIZAÇÃO (ignora throttle)
+  Future<void> forceSyncNow() async {
+    // 🔥 VERIFICAÇÃO DE INTERNET REMOVIDA
+    // if (!_isConnected) {
+    //   LoggerService.info('📵 Sem conexão, ignorando force sync');
+    //   return;
+    // }
+
+    if (!_hasUser) {
+      LoggerService.info('👤 Sem usuário logado, ignorando force sync');
+      return;
+    }
+    if (_isSyncing) {
+      LoggerService.info('⏳ Sincronização já em andamento, ignorando...');
+      return;
+    }
+
+    LoggerService.info('🔄 FORÇANDO sincronização (ignorando throttle)...');
+    _isSyncing = true;
+    notifyListeners();
+
+    try {
+      await _syncManager.syncAll();
+      _lastSyncTime = DateTime.now();
+      LoggerService.success('✅ Sincronização FORÇADA concluída!');
+    } catch (e) {
+      LoggerService.error('❌ Erro na sincronização forçada: $e', e);
+      rethrow;
+    } finally {
+      _isSyncing = false;
+      notifyListeners();
+    }
+  }
+
+  Map<String, dynamic> getSyncStatus() {
+    return {
+      'isSyncing': _isSyncing,
+      'isConnected': _isConnected,
+      'hasUser': _hasUser,
+      'lastSyncTime': _lastSyncTime?.toIso8601String(),
+      'isInitialized': _isInitialized,
+    };
   }
 
   Future<void> markAsPending(String table, int id) async {
@@ -153,7 +178,7 @@ class SyncService extends ChangeNotifier {
   @override
   void dispose() {
     _debounceTimer?.cancel();
-    _connectivitySubscription?.cancel();
+    // _connectivitySubscription?.cancel(); // 🔥 REMOVIDO
     super.dispose();
   }
 }

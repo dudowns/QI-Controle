@@ -207,8 +207,9 @@ class SupabaseQueries {
       );
 
       if (result == null) return {};
-      if (result is List && result.isNotEmpty)
+      if (result is List && result.isNotEmpty) {
         return Map<String, dynamic>.from(result[0]);
+      }
       if (result is Map) return Map<String, dynamic>.from(result);
       return {};
     } catch (e) {

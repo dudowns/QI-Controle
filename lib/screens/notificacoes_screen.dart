@@ -108,13 +108,16 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
 
   Color _getCardColor(AppNotification notification) {
     if (notification.ticker != null) return const Color(0xFF4CAF50); // Provento
-    if (notification.titulo.toLowerCase().contains('conta'))
+    if (notification.titulo.toLowerCase().contains('conta')) {
       return const Color(0xFFFF9800);
-    if (notification.titulo.toLowerCase().contains('meta'))
+    }
+    if (notification.titulo.toLowerCase().contains('meta')) {
       return const Color(0xFF2196F3);
+    }
     if (notification.titulo.toLowerCase().contains('invest') ||
-        notification.titulo.toLowerCase().contains('tesouro'))
+        notification.titulo.toLowerCase().contains('tesouro')) {
       return const Color(0xFF9C27B0);
+    }
     return const Color(0xFF607D8B);
   }
 
@@ -123,7 +126,9 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
     if (notification.titulo.toLowerCase().contains('conta')) return '📅';
     if (notification.titulo.toLowerCase().contains('meta')) return '🎯';
     if (notification.titulo.toLowerCase().contains('invest') ||
-        notification.titulo.toLowerCase().contains('tesouro')) return '📈';
+        notification.titulo.toLowerCase().contains('tesouro')) {
+      return '📈';
+    }
     return '🔔';
   }
 
@@ -132,8 +137,9 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
     if (notification.titulo.toLowerCase().contains('conta')) return 'Conta';
     if (notification.titulo.toLowerCase().contains('meta')) return 'Meta';
     if (notification.titulo.toLowerCase().contains('invest') ||
-        notification.titulo.toLowerCase().contains('tesouro'))
+        notification.titulo.toLowerCase().contains('tesouro')) {
       return 'Investimento';
+    }
     return 'Geral';
   }
 
@@ -216,7 +222,7 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
           Container(
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: AppColors.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.notifications_none, size: 80),
@@ -255,12 +261,12 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
               border: Border.all(
                 color: notification.lida
                     ? Colors.transparent
-                    : cor.withOpacity(0.3),
+                    : cor.withValues(alpha: 0.3),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -276,7 +282,7 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
                   height: 44,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [cor.withOpacity(0.7), cor],
+                      colors: [cor.withValues(alpha: 0.7), cor],
                     ),
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -296,7 +302,7 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: cor.withOpacity(0.1),
+                              color: cor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -318,7 +324,7 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
                             Container(
                               width: 8,
                               height: 8,
-                              decoration: BoxDecoration(
+                              decoration: const BoxDecoration(
                                 color: AppColors.primary,
                                 shape: BoxShape.circle,
                               ),

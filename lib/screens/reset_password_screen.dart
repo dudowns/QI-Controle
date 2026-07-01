@@ -151,8 +151,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           decoration: InputDecoration(
             labelText: 'Nova Senha',
             hintText: '••••••••',
-            labelStyle: TextStyle(color: AppColors.primary),
-            prefixIcon: Icon(Icons.lock_outline, color: AppColors.primary),
+            labelStyle: const TextStyle(color: AppColors.primary),
+            prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
             suffixIcon: IconButton(
               icon: Icon(
                   _mostrarSenha ? Icons.visibility : Icons.visibility_off,
@@ -166,7 +166,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: AppColors.primary, width: 2),
+              borderSide: const BorderSide(color: AppColors.primary, width: 2),
             ),
             filled: true,
             fillColor: Colors.grey[50],
@@ -179,8 +179,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           decoration: InputDecoration(
             labelText: 'Confirmar Senha',
             hintText: '••••••••',
-            labelStyle: TextStyle(color: AppColors.primary),
-            prefixIcon: Icon(Icons.lock_outline, color: AppColors.primary),
+            labelStyle: const TextStyle(color: AppColors.primary),
+            prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
             suffixIcon: IconButton(
               icon: Icon(
                   _mostrarConfirmar ? Icons.visibility : Icons.visibility_off,
@@ -195,7 +195,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: AppColors.primary, width: 2),
+              borderSide: const BorderSide(color: AppColors.primary, width: 2),
             ),
             filled: true,
             fillColor: Colors.grey[50],

@@ -53,8 +53,9 @@ class _FiltroAvancadoState extends State<FiltroAvancado> {
     if (_dataInicio != null) filtros['data_inicio'] = _dataInicio;
     if (_dataFim != null) filtros['data_fim'] = _dataFim;
     if (_tipo != null && _tipo != 'Todos') filtros['tipo'] = _tipo;
-    if (_categoria != null && _categoria != 'Todos')
+    if (_categoria != null && _categoria != 'Todos') {
       filtros['categoria'] = _categoria;
+    }
     if (_valorMin != null) filtros['valor_min'] = _valorMin;
     if (_valorMax != null) filtros['valor_max'] = _valorMax;
     widget.onAplicar(filtros);

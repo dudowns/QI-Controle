@@ -1,5 +1,6 @@
 // lib/widgets/adicionar_deposito_modal.dart
 import 'package:flutter/material.dart';
+import 'package:animate_do/animate_do.dart';
 import '../database/db_helper.dart';
 import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
@@ -32,16 +33,21 @@ class AdicionarDepositoModal extends StatefulWidget {
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (context) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        child: AdicionarDepositoModal(
-          metaId: metaId,
-          valorAtual: valorAtual,
-          valorObjetivo: valorObjetivo,
-          onDepositoAdicionado: onDepositoAdicionado,
+      builder: (context) => FadeInDown(
+        duration: const Duration(milliseconds: 400),
+        child: Dialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: AdicionarDepositoModal(
+            metaId: metaId,
+            valorAtual: valorAtual,
+            valorObjetivo: valorObjetivo,
+            onDepositoAdicionado: onDepositoAdicionado,
+          ),
         ),
       ),
     );

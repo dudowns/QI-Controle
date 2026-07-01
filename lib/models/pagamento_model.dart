@@ -1,12 +1,11 @@
 // lib/models/pagamento_model.dart
-
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'conta_model.dart';
 
 class PagamentoMes {
-  String? id; // 🔥 Alterado de int? para String? (UUID do Supabase)
-  String contaId; // 🔥 Alterado de int para String (UUID da Conta pai)
+  String? id;
+  String contaId;
   String contaNome;
   int anoMes;
   double valor;
@@ -26,7 +25,6 @@ class PagamentoMes {
   });
 
   factory PagamentoMes.fromJson(Map<String, dynamic> json) {
-    // 🔥 Lógica para converter o status (aceita índice int ou nome String)
     StatusPagamento parseStatus(dynamic statusJson) {
       if (statusJson is int) return StatusPagamento.values[statusJson];
       if (statusJson is String) {
@@ -40,12 +38,12 @@ class PagamentoMes {
 
     return PagamentoMes(
       id: json['id']?.toString(),
-      contaId: json['conta_id']?.toString() ?? '',
-      contaNome: json['conta_nome']?.toString() ?? 'Conta Removida',
+      contaId: (json['conta_id'] as String?) ?? '',
+      contaNome: (json['conta_nome'] as String?) ?? 'Conta Removida',
       anoMes: (json['ano_mes'] as num?)?.toInt() ?? 0,
       valor: (json['valor'] as num?)?.toDouble() ?? 0.0,
       dataPagamento: json['data_pagamento'] != null
-          ? DateTime.parse(json['data_pagamento'] as String)
+          ? DateTime.tryParse(json['data_pagamento'].toString())
           : null,
       status: parseStatus(json['status']),
       diaVencimento: (json['dia_vencimento'] as num?)?.toInt() ?? 1,
@@ -58,7 +56,6 @@ class PagamentoMes {
       'ano_mes': anoMes,
       'valor': valor,
       'data_pagamento': dataPagamento?.toIso8601String(),
-      // 🔥 Salvamos como String no Supabase para facilitar a leitura no dashboard
       'status': status.name,
       'dia_vencimento': diaVencimento,
     };
@@ -94,10 +91,8 @@ class PagamentoMes {
     final ano = anoMes ~/ 100;
     final mes = anoMes % 100;
 
-    // Vencimento no último momento do dia
     final dataVencimento = DateTime(ano, mes, diaVencimento, 23, 59, 59);
 
     return dataVencimento.isBefore(hoje);
   }
 }
-

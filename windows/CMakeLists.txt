@@ -1,10 +1,14 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
-project(controle_financeiro_app LANGUAGES CXX)
+
+# FORÇAR O VISUAL STUDIO 2026
+set(CMAKE_GENERATOR "Visual Studio 18 2026" CACHE INTERNAL "" FORCE)
+
+project(deepseek LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "controle_financeiro_app")
+set(BINARY_NAME "deepseek")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.

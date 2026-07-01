@@ -1,6 +1,6 @@
 // lib/screens/login_screen.dart
-import 'dart:io';
 import 'package:flutter/material.dart';
+import 'dart:io' if (dart.library.html) 'dart:html' as html; // 🔥 LINHA MÁGICA
 import 'package:animate_do/animate_do.dart';
 import '../services/auth_service.dart';
 import '../services/sync_service.dart';
@@ -75,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
-    final bool isWindows = Platform.isWindows;
+    final bool isWindows = identical(0, 0.0) ? false : false;
 
     return Scaffold(
       body: Container(
@@ -133,8 +133,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: InputDecoration(
                             labelText: 'E-mail ou Username',
                             hintText: 'seu@email.com ou username',
-                            labelStyle: TextStyle(color: AppColors.primary),
-                            prefixIcon: Icon(Icons.person_outline,
+                            labelStyle:
+                                const TextStyle(color: AppColors.primary),
+                            prefixIcon: const Icon(Icons.person_outline,
                                 color: AppColors.primary),
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(16)),
@@ -144,7 +145,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide(
+                              borderSide: const BorderSide(
                                   color: AppColors.primary, width: 2),
                             ),
                             filled: true,
@@ -158,8 +159,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: InputDecoration(
                             labelText: 'Senha',
                             hintText: '••••••••',
-                            labelStyle: TextStyle(color: AppColors.primary),
-                            prefixIcon: Icon(Icons.lock_outline,
+                            labelStyle:
+                                const TextStyle(color: AppColors.primary),
+                            prefixIcon: const Icon(Icons.lock_outline,
                                 color: AppColors.primary),
                             suffixIcon: IconButton(
                               icon: Icon(
@@ -178,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide(
+                              borderSide: const BorderSide(
                                   color: AppColors.primary, width: 2),
                             ),
                             filled: true,
@@ -191,7 +193,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: TextButton(
                             onPressed: () => Navigator.pushNamed(
                                 context, '/forgot-password'),
-                            child: Text('Esqueceu a senha?',
+                            child: const Text('Esqueceu a senha?',
                                 style: TextStyle(
                                     fontSize: 12, color: AppColors.primary)),
                           ),
@@ -280,7 +282,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: TextButton.styleFrom(
                                   padding: EdgeInsets.zero,
                                   minimumSize: Size.zero),
-                              child: Text('CADASTRE-SE',
+                              child: const Text('CADASTRE-SE',
                                   style: TextStyle(
                                       color: AppColors.primary,
                                       fontWeight: FontWeight.bold,

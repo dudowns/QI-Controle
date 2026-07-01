@@ -1,5 +1,6 @@
 // lib/widgets/adicionar_investimento_modal.dart
 import 'package:flutter/material.dart';
+import 'package:animate_do/animate_do.dart';
 import '../models/investimento_model.dart';
 import '../constants/app_colors.dart';
 import '../utils/formatters.dart';
@@ -25,216 +26,210 @@ class AdicionarInvestimentoModal {
     final List<String> tipos = ['ACAO', 'FII', 'ETF', 'BDR', 'CRIPTO'];
     String? tipoSelecionado = investimento?.tipo ?? 'ACAO';
 
-    // 🔥 Tipo de transação (COMPRA/VENDA)
+    // Tipo de transação (COMPRA/VENDA)
     String tipoTransacao = 'COMPRA';
 
-    // 🔥 Data da transação
+    // Data da transação
     DateTime dataTransacao = DateTime.now();
 
     await showDialog(
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          return Dialog(
-            insetPadding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            elevation: 0,
-            backgroundColor: Colors.transparent,
-            child: Container(
-              width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 550),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildHeader(
-                      isEditing ? 'Editar Investimento' : 'Novo Investimento',
-                      context),
-                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
-                      child: Form(
-                        key: formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Ticker
-                            _buildTextField(tickerController, 'Ticker',
-                                hint: 'Ex: PETR4, VISC11'),
-                            const SizedBox(height: 16),
-
-                            // Tipo do Investimento
-                            _buildTipoSelector(
-                                tipos,
-                                tipoSelecionado,
-                                (value) =>
-                                    setState(() => tipoSelecionado = value)),
-                            const SizedBox(height: 16),
-
-                            // Tipo de Transação (COMPRA/VENDA) - APENAS PARA NOVO INVESTIMENTO
-                            if (!isEditing) ...[
-                              const Text(
-                                'Tipo de Transação',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: Color(0xFF333333),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[100],
-                                  borderRadius: BorderRadius.circular(30),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: _buildTipoTransacaoButton(
-                                        label: '📈 COMPRA',
-                                        value: 'COMPRA',
-                                        selected: tipoTransacao == 'COMPRA',
-                                        onTap: () => setState(
-                                            () => tipoTransacao = 'COMPRA'),
-                                        color: Colors.green,
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: _buildTipoTransacaoButton(
-                                        label: '📉 VENDA',
-                                        value: 'VENDA',
-                                        selected: tipoTransacao == 'VENDA',
-                                        onTap: () => setState(
-                                            () => tipoTransacao = 'VENDA'),
-                                        color: Colors.red,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+      builder: (context) => FadeInDown(
+        duration: const Duration(milliseconds: 400),
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              child: Container(
+                width: MediaQuery.of(context).size.width - 40,
+                constraints:
+                    const BoxConstraints(maxWidth: 500, maxHeight: 550),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildHeader(
+                        isEditing ? 'Editar Investimento' : 'Novo Investimento',
+                        context),
+                    const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Form(
+                          key: formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildTextField(tickerController, 'Ticker',
+                                  hint: 'Ex: PETR4, VISC11'),
                               const SizedBox(height: 16),
-                            ],
-
-                            // Quantidade
-                            _buildTextField(quantidadeController, 'Quantidade',
-                                isNumber: true),
-                            const SizedBox(height: 16),
-
-                            // Preço Médio
-                            _buildTextField(precoMedioController, 'Preço Médio',
-                                isNumber: true, prefix: 'R\$ '),
-
-                            // Data da Transação (apenas para novo investimento)
-                            if (!isEditing) ...[
+                              _buildTipoSelector(
+                                  tipos,
+                                  tipoSelecionado,
+                                  (value) =>
+                                      setState(() => tipoSelecionado = value)),
                               const SizedBox(height: 16),
-                              const Text(
-                                'Data da Transação',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: Color(0xFF333333),
+                              if (!isEditing) ...[
+                                const Text(
+                                  'Tipo de Transação',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF333333),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              InkWell(
-                                onTap: () async {
-                                  final date = await showDatePicker(
-                                    context: context,
-                                    initialDate: dataTransacao,
-                                    firstDate: DateTime(2020),
-                                    lastDate: DateTime.now(),
-                                    locale: const Locale('pt', 'BR'),
-                                  );
-                                  if (date != null) {
-                                    setState(() => dataTransacao = date);
-                                  }
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 14),
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.all(4),
                                   decoration: BoxDecoration(
-                                    border:
-                                        Border.all(color: Colors.grey[300]!),
-                                    borderRadius: BorderRadius.circular(10),
+                                    color: Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(30),
                                   ),
                                   child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Row(
-                                        children: [
-                                          Icon(Icons.calendar_today,
-                                              size: 18,
-                                              color: Colors.grey[500]),
-                                          const SizedBox(width: 12),
-                                          const Text(
-                                            'Data',
-                                            style: TextStyle(
-                                                color: Color(0xFF666666)),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            Formatador.data(dataTransacao),
-                                            style:
-                                                const TextStyle(fontSize: 14),
-                                          ),
-                                        ],
+                                      Expanded(
+                                        child: _buildTipoTransacaoButton(
+                                          label: '📈 COMPRA',
+                                          value: 'COMPRA',
+                                          selected: tipoTransacao == 'COMPRA',
+                                          onTap: () => setState(
+                                              () => tipoTransacao = 'COMPRA'),
+                                          color: Colors.green,
+                                        ),
                                       ),
-                                      Icon(Icons.arrow_drop_down,
-                                          size: 20, color: Colors.grey[500]),
+                                      Expanded(
+                                        child: _buildTipoTransacaoButton(
+                                          label: '📉 VENDA',
+                                          value: 'VENDA',
+                                          selected: tipoTransacao == 'VENDA',
+                                          onTap: () => setState(
+                                              () => tipoTransacao = 'VENDA'),
+                                          color: Colors.red,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
-                              ),
+                                const SizedBox(height: 16),
+                              ],
+                              _buildTextField(
+                                  quantidadeController, 'Quantidade',
+                                  isNumber: true),
+                              const SizedBox(height: 16),
+                              _buildTextField(
+                                  precoMedioController, 'Preço Médio',
+                                  isNumber: true, prefix: 'R\$ '),
+                              if (!isEditing) ...[
+                                const SizedBox(height: 16),
+                                const Text(
+                                  'Data da Transação',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF333333),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                InkWell(
+                                  onTap: () async {
+                                    final date = await showDatePicker(
+                                      context: context,
+                                      initialDate: dataTransacao,
+                                      firstDate: DateTime(2020),
+                                      lastDate: DateTime.now(),
+                                      locale: const Locale('pt', 'BR'),
+                                    );
+                                    if (date != null) {
+                                      setState(() => dataTransacao = date);
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 14),
+                                    decoration: BoxDecoration(
+                                      border:
+                                          Border.all(color: Colors.grey[300]!),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(Icons.calendar_today,
+                                                size: 18,
+                                                color: Colors.grey[500]),
+                                            const SizedBox(width: 12),
+                                            const Text(
+                                              'Data',
+                                              style: TextStyle(
+                                                  color: Color(0xFF666666)),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              Formatador.data(dataTransacao),
+                                              style:
+                                                  const TextStyle(fontSize: 14),
+                                            ),
+                                          ],
+                                        ),
+                                        Icon(Icons.arrow_drop_down,
+                                            size: 20, color: Colors.grey[500]),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 24),
+                              _buildButtons(context, formKey, isEditing, () {
+                                if (formKey.currentState!.validate()) {
+                                  final novoInvestimento = Investimento(
+                                    id: investimento?.id,
+                                    ticker: tickerController.text.toUpperCase(),
+                                    tipo: tipoSelecionado!,
+                                    quantidade: double.parse(
+                                        quantidadeController.text
+                                            .replaceAll(',', '.')),
+                                    precoMedio: double.parse(
+                                        precoMedioController.text
+                                            .replaceAll(',', '.')),
+                                    precoAtual: null,
+                                    corretora: null,
+                                  );
+                                  Navigator.pop(context);
+                                  onSave(novoInvestimento, tipoTransacao,
+                                      dataTransacao);
+                                }
+                              }),
                             ],
-
-                            const SizedBox(height: 24),
-                            _buildButtons(context, formKey, isEditing, () {
-                              if (formKey.currentState!.validate()) {
-                                final novoInvestimento = Investimento(
-                                  id: investimento?.id,
-                                  ticker: tickerController.text.toUpperCase(),
-                                  tipo: tipoSelecionado!,
-                                  quantidade: double.parse(quantidadeController
-                                      .text
-                                      .replaceAll(',', '.')),
-                                  precoMedio: double.parse(precoMedioController
-                                      .text
-                                      .replaceAll(',', '.')),
-                                  precoAtual: null, // 🔥 REMOVIDO
-                                  corretora: null, // 🔥 REMOVIDO
-                                );
-                                Navigator.pop(context);
-                                onSave(novoInvestimento, tipoTransacao,
-                                    dataTransacao);
-                              }
-                            }),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

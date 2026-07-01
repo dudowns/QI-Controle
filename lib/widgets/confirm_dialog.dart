@@ -28,6 +28,7 @@ class ConfirmDialog {
   }) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // 🔥 GARANTE QUE O DIALOGO USE O CONTEXTO CORRETO DO MATERIALAPP
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(

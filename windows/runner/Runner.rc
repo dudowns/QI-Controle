@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "controle_financeiro_app" "\0"
+            VALUE "FileDescription", "deepseek" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "controle_financeiro_app" "\0"
+            VALUE "InternalName", "deepseek" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "controle_financeiro_app.exe" "\0"
-            VALUE "ProductName", "controle_financeiro_app" "\0"
+            VALUE "OriginalFilename", "deepseek.exe" "\0"
+            VALUE "ProductName", "deepseek" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

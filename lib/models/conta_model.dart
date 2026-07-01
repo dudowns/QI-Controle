@@ -1,16 +1,9 @@
 // lib/models/conta_model.dart
 import 'package:flutter/material.dart';
 
-enum TipoConta {
-  mensal,
-  parcelada,
-}
+enum TipoConta { mensal, parcelada }
 
-enum StatusPagamento {
-  pendente,
-  pago,
-  atrasado,
-}
+enum StatusPagamento { pendente, pago, atrasado }
 
 extension StatusPagamentoExtension on StatusPagamento {
   String get nome {
@@ -67,19 +60,22 @@ class Conta {
   factory Conta.fromJson(Map<String, dynamic> json) {
     return Conta(
       id: json['id']?.toString(),
-      nome: json['nome'] as String,
-      valor: (json['valor'] as num).toDouble(),
-      diaVencimento: (json['dia_vencimento'] as num).toInt(),
-      tipo: json['tipo'] == 'mensal' ? TipoConta.mensal : TipoConta.parcelada,
+      nome: (json['nome'] as String?) ?? '',
+      valor: (json['valor'] as num?)?.toDouble() ?? 0.0,
+      diaVencimento: (json['dia_vencimento'] as num?)?.toInt() ?? 1,
+      tipo: (json['tipo'] as String?) == 'mensal'
+          ? TipoConta.mensal
+          : TipoConta.parcelada,
       categoria: json['categoria'] as String?,
       ativa: json['ativa'] is bool ? json['ativa'] : (json['ativa'] == 1),
       parcelasTotal: json['parcelas_total'] as int?,
       parcelasPagas: json['parcelas_pagas'] as int?,
       dataInicio: json['data_inicio'] != null
-          ? DateTime.parse(json['data_inicio'])
+          ? DateTime.tryParse(json['data_inicio'].toString())
           : null,
-      dataFim:
-          json['data_fim'] != null ? DateTime.parse(json['data_fim']) : null,
+      dataFim: json['data_fim'] != null
+          ? DateTime.tryParse(json['data_fim'].toString())
+          : null,
     );
   }
 
@@ -112,4 +108,3 @@ class Conta {
     return '${parcelasPagas ?? 0}/${parcelasTotal ?? 0}';
   }
 }
-

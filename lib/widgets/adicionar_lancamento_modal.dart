@@ -1,6 +1,7 @@
 // lib/widgets/adicionar_lancamento_modal.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:animate_do/animate_do.dart';
 import '../database/db_helper.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_categories.dart';
@@ -23,13 +24,16 @@ class AdicionarLancamentoModal extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        decoration: BoxDecoration(
-          color: AppColors.surface(context),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      builder: (context) => FadeInUp(
+        duration: const Duration(milliseconds: 400),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: AppColors.surface(context),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: AdicionarLancamentoModal(onSalvo: onSalvo),
         ),
-        child: AdicionarLancamentoModal(onSalvo: onSalvo),
       ),
     );
   }

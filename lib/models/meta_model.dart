@@ -1,15 +1,7 @@
 // lib/models/meta_model.dart
-
 import 'package:flutter/material.dart';
 
-enum TipoMeta {
-  viagem,
-  carro,
-  casa,
-  estudo,
-  investimento,
-  geral,
-}
+enum TipoMeta { viagem, carro, casa, estudo, investimento, geral }
 
 extension TipoMetaExtension on TipoMeta {
   String get nome {
@@ -116,10 +108,11 @@ class DepositoMeta {
   factory DepositoMeta.fromJson(Map<String, dynamic> json) {
     return DepositoMeta(
       id: json['id']?.toString(),
-      metaId: json['meta_id']?.toString() ?? '',
+      metaId: (json['meta_id'] as String?) ?? '',
       valor: (json['valor'] as num?)?.toDouble() ?? 0.0,
       dataDeposito: json['data_deposito'] != null
-          ? DateTime.parse(json['data_deposito'] as String)
+          ? DateTime.tryParse(json['data_deposito'].toString()) ??
+                DateTime.now()
           : DateTime.now(),
       observacao: json['observacao']?.toString(),
     );
@@ -148,7 +141,7 @@ class Meta {
   final TipoMeta tipo;
   final bool concluida;
   final List<DepositoMeta>? depositos;
-  final String? iconePersonalizado; // 🆕 NOVO CAMPO
+  final String? iconePersonalizado;
 
   Meta({
     this.id,
@@ -161,7 +154,7 @@ class Meta {
     required this.tipo,
     this.concluida = false,
     this.depositos,
-    this.iconePersonalizado, // 🆕 NOVO CAMPO
+    this.iconePersonalizado,
   });
 
   double get progresso =>
@@ -179,15 +172,15 @@ class Meta {
   factory Meta.fromJson(Map<String, dynamic> json) {
     return Meta(
       id: json['id']?.toString(),
-      titulo: json['titulo']?.toString() ?? '',
+      titulo: (json['titulo'] as String?) ?? '',
       descricao: json['descricao']?.toString(),
       valorObjetivo: (json['valor_objetivo'] as num?)?.toDouble() ?? 0.0,
       valorAtual: (json['valor_atual'] as num?)?.toDouble() ?? 0.0,
       dataInicio: json['data_inicio'] != null
-          ? DateTime.parse(json['data_inicio'])
+          ? DateTime.tryParse(json['data_inicio'].toString()) ?? DateTime.now()
           : DateTime.now(),
       dataFim: json['data_fim'] != null
-          ? DateTime.parse(json['data_fim'])
+          ? DateTime.tryParse(json['data_fim'].toString()) ?? DateTime.now()
           : DateTime.now(),
       tipo: TipoMetaExtension.fromString(
         json['type']?.toString() ?? json['cor']?.toString(),
@@ -195,7 +188,7 @@ class Meta {
       concluida: json['concluida'] is bool
           ? json['concluida']
           : (json['concluida'] == 1),
-      iconePersonalizado: json['icon']?.toString(), // 🆕 NOVO CAMPO
+      iconePersonalizado: json['icon']?.toString(),
     );
   }
 
@@ -208,9 +201,9 @@ class Meta {
       'data_inicio': dataInicio.toIso8601String(),
       'data_fim': dataFim.toIso8601String(),
       'cor': tipo.nome,
-      'type': tipo.nome, // 🆕 Para compatibilidade com schema
+      'type': tipo.nome,
       'concluida': concluida,
-      'notes': descricao, // 🆕 Mapeia descricao como notes
+      'notes': descricao,
     };
     if (id != null) map['id'] = id;
     if (iconePersonalizado != null) map['icon'] = iconePersonalizado;

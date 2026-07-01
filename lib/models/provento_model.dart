@@ -1,14 +1,8 @@
 // lib/models/provento_model.dart
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-enum TipoProvento {
-  dividendo,
-  jcp,
-  rendaFixa,
-  outros,
-}
+enum TipoProvento { dividendo, jcp, rendaFixa, outros }
 
 extension TipoProventoExtension on TipoProvento {
   String get nome {
@@ -65,7 +59,7 @@ extension TipoProventoExtension on TipoProvento {
 }
 
 class Provento {
-  final String? id; // 🔥 Alterado de int? para String? (UUID)
+  final String? id;
   final String ticker;
   final TipoProvento tipo;
   final double valorPorCota;
@@ -87,7 +81,6 @@ class Provento {
     this.syncAutomatico = false,
   }) : totalRecebido = totalRecebido ?? (valorPorCota * quantidade);
 
-  // Getters
   bool get isFuturo => dataPagamento.isAfter(DateTime.now());
 
   bool get isPassado => dataPagamento.isBefore(DateTime.now());
@@ -99,22 +92,21 @@ class Provento {
 
   factory Provento.fromJson(Map<String, dynamic> json) {
     return Provento(
-      // 🔥 Forçamos String para o ID
       id: json['id']?.toString(),
-      ticker: json['ticker']?.toString() ?? '',
+      ticker: (json['ticker'] as String?) ?? '',
       tipo: TipoProventoExtension.fromString(
-          json['tipo_provento']?.toString() ?? 'Dividendo'),
-      // 🔥 Conversão robusta de num para double
+        (json['tipo_provento'] as String?) ?? 'Dividendo',
+      ),
       valorPorCota: (json['valor_por_cota'] as num?)?.toDouble() ?? 0.0,
       quantidade: (json['quantidade'] as num?)?.toDouble() ?? 1.0,
       dataPagamento: json['data_pagamento'] != null
-          ? DateTime.parse(json['data_pagamento'] as String)
+          ? DateTime.tryParse(json['data_pagamento'].toString()) ??
+                DateTime.now()
           : DateTime.now(),
       dataCom: json['data_com'] != null
-          ? DateTime.parse(json['data_com'] as String)
+          ? DateTime.tryParse(json['data_com'].toString())
           : null,
       totalRecebido: (json['total_recebido'] as num?)?.toDouble(),
-      // 🔥 No Supabase booleano é bool nativo
       syncAutomatico: json['sync_automatico'] is bool
           ? json['sync_automatico']
           : (json['sync_automatico'] == 1),
@@ -138,7 +130,7 @@ class Provento {
   }
 
   Provento copyWith({
-    String? id, // 🔥 Alterado para String?
+    String? id,
     String? ticker,
     TipoProvento? tipo,
     double? valorPorCota,
@@ -161,4 +153,3 @@ class Provento {
     );
   }
 }
-
