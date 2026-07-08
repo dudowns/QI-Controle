@@ -1,7 +1,7 @@
+// lib/services/export_service.dart
 import '../services/logger_service.dart';
 import 'dart:io';
 import 'dart:convert';
-import 'package:csv/csv.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -45,9 +45,34 @@ class ExportService {
     }
   }
 
-  String _formatNumber(double? value) {
+  String _formatNumber(dynamic value) {
     if (value == null) return '0,00';
-    return value.toStringAsFixed(2).replaceAll('.', ',');
+    final doubleValue = value is double ? value : value.toDouble();
+    return doubleValue.toStringAsFixed(2).replaceAll('.', ',');
+  }
+
+  // ========== CONVERSOR CSV MANUAL ==========
+
+  String _toCsv(List<List<String>> rows, {String delimiter = ';'}) {
+    if (rows.isEmpty) return '';
+
+    final buffer = StringBuffer();
+    for (int i = 0; i < rows.length; i++) {
+      final row = rows[i];
+      for (int j = 0; j < row.length; j++) {
+        String cell = row[j];
+        // Escapar células que contenham delimitador ou aspas
+        if (cell.contains(delimiter) ||
+            cell.contains('"') ||
+            cell.contains('\n')) {
+          cell = '"${cell.replaceAll('"', '""')}"';
+        }
+        buffer.write(cell);
+        if (j < row.length - 1) buffer.write(delimiter);
+      }
+      if (i < rows.length - 1) buffer.write('\n');
+    }
+    return buffer.toString();
   }
 
   // ========== EXPORTAÇÃO PARA CSV ==========
@@ -141,7 +166,9 @@ class ExportService {
         ''
       ]);
 
-      String csv = const ListToCsvConverter().convert(rows);
+      // ✅ USANDO NOSSO CONVERSOR MANUAL
+      String csv = _toCsv(rows, delimiter: ';');
+
       final fileName =
           'lancamentos_${_fileDateFormat.format(DateTime.now())}.csv';
       final path = await _getExportPath(fileName);
@@ -155,8 +182,10 @@ class ExportService {
         PerformanceService.stop('export_lancamentos_csv');
 
         if (share) {
-          await Share.shareXFiles([XFile(path)],
-              text: '📊 Exportação de Lançamentos - Controle Financeiro');
+          await Share.shareXFiles(
+            [XFile(path)],
+            text: '📊 Exportação de Lançamentos - Controle Financeiro',
+          );
         }
 
         return file;
@@ -239,7 +268,7 @@ class ExportService {
         ''
       ]);
 
-      String csv = const ListToCsvConverter().convert(rows);
+      String csv = _toCsv(rows, delimiter: ';');
       final fileName =
           'investimentos_${_fileDateFormat.format(DateTime.now())}.csv';
       final path = await _getExportPath(fileName);
@@ -253,8 +282,10 @@ class ExportService {
         PerformanceService.stop('export_investimentos_csv');
 
         if (share) {
-          await Share.shareXFiles([XFile(path)],
-              text: '📈 Exportação de Investimentos - Controle Financeiro');
+          await Share.shareXFiles(
+            [XFile(path)],
+            text: '📈 Exportação de Investimentos - Controle Financeiro',
+          );
         }
 
         return file;
@@ -308,7 +339,7 @@ class ExportService {
         ]);
       }
 
-      String csv = const ListToCsvConverter().convert(rows);
+      String csv = _toCsv(rows, delimiter: ';');
       final fileName = 'metas_${_fileDateFormat.format(DateTime.now())}.csv';
       final path = await _getExportPath(fileName);
 
@@ -320,8 +351,10 @@ class ExportService {
         PerformanceService.stop('export_metas_csv');
 
         if (share) {
-          await Share.shareXFiles([XFile(path)],
-              text: '🎯 Exportação de Metas - Controle Financeiro');
+          await Share.shareXFiles(
+            [XFile(path)],
+            text: '🎯 Exportação de Metas - Controle Financeiro',
+          );
         }
 
         return file;
@@ -394,7 +427,7 @@ class ExportService {
         ''
       ]);
 
-      String csv = const ListToCsvConverter().convert(rows);
+      String csv = _toCsv(rows, delimiter: ';');
       final fileName =
           'proventos_${_fileDateFormat.format(DateTime.now())}.csv';
       final path = await _getExportPath(fileName);
@@ -408,8 +441,10 @@ class ExportService {
         PerformanceService.stop('export_proventos_csv');
 
         if (share) {
-          await Share.shareXFiles([XFile(path)],
-              text: '💰 Exportação de Proventos - Controle Financeiro');
+          await Share.shareXFiles(
+            [XFile(path)],
+            text: '💰 Exportação de Proventos - Controle Financeiro',
+          );
         }
 
         return file;
@@ -467,8 +502,10 @@ class ExportService {
         PerformanceService.stop('export_all_json');
 
         if (share) {
-          await Share.shareXFiles([XFile(path)],
-              text: '📦 Backup Completo - Controle Financeiro');
+          await Share.shareXFiles(
+            [XFile(path)],
+            text: '📦 Backup Completo - Controle Financeiro',
+          );
         }
 
         return file;
@@ -524,8 +561,10 @@ class ExportService {
 
     if (files.isNotEmpty) {
       final xFiles = files.map((f) => XFile(f.path)).toList();
-      await Share.shareXFiles(xFiles,
-          text: '📦 Exportação Completa - Controle Financeiro');
+      await Share.shareXFiles(
+        xFiles,
+        text: '📦 Exportação Completa - Controle Financeiro',
+      );
     }
   }
 
@@ -632,7 +671,7 @@ class ExportService {
         ''
       ]);
 
-      String csv = const ListToCsvConverter().convert(rows);
+      String csv = _toCsv(rows, delimiter: ';');
       final fileName =
           'lancamentos_periodo_${_fileDateFormat.format(DateTime.now())}.csv';
       final path = await _getExportPath(fileName);
@@ -646,9 +685,11 @@ class ExportService {
         PerformanceService.stop('export_lancamentos_periodo');
 
         if (share) {
-          await Share.shareXFiles([XFile(path)],
-              text:
-                  '📊 Exportação de Lançamentos por Período - Controle Financeiro');
+          await Share.shareXFiles(
+            [XFile(path)],
+            text:
+                '📊 Exportação de Lançamentos por Período - Controle Financeiro',
+          );
         }
 
         return file;
@@ -696,4 +737,3 @@ class ExportService {
     }
   }
 }
-

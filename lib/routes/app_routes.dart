@@ -1,4 +1,5 @@
 // lib/constants/app_routes.dart
+
 class AppRoutes {
   static const String home = '/';
   static const String splash = '/splash';
@@ -21,4 +22,5 @@ class AppRoutes {
   static const String notificacoes = '/notificacoes';
   static const String configuracoes = '/configuracoes';
   static const String perfil = '/perfil';
+  static const String debugSync = '/debug-sync';
 }

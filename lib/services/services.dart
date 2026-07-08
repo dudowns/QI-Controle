@@ -1,10 +1,10 @@
-// lib/services/services.dart
-
 export 'auth_service.dart';
 export 'backup_service_plus.dart';
 export 'dashboard_service.dart';
 export 'error_handler.dart';
 export 'export_service.dart';
+export 'insight_service.dart';
+export 'investment_insight_service.dart' hide InsightType;
 export 'loading_service.dart';
 export 'logger_service.dart';
 export 'logo_service.dart';
@@ -16,6 +16,7 @@ export 'renda_fixa_diaria.dart';
 export 'supabase_database_service.dart';
 export 'supabase_queries.dart';
 export 'sync_manager.dart';
+export 'sync_service_improved.dart';
 export 'sync_service.dart';
 export 'theme_service.dart';
 export 'yahoo_finance_service.dart';

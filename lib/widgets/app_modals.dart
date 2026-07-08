@@ -10,9 +10,23 @@ import '../widgets/toast.dart';
 class AppModals {
   // ========== CORES PADRÃO ==========
   static const Color _primaryColor = AppColors.primary;
-  static const Color _secondaryColor = AppColors.secondary;
   static const Color _errorColor = AppColors.error;
   static const Color _successColor = AppColors.success;
+
+  // ✅ CATEGORIAS PADRONIZADAS (mesmas do ContaRepository)
+  static const List<String> categoriasConta = [
+    'Alimentação',
+    'Cartão de Crédito',
+    'Cuidados Pessoais',
+    'Educação',
+    'Empréstimo',
+    'Investimentos',
+    'Lazer',
+    'Moradia',
+    'Saúde',
+    'Transporte',
+    'Outros'
+  ];
 
   // ========== 1. MODAL DE LANÇAMENTO ==========
   static Future<Map<String, dynamic>?> mostrarModalLancamento({
@@ -48,16 +62,15 @@ class AppModals {
             insetPadding:
                 const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             elevation: 0,
             backgroundColor: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(
-                  maxWidth: 500, maxHeight: 550), // 🔥 Altura reduzida
+              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 550),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.15),
@@ -76,8 +89,7 @@ class AppModals {
                   const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(
-                          16), // 🔥 Padding reduzido de 20 para 16
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -208,21 +220,20 @@ class AppModals {
             insetPadding:
                 const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             elevation: 0,
             backgroundColor: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(
-                  maxWidth: 500, maxHeight: 550), // 🔥 Altura reduzida
+              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 550),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
                       color: Colors.black.withValues(alpha: 0.15),
                       blurRadius: 20,
-                      offset: const Offset(0, 8)),
+                      offset: const Offset(0, 8))
                 ],
               ),
               child: Column(
@@ -235,7 +246,7 @@ class AppModals {
                   const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16), // 🔥 Padding reduzido
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -349,7 +360,6 @@ class AppModals {
       'Rendimento',
       'Amortização'
     ];
-
     bool temDataCom = dataCom != null;
 
     return showDialog<Map<String, dynamic>>(
@@ -362,21 +372,20 @@ class AppModals {
             insetPadding:
                 const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             elevation: 0,
             backgroundColor: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(
-                  maxWidth: 500, maxHeight: 550), // 🔥 Altura reduzida
+              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 550),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
                       color: Colors.black.withValues(alpha: 0.15),
                       blurRadius: 20,
-                      offset: const Offset(0, 8)),
+                      offset: const Offset(0, 8))
                 ],
               ),
               child: Column(
@@ -388,7 +397,7 @@ class AppModals {
                   const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16), // 🔥 Padding reduzido
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -483,7 +492,7 @@ class AppModals {
     );
   }
 
-  // ========== 4. MODAL DE CONTA DO MÊS (Compacto) ==========
+  // ========== 4. MODAL DE CONTA DO MÊS (CORRIGIDO) ==========
   static Future<Map<String, dynamic>?> mostrarModalConta({
     required BuildContext context,
     Map<String, dynamic>? conta,
@@ -511,22 +520,6 @@ class AppModals {
 
     final List<int> dias = List.generate(31, (i) => i + 1);
     final List<String> tipos = ['mensal', 'parcelada'];
-    final List<String> categorias = [
-      'Água',
-      'Luz',
-      'Internet',
-      'Telefone',
-      'Aluguel',
-      'Transporte',
-      'Alimentação',
-      'Lazer',
-      'Saúde',
-      'Educação',
-      'Cartão de Crédito',
-      'Empréstimo', // 🔥 Adicionado aqui com acento (ou sem acento, como preferir)
-      'Financiamento',
-      'Outros'
-    ];
 
     return showDialog<Map<String, dynamic>>(
       context: context,
@@ -538,21 +531,20 @@ class AppModals {
             insetPadding:
                 const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             elevation: 0,
             backgroundColor: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(
-                  maxWidth: 500, maxHeight: 550), // 🔥 Altura reduzida
+              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 550),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
                       color: Colors.black.withValues(alpha: 0.15),
                       blurRadius: 20,
-                      offset: const Offset(0, 8)),
+                      offset: const Offset(0, 8))
                 ],
               ),
               child: Column(
@@ -564,7 +556,7 @@ class AppModals {
                   const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16), // 🔥 Padding reduzido
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -582,10 +574,11 @@ class AppModals {
                               (value) => setState(() => tipo = value),
                               isDark: isDark),
                           const SizedBox(height: 10),
+                          // ✅ CATEGORIAS PADRONIZADAS
                           _buildDropdownString(
                               'Categoria',
                               categoria,
-                              categorias,
+                              categoriasConta,
                               (value) => setState(() => categoria = value),
                               isDark: isDark),
                           const SizedBox(height: 10),
@@ -630,9 +623,25 @@ class AppModals {
                                   }
                                 }
                                 if (isEditing) {
-                                  final idOriginal = conta['id'];
-                                  if (idOriginal != null) {
+                                  // ✅ CORREÇÃO: Envia o ID original e o remote_id
+                                  final idOriginal = conta!['id'];
+                                  final remoteId = conta['remote_id'];
+
+                                  // 🔥 PRIORIDADE: remote_id (Supabase) se existir
+                                  if (remoteId != null &&
+                                      remoteId.toString().isNotEmpty) {
+                                    resultado['id'] = remoteId.toString();
+                                    resultado['remote_id'] =
+                                        remoteId.toString();
+                                  } else if (idOriginal != null) {
                                     resultado['id'] = idOriginal.toString();
+                                    resultado['remote_id'] =
+                                        idOriginal.toString();
+                                  }
+
+                                  // 🔥 Mantém o user_id se existir
+                                  if (conta['user_id'] != null) {
+                                    resultado['user_id'] = conta['user_id'];
                                   }
                                 }
                                 if (onSalvo != null) onSalvo();
@@ -710,21 +719,20 @@ class AppModals {
             insetPadding:
                 const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             elevation: 0,
             backgroundColor: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(
-                  maxWidth: 500, maxHeight: 550), // 🔥 Altura reduzida
+              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 550),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
                       color: Colors.black.withValues(alpha: 0.15),
                       blurRadius: 20,
-                      offset: const Offset(0, 8)),
+                      offset: const Offset(0, 8))
                 ],
               ),
               child: Column(
@@ -735,7 +743,7 @@ class AppModals {
                   const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16), // 🔥 Padding reduzido
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -841,21 +849,20 @@ class AppModals {
             insetPadding:
                 const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             elevation: 0,
             backgroundColor: Colors.transparent,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
-              constraints: const BoxConstraints(
-                  maxWidth: 450, maxHeight: 450), // 🔥 Altura reduzida
+              constraints: const BoxConstraints(maxWidth: 450, maxHeight: 450),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
                       color: Colors.black.withValues(alpha: 0.15),
                       blurRadius: 20,
-                      offset: const Offset(0, 8)),
+                      offset: const Offset(0, 8))
                 ],
               ),
               child: Column(
@@ -865,7 +872,7 @@ class AppModals {
                   const Divider(height: 1, color: Color(0xFFEEEEEE)),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16), // 🔥 Padding reduzido
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1000,15 +1007,15 @@ class AppModals {
         prefixStyle: TextStyle(
             color: isDark ? Colors.grey[400] : const Color(0xFF666666)),
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(
                 color: isDark ? Colors.grey[700]! : const Color(0xFFE0E0E0))),
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(
                 color: isDark ? Colors.grey[700]! : const Color(0xFFE0E0E0))),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: _primaryColor, width: 1.5)),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1027,12 +1034,12 @@ class AppModals {
     return InkWell(
       onTap: () async {
         final picked = await showDatePicker(
-          context: context,
-          initialDate: date,
-          firstDate: firstDate ?? DateTime(2020),
-          lastDate: lastDate ?? DateTime.now().add(const Duration(days: 3650)),
-          locale: const Locale('pt', 'BR'),
-        );
+            context: context,
+            initialDate: date,
+            firstDate: firstDate ?? DateTime(2020),
+            lastDate:
+                lastDate ?? DateTime.now().add(const Duration(days: 3650)),
+            locale: const Locale('pt', 'BR'));
         if (picked != null) onChanged(picked);
       },
       child: Container(
@@ -1040,28 +1047,25 @@ class AppModals {
         decoration: BoxDecoration(
             border: Border.all(
                 color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
-            borderRadius: BorderRadius.circular(10)),
+            borderRadius: BorderRadius.circular(12)),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Icon(Icons.calendar_today,
-                    size: 16,
-                    color: isDark ? Colors.grey[400] : Colors.grey[500]),
-                const SizedBox(width: 12),
-                Text(label,
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                const SizedBox(width: 8),
-                Text(Formatador.data(date),
-                    style: TextStyle(
-                        fontSize: 14,
-                        color:
-                            isDark ? Colors.white : const Color(0xFF333333))),
-              ],
-            ),
+            Row(children: [
+              Icon(Icons.calendar_today,
+                  size: 16,
+                  color: isDark ? Colors.grey[400] : Colors.grey[500]),
+              const SizedBox(width: 12),
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600])),
+              const SizedBox(width: 8),
+              Text(Formatador.data(date),
+                  style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.white : const Color(0xFF333333))),
+            ]),
             Icon(Icons.arrow_drop_down,
                 size: 20, color: isDark ? Colors.grey[400] : Colors.grey[500]),
           ],
@@ -1080,12 +1084,12 @@ class AppModals {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: selected
               ? _primaryColor.withValues(alpha: 0.08)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
               color: selected
                   ? _primaryColor
@@ -1124,9 +1128,9 @@ class AppModals {
       decoration: BoxDecoration(
           border:
               Border.all(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
-          borderRadius: BorderRadius.circular(10)),
+          borderRadius: BorderRadius.circular(12)),
       child: DropdownButton<String>(
-        value: value,
+        value: categorias.contains(value) ? value : categorias.first,
         isExpanded: true,
         underline: const SizedBox(),
         icon: Icon(Icons.arrow_drop_down,
@@ -1138,21 +1142,18 @@ class AppModals {
         items: categorias.map((cat) {
           return DropdownMenuItem(
             value: cat,
-            child: Row(
-              children: [
-                Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                        color: AppCategories.getColor(cat),
-                        shape: BoxShape.circle)),
-                const SizedBox(width: 8),
-                Text(cat,
-                    style: TextStyle(
-                        color:
-                            isDark ? Colors.white : const Color(0xFF333333))),
-              ],
-            ),
+            child: Row(children: [
+              Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                      color: AppCategories.getColor(cat),
+                      shape: BoxShape.circle)),
+              const SizedBox(width: 8),
+              Text(cat,
+                  style: TextStyle(
+                      color: isDark ? Colors.white : const Color(0xFF333333))),
+            ]),
           );
         }).toList(),
         onChanged: (value) => onChanged(value ?? ''),
@@ -1168,7 +1169,7 @@ class AppModals {
       decoration: BoxDecoration(
           border:
               Border.all(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
-          borderRadius: BorderRadius.circular(10)),
+          borderRadius: BorderRadius.circular(12)),
       child: DropdownButton<String>(
         value: value,
         isExpanded: true,
@@ -1179,13 +1180,14 @@ class AppModals {
             fontSize: 14,
             color: isDark ? Colors.white : const Color(0xFF333333)),
         dropdownColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
-        items: tipos.map((tipo) {
-          return DropdownMenuItem(
-              value: tipo,
-              child: Text(TipoInvestimento.getNomeAmigavel(tipo),
-                  style: TextStyle(
-                      color: isDark ? Colors.white : const Color(0xFF333333))));
-        }).toList(),
+        items: tipos
+            .map((tipo) => DropdownMenuItem(
+                value: tipo,
+                child: Text(TipoInvestimento.getNomeAmigavel(tipo),
+                    style: TextStyle(
+                        color:
+                            isDark ? Colors.white : const Color(0xFF333333)))))
+            .toList(),
         onChanged: (value) => onChanged(value ?? 'ACAO'),
       ),
     );
@@ -1208,9 +1210,9 @@ class AppModals {
           decoration: BoxDecoration(
               border: Border.all(
                   color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
-              borderRadius: BorderRadius.circular(10)),
+              borderRadius: BorderRadius.circular(12)),
           child: DropdownButton<String>(
-            value: value,
+            value: items.contains(value) ? value : items.first,
             isExpanded: true,
             underline: const SizedBox(),
             icon: Icon(Icons.arrow_drop_down,
@@ -1252,7 +1254,7 @@ class AppModals {
           decoration: BoxDecoration(
               border: Border.all(
                   color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
-              borderRadius: BorderRadius.circular(10)),
+              borderRadius: BorderRadius.circular(12)),
           child: DropdownButton<int>(
             value: value,
             isExpanded: true,
@@ -1296,7 +1298,7 @@ class AppModals {
           decoration: BoxDecoration(
               border: Border.all(
                   color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
-              borderRadius: BorderRadius.circular(10)),
+              borderRadius: BorderRadius.circular(12)),
           child: DropdownButton<String>(
             value: controller.text.isNotEmpty ? controller.text : null,
             isExpanded: true,
@@ -1396,13 +1398,12 @@ class AppModals {
           child: OutlinedButton(
             onPressed: onCancel,
             style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              side: BorderSide(
-                  color: isDark ? Colors.grey[700]! : Colors.grey[400]!),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              foregroundColor: isDark ? Colors.grey[300] : null,
-            ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: BorderSide(
+                    color: isDark ? Colors.grey[700]! : Colors.grey[400]!),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                foregroundColor: isDark ? Colors.grey[300] : null),
             child: const Text('Cancelar', style: TextStyle(fontSize: 14)),
           ),
         ),
@@ -1411,15 +1412,16 @@ class AppModals {
           child: ElevatedButton(
             onPressed: onConfirm,
             style: ElevatedButton.styleFrom(
-              backgroundColor: _primaryColor,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
-            ),
+                backgroundColor: _primaryColor,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0),
             child: Text(isEditing ? 'Atualizar' : 'Salvar',
-                style:
-                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white)),
           ),
         ),
       ],
@@ -1451,7 +1453,6 @@ class AppModals {
   }
 }
 
-// 🔥 CLASSE AUXILIAR PARA INVESTIMENTO
 class TipoInvestimento {
   static String getNomeAmigavel(String tipo) {
     switch (tipo) {

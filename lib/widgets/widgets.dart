@@ -1,4 +1,5 @@
-﻿export 'adicionar_conta_modal.dart';
+﻿// lib/widgets/widgets.dart
+export 'adicionar_conta_modal.dart';
 export 'adicionar_investimento_modal.dart';
 export 'animated_card.dart';
 export 'animated_counter.dart';
@@ -10,3 +11,6 @@ export 'modern_card.dart';
 export 'notificacao_botao.dart';
 export 'theme_selector.dart';
 export 'toast.dart';
+export 'layout_selector.dart';
+export 'responsive_layout.dart';
+export 'money_field.dart';

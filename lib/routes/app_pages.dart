@@ -1,14 +1,20 @@
 // lib/constants/app_pages.dart
 
 import 'package:flutter/material.dart';
-import '../screens/dashboard.dart';
-import '../screens/lancamentos.dart';
-import '../screens/nova_transacao.dart';
-import '../screens/investimentos.dart';
-import '../screens/metas_screen.dart';
-import '../screens/contas_do_mes_screen.dart';
-import '../screens/backup_screen.dart';
-import '../screens/notificacoes_screen.dart';
+
+// ✅ USANDO O BARREL DE TELAS
+import '../screens/screens.dart';
+
+// ✅ OU IMPORTS DIRETOS (se preferir)
+// import '../screens/shared/dashboard.dart';
+// import '../screens/shared/lancamentos.dart';
+import '../screens/shared/nova_transacao.dart';
+// import '../screens/shared/investimentos.dart';
+// import '../screens/shared/metas_screen.dart';
+// import '../screens/shared/contas_do_mes_screen.dart';
+// import '../screens/shared/backup_screen.dart';
+// import '../screens/shared/notificacoes_screen.dart';
+
 import 'app_routes.dart';
 
 class AppPages {
@@ -22,7 +28,6 @@ class AppPages {
     AppRoutes.contas: (context) => const ContasDoMesScreen(),
     AppRoutes.backup: (context) => const BackupScreen(),
     AppRoutes.notificacoes: (context) => const NotificacoesScreen(),
-    // 🔥 REMOVIDA A LINHA DUPLICADA
   };
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -40,4 +45,3 @@ class AppPages {
     }
   }
 }
-

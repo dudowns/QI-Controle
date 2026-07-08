@@ -1,5 +1,6 @@
 ﻿// lib/repositories/renda_fixa_repository.dart
 import 'package:sqflite/sqflite.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../database/db_helper.dart';
 import '../models/renda_fixa_model.dart';
 import '../services/sync_service.dart';
@@ -9,18 +10,49 @@ import '../services/logger_service.dart';
 class RendaFixaRepository {
   final DBHelper _dbHelper = DBHelper();
   final SyncService _syncService = SyncService();
+  final _supabase = Supabase.instance.client;
 
   static const String tabelaRendaFixa = DBHelper.tabelaRendaFixa;
 
-  /// Acesso direto ao banco para queries complexas
-  Future<Database> getDatabase() async {
-    return await _dbHelper.database;
-  }
+  Future<Database> getDatabase() async => await _dbHelper.database;
 
-  /// Insere um novo investimento
+  // ========== INSERIR (CORRIGIDO) ==========
   Future<int> insert(RendaFixaModel investimento) async {
+    final user = _supabase.auth.currentUser;
     final json = investimento.toJson();
-    json['sync_status'] = 'pending';
+
+    String? remoteId;
+    if (user != null) {
+      try {
+        final dadosSupabase = {
+          'user_id': user.id,
+          'nome': investimento.nome,
+          'tipo_renda': investimento.tipoRenda,
+          'indexador': investimento.indexador.name,
+          'taxa': investimento.taxa,
+          'valor_aplicado': investimento.valorAplicado,
+          'data_vencimento': investimento.dataVencimento.toIso8601String(),
+          'liquidez_diaria': investimento.liquidezDiaria,
+          'observacao': investimento.observacao ?? '',
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        };
+
+        final response = await _supabase
+            .from('renda_fixa')
+            .insert(dadosSupabase)
+            .select('id')
+            .single();
+
+        remoteId = response['id']?.toString();
+        LoggerService.success('✅ Renda Fixa salva no Supabase: $remoteId');
+      } catch (e) {
+        LoggerService.error('❌ Erro ao salvar no Supabase: $e');
+      }
+    }
+
+    json['remote_id'] = remoteId;
+    json['sync_status'] = remoteId != null ? 'synced' : 'pending';
     json['updated_at'] = DateTime.now().toIso8601String();
 
     final id = await _dbHelper.insertRendaFixa(json);
@@ -28,214 +60,113 @@ class RendaFixaRepository {
     return id;
   }
 
-  /// Atualiza um investimento
+  // ========== ATUALIZAR (CORRIGIDO) ==========
   Future<int> update(RendaFixaModel investimento) async {
-    if (investimento.id == null) throw Exception('ID nao pode ser nulo');
+    if (investimento.id == null) throw Exception('ID não pode ser nulo');
+
+    final user = _supabase.auth.currentUser;
+    final remoteId = investimento.id?.toString();
+
+    if (user != null && remoteId != null && remoteId.isNotEmpty) {
+      try {
+        await _supabase
+            .from('renda_fixa')
+            .update({
+              'nome': investimento.nome,
+              'tipo_renda': investimento.tipoRenda,
+              'indexador': investimento.indexador.name,
+              'taxa': investimento.taxa,
+              'valor_aplicado': investimento.valorAplicado,
+              'data_vencimento': investimento.dataVencimento.toIso8601String(),
+              'liquidez_diaria': investimento.liquidezDiaria,
+              'observacao': investimento.observacao ?? '',
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', remoteId)
+            .eq('user_id', user.id);
+        LoggerService.success('✅ Renda Fixa atualizada no Supabase');
+      } catch (e) {
+        LoggerService.error('❌ Erro ao atualizar no Supabase: $e');
+      }
+    }
 
     final json = investimento.toJson();
     json['sync_status'] = 'pending';
     json['updated_at'] = DateTime.now().toIso8601String();
-
     final result = await _dbHelper.updateRendaFixa(json);
     _syncService.syncNow();
     return result;
   }
 
-  /// Deleta um investimento
+  // ========== DELETAR (CORRIGIDO) ==========
   Future<int> delete(int id) async {
+    final user = _supabase.auth.currentUser;
     final investimento = await getById(id);
-    final remoteId = investimento?.id.toString();
+    final remoteId = investimento?.id?.toString();
 
-    final result = await _dbHelper.deleteRendaFixa(id);
-
-    if (remoteId != null) {
-      await _syncService.deleteAndSync('renda_fixa', id, remoteId);
+    if (user != null && remoteId != null && remoteId.isNotEmpty) {
+      try {
+        await _supabase
+            .from('renda_fixa')
+            .delete()
+            .eq('id', remoteId)
+            .eq('user_id', user.id);
+        LoggerService.success('✅ Renda Fixa deletada do Supabase');
+      } catch (e) {
+        LoggerService.error('❌ Erro ao deletar do Supabase: $e');
+      }
     }
 
+    final result = await _dbHelper.deleteRendaFixa(id);
+    _syncService.syncNow();
     return result;
   }
 
-  /// Busca todos os investimentos de renda fixa
+  // ========== BUSCAR ==========
   Future<List<RendaFixaModel>> getAll() async {
     final dados = await _dbHelper.getAllRendaFixa();
-    return dados
-        .map((json) {
-          try {
-            return RendaFixaModel.fromJson(json);
-          } catch (e) {
-            LoggerService.info('Erro ao converter renda fixa: $e');
-            return null;
-          }
-        })
-        .whereType<RendaFixaModel>()
-        .toList();
+    return dados.map((json) => RendaFixaModel.fromJson(json)).toList();
   }
 
-  /// Busca um investimento pelo ID
   Future<RendaFixaModel?> getById(int id) async {
     final dados = await _dbHelper.getRendaFixaById(id);
     if (dados == null) return null;
     return RendaFixaModel.fromJson(dados);
   }
 
-  // ========== METODOS COM RESULT ==========
-
+  // ========== RESULT METHODS ==========
   Future<Result<List<RendaFixaModel>>> getAllRendaFixaResult() async {
     try {
-      final dados = await _dbHelper.getAllRendaFixa();
-      final investimentos =
-          dados.map((json) => RendaFixaModel.fromJson(json)).toList();
-      return Result.success(investimentos);
+      return Result.success(await getAll());
     } catch (e) {
-      return Result.failure('Erro ao carregar renda fixa: $e');
-    }
-  }
-
-  Future<Result<RendaFixaModel?>> getRendaFixaByIdResult(int id) async {
-    try {
-      final dados = await _dbHelper.getRendaFixaById(id);
-      if (dados == null) return Result.success(null);
-      return Result.success(RendaFixaModel.fromJson(dados));
-    } catch (e) {
-      return Result.failure('Erro ao buscar renda fixa ID: $id\n$e');
+      return Result.failure('Erro ao carregar: $e');
     }
   }
 
   Future<Result<int>> insertRendaFixaResult(RendaFixaModel investimento) async {
     try {
-      final json = investimento.toJson();
-      json['sync_status'] = 'pending';
-      json['updated_at'] = DateTime.now().toIso8601String();
-
-      final id = await _dbHelper.insertRendaFixa(json);
-      _syncService.syncNow();
+      final id = await insert(investimento);
       return Result.success(id);
     } catch (e) {
-      return Result.failure(
-          'Erro ao adicionar investimento: ${investimento.nome}\n$e');
+      return Result.failure('Erro ao adicionar: $e');
     }
   }
 
   Future<Result<int>> updateRendaFixaResult(RendaFixaModel investimento) async {
     try {
-      if (investimento.id == null) {
-        return Result.failure('ID do investimento nao pode ser nulo');
-      }
-
-      final json = investimento.toJson();
-      json['sync_status'] = 'pending';
-      json['updated_at'] = DateTime.now().toIso8601String();
-
-      final result = await _dbHelper.updateRendaFixa(json);
-      _syncService.syncNow();
+      final result = await update(investimento);
       return Result.success(result);
     } catch (e) {
-      return Result.failure(
-          'Erro ao atualizar investimento: ${investimento.nome}\n$e');
+      return Result.failure('Erro ao atualizar: $e');
     }
   }
 
   Future<Result<int>> deleteRendaFixaResult(int id) async {
     try {
-      final investimento = await getRendaFixaByIdResult(id);
-      final remoteId =
-          investimento.isSuccess ? investimento.data?.id?.toString() : null;
-
-      final result = await _dbHelper.deleteRendaFixa(id);
-
-      if (remoteId != null && remoteId.isNotEmpty) {
-        await _syncService.deleteAndSync('renda_fixa', id, remoteId);
-      }
-
+      final result = await delete(id);
       return Result.success(result);
     } catch (e) {
-      return Result.failure('Erro ao excluir renda fixa ID: $id\n$e');
+      return Result.failure('Erro ao excluir: $e');
     }
-  }
-
-  Future<Result<Map<String, dynamic>>> getEstatisticasRendaFixaResult() async {
-    try {
-      final result = await getAllRendaFixaResult();
-      if (result.isFailure) return Result.failure(result.error);
-
-      final investimentos = result.data;
-      double totalAplicado = 0;
-      double totalAtual = 0;
-
-      for (var inv in investimentos) {
-        totalAplicado += inv.valorAplicado;
-        totalAtual += inv.valorFinal ?? inv.valorAplicado;
-      }
-
-      return Result.success({
-        'totalAplicado': totalAplicado,
-        'totalAtual': totalAtual,
-        'rendimentoTotal': totalAtual - totalAplicado,
-        'quantidade': investimentos.length,
-      });
-    } catch (e) {
-      return Result.failure('Erro ao calcular estatisticas: $e');
-    }
-  }
-
-  Future<Result<List<RendaFixaModel>>> getRendaFixaAtivosResult() async {
-    try {
-      final result = await getAllRendaFixaResult();
-      if (result.isFailure) return Result.failure(result.error);
-
-      final hoje = DateTime.now();
-      final ativos =
-          result.data.where((inv) => inv.dataVencimento.isAfter(hoje)).toList();
-      return Result.success(ativos);
-    } catch (e) {
-      return Result.failure('Erro ao buscar renda fixa ativos: $e');
-    }
-  }
-
-  Future<Result<List<RendaFixaModel>>> getRendaFixaVencidosResult() async {
-    try {
-      final result = await getAllRendaFixaResult();
-      if (result.isFailure) return Result.failure(result.error);
-
-      final hoje = DateTime.now();
-      final vencidos = result.data
-          .where((inv) => inv.dataVencimento.isBefore(hoje))
-          .toList();
-      return Result.success(vencidos);
-    } catch (e) {
-      return Result.failure('Erro ao buscar renda fixa vencidos: $e');
-    }
-  }
-
-  // ========== METODOS AUXILIARES ==========
-
-  Future<Map<String, dynamic>> getEstatisticas() async {
-    final investimentos = await getAll();
-    double totalAplicado = 0;
-    double totalAtual = 0;
-
-    for (var inv in investimentos) {
-      totalAplicado += inv.valorAplicado;
-      totalAtual += inv.valorFinal ?? inv.valorAplicado;
-    }
-
-    return {
-      'totalAplicado': totalAplicado,
-      'totalAtual': totalAtual,
-      'rendimentoTotal': totalAtual - totalAplicado,
-      'quantidade': investimentos.length,
-    };
-  }
-
-  Future<List<RendaFixaModel>> getAtivos() async {
-    final todos = await getAll();
-    final hoje = DateTime.now();
-    return todos.where((inv) => inv.dataVencimento.isAfter(hoje)).toList();
-  }
-
-  Future<List<RendaFixaModel>> getVencidos() async {
-    final todos = await getAll();
-    final hoje = DateTime.now();
-    return todos.where((inv) => inv.dataVencimento.isBefore(hoje)).toList();
   }
 }

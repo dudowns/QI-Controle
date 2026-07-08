@@ -5,42 +5,32 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
+
+// ✅ SERVICES
 import 'services/theme_service.dart';
 import 'services/sync_service.dart';
 import 'services/loading_service.dart';
 import 'services/logger_service.dart';
 import 'services/notification_service.dart';
-import 'database/db_helper.dart';
-import 'screens/splash_screen.dart';
-import 'screens/login_screen.dart';
-import 'screens/profiles_screen.dart';
-import 'screens/register_screen.dart';
-import 'screens/forgot_password_screen.dart';
-import 'screens/verify_otp_screen.dart';
-import 'screens/reset_password_screen.dart';
-import 'screens/main_screen.dart';
-import 'screens/dashboard.dart';
-import 'screens/lancamentos.dart';
-import 'screens/investimentos.dart';
-import 'screens/metas_screen.dart';
-import 'screens/proventos.dart';
-import 'screens/renda_fixa_screen.dart';
-import 'screens/contas_do_mes_screen.dart';
-import 'screens/transacoes_screen.dart';
-import 'screens/notificacoes_screen.dart';
-import 'screens/backup_screen.dart';
-import 'screens/configuracoes_screen.dart';
-import 'screens/perfil_screen.dart';
-import 'widgets/confirm_dialog.dart';
-import 'screens/debug_sync_screen.dart';
+import 'services/sync_service_improved.dart';
 
-// 🔥 CHAVE GLOBAL PARA O NAVEGADOR
+// ✅ DATABASE
+import 'database/db_helper.dart';
+
+// ✅ PROVIDERS
+import 'providers/layout_provider.dart';
+
+// ✅ WIDGETS
+import 'widgets/confirm_dialog.dart';
+
+// ✅ SCREENS (IMPORT DO BARREL PRINCIPAL)
+import 'screens/screens.dart';
+
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Captura erros globais
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
     LoggerService.error(
@@ -55,21 +45,18 @@ void main() async {
     LoggerService.info('🚀 Inicializando Supabase...');
     await Supabase.initialize(
       url: 'https://fmzzuoqqvzomtlpatwye.supabase.co',
-      anonKey:
+      publishableKey:
           'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtenp1b3FxdnpvbXRscGF0d3llIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1MzExNjAsImV4cCI6MjA5MDEwNzE2MH0.6SO5dLvLOSr_-QV3AMYB8aOCe_DLmJ30L_VNFsDz4XM',
     );
     LoggerService.success('✅ Supabase inicializado');
 
     Intl.defaultLocale = 'pt_BR';
 
-    // 🔥 CORREÇÃO PARA A WEB: Detecta se está rodando no navegador
     final bool isWeb = identical(0, 0.0) ? true : false;
 
     if (isWeb) {
-      // 🔥 MODO WEB: Não tenta criar o banco SQLite local
       LoggerService.info('🌐 Modo Web detectado. Usando apenas Supabase.');
     } else {
-      // 🔥 MODO DESKTOP: Inicializa o banco SQLite local normalmente
       LoggerService.info('🗄️ Inicializando banco de dados...');
       final dbHelper = DBHelper();
       await dbHelper.database;
@@ -81,34 +68,34 @@ void main() async {
     final themeService = ThemeService();
     await themeService.loadTheme();
 
-    // 🔥 CORREÇÃO PERFEITA PARA O SYNC SERVICE (Evita duplicatas na primeira abertura)
     LoggerService.info('🔄 Inicializando SyncService...');
     final syncService = SyncService();
     syncService.initialize();
 
-    // ✅ IMPEDE A SINCRONIZAÇÃO AUTOMÁTICA NA PRIMEIRA ABERTURA
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Só sincroniza se o usuário estiver logado e NÃO for a primeira abertura
+    // ✅ NOVO: Serviço de sincronização melhorado
+    final syncImproved = SyncServiceImproved();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (Supabase.instance.client.auth.currentUser != null) {
-        // Apenas agenda uma sincronização suave para depois
-        Future.delayed(const Duration(seconds: 5), () {
-          syncService.forceSyncNow(); // Força uma sincronização segura depois
-        });
+        LoggerService.info('🔄 Executando sincronização inicial completa...');
+        await syncImproved.syncAllData(force: true);
+        LoggerService.success('✅ Sincronização inicial concluída!');
       }
     });
+
     LoggerService.success('✅ SyncService inicializado com segurança');
 
     LoggerService.info('🔔 Inicializando NotificationService...');
     await NotificationService().init();
     LoggerService.success('✅ NotificationService inicializado');
 
-    // ✅ Providers envolvendo MyApp, com Consumer dentro de MyApp envolvendo MaterialApp
     runApp(
       MultiProvider(
         providers: [
           ChangeNotifierProvider.value(value: themeService),
           ChangeNotifierProvider(create: (_) => LoadingService()),
           ChangeNotifierProvider(create: (_) => SyncService()),
+          ChangeNotifierProvider(create: (_) => LayoutProvider()),
         ],
         child: const MyApp(),
       ),
@@ -161,12 +148,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          ConfirmDialog.setContext(context);
-        });
-
         return MaterialApp(
-          navigatorKey: navigatorKey, // ✅ CHAVE GLOBAL ADICIONADA
+          navigatorKey: navigatorKey,
           title: 'QI Controle',
           debugShowCheckedModeBanner: false,
           theme: themeService.getLightTheme(),
@@ -181,6 +164,7 @@ class MyApp extends StatelessWidget {
           locale: const Locale('pt', 'BR'),
           initialRoute: '/splash',
           routes: {
+            // ✅ SHARED SCREENS
             '/splash': (context) => const SplashScreen(),
             '/profiles': (context) => const ProfilesScreen(),
             '/login': (context) => const LoginScreen(),
@@ -189,6 +173,8 @@ class MyApp extends StatelessWidget {
             '/verify-otp': (context) => const VerifyOtpScreen(email: ''),
             '/reset-password': (context) => const ResetPasswordScreen(),
             '/main': (context) => const MainScreen(),
+
+            // ✅ DESKTOP & MOBILE SCREENS (usando o barrel)
             '/dashboard': (context) => const DashboardScreen(),
             '/lancamentos': (context) => const LancamentosScreen(),
             '/investimentos': (context) => const InvestimentosScreen(),

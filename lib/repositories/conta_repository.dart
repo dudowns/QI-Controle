@@ -26,12 +26,97 @@ class ContaRepository {
         where: 'status = 1', orderBy: 'data_pagamento DESC', limit: limit);
   }
 
+  // ✅ CORRIGIDO: Salva no Supabase PRIMEIRO, depois no banco local, e gera pagamentos
   Future<int> adicionarConta(Map<String, dynamic> conta) async {
-    conta['sync_status'] = 'pending';
+    final user = _supabase.auth.currentUser;
+
+    // 1. PRIMEIRO SALVA NO SUPABASE
+    String? remoteId;
+    if (user != null) {
+      try {
+        final dadosSupabase = {
+          'user_id': user.id,
+          'nome': conta['nome'],
+          'valor': conta['valor'] ?? conta['valor_estimado'] ?? 0,
+          'dia_vencimento': conta['dia_vencimento'] as int? ?? 1,
+          'categoria': conta['categoria'] ?? 'Outros',
+          'tipo': conta['tipo'] ?? 'mensal',
+          'parcelas_total': conta['parcelas_total'] as int? ?? 1,
+          'parcelas_pagas': conta['parcelas_pagas'] as int? ?? 0,
+          'ativa': 1,
+          'data_inicio':
+              conta['data_inicio'] ?? DateTime.now().toIso8601String(),
+          'criado_em': DateTime.now().toIso8601String(),
+          'atualizado_em': DateTime.now().toIso8601String(),
+        };
+
+        final response = await _supabase
+            .from('contas')
+            .insert(dadosSupabase)
+            .select('id')
+            .single();
+
+        remoteId = response['id']?.toString();
+        LoggerService.success('✅ Conta salva no Supabase: $remoteId');
+
+        // ✅ GERA OS PAGAMENTOS NO SUPABASE
+        if (remoteId != null) {
+          await _gerarPagamentosSupabase(user.id, remoteId, conta);
+        }
+      } catch (e) {
+        LoggerService.error('❌ Erro ao salvar no Supabase: $e');
+      }
+    }
+
+    // 2. DEPOIS SALVA NO BANCO LOCAL
+    conta['remote_id'] = remoteId;
+    conta['sync_status'] = remoteId != null ? 'synced' : 'pending';
+    conta['user_id'] = user?.id;
     conta['updated_at'] = DateTime.now().toIso8601String();
+
     final id = await _dbHelper.adicionarContaComUserId(conta);
+
+    // 3. DISPARA SINCRONIZAÇÃO
     _syncService.syncNow();
+
     return id;
+  }
+
+  // ✅ NOVO MÉTODO: Gerar pagamentos no Supabase
+  Future<void> _gerarPagamentosSupabase(
+      String userId, String contaId, Map<String, dynamic> conta) async {
+    try {
+      final dataInicioStr =
+          conta['data_inicio']?.toString() ?? DateTime.now().toIso8601String();
+      final dataInicio = DateTime.parse(dataInicioStr);
+      final tipo = conta['tipo']?.toString() ?? 'mensal';
+      final valor = (conta['valor'] as num?)?.toDouble() ?? 0.0;
+      final diaVencimento = conta['dia_vencimento'] as int? ?? 1;
+      final limite =
+          tipo == 'parcelada' ? (conta['parcelas_total'] as int? ?? 1) : 60;
+
+      final pagamentos = <Map<String, dynamic>>[];
+      for (int i = 0; i < limite; i++) {
+        final mesReferencia =
+            DateTime(dataInicio.year, dataInicio.month + i, diaVencimento);
+        final anoMes = mesReferencia.year * 100 + mesReferencia.month;
+        pagamentos.add({
+          'user_id': userId,
+          'conta_id': contaId,
+          'ano_mes': anoMes,
+          'valor': valor,
+          'status': 0,
+          'criado_em': DateTime.now().toIso8601String(),
+          'atualizado_em': DateTime.now().toIso8601String(),
+        });
+      }
+
+      await _supabase.from('pagamentos_mensais').insert(pagamentos);
+      LoggerService.success(
+          '✅ ${pagamentos.length} pagamentos gerados no Supabase');
+    } catch (e) {
+      LoggerService.error('❌ Erro ao gerar pagamentos no Supabase: $e');
+    }
   }
 
   Future<List<Conta>> getContasAtivas() async {
@@ -56,14 +141,12 @@ class ContaRepository {
     return await getContaByIdString(id.toString());
   }
 
-  /// 🔥 OTIMIZADO: Força leitura limpa desativando cache interno temporariamente ao listar
   Future<List<Map<String, dynamic>>> getPagamentosDoMes(
       int ano, int mes) async {
     try {
       final db = await _dbHelper.database;
       final anoMes = ano * 100 + mes;
 
-      // Buscamos os pagamentos locais ativos daquele mês de referência
       final local = await db.query(
         tabelaPagamentos,
         where: 'ano_mes = ? AND (deleted_at IS NULL)',
@@ -80,7 +163,6 @@ class ContaRepository {
           Map<String, dynamic>? conta;
 
           if (contaId.isNotEmpty) {
-            // Buscando os dados estruturais da conta diretamente do SQLite garantindo dados frescos
             final contas = await db.query(
               tabelaContas,
               where: '(id = ? OR remote_id = ?) AND (deleted_at IS NULL)',
@@ -232,31 +314,106 @@ class ContaRepository {
     };
   }
 
+  // ============================================================
+  // 🔥 FUNÇÃO DELETAR CONTA - CORRIGIDA COM SUPABASE
+  // ============================================================
   Future<void> deletarConta(String contaId) async {
+    //DEBUG INICIO//
+    print('🗑️ [DEBUG] deletarConta INICIADO');
+    print('🗑️ [DEBUG] contaId = "$contaId"');
+    //FINAL DEBUG//
+
     final db = await _dbHelper.database;
     final user = _supabase.auth.currentUser;
 
-    final remoteId = await _getRemoteIdFromLocalId(contaId);
+    // 🔥 1. PRIMEIRO, BUSCA O remote_id DA CONTA
+    String? remoteId;
+    try {
+      final result = await db.query(
+        tabelaContas,
+        where: 'id = ? OR remote_id = ?',
+        whereArgs: [contaId, contaId],
+      );
+      if (result.isNotEmpty) {
+        remoteId = result.first['remote_id'] as String?;
+        //DEBUG INICIO//
+        print('🗑️ [DEBUG] remoteId encontrado = "$remoteId"');
+        //FINAL DEBUG//
+      }
+    } catch (e) {
+      //DEBUG INICIO//
+      print('🔴 [DEBUG] Erro ao buscar remoteId: $e');
+      //FINAL DEBUG//
+    }
 
+    // 🔥 2. EXCLUI DO SUPABASE (se tiver user e remoteId)
     if (user != null && remoteId != null && remoteId.isNotEmpty) {
       try {
+        //DEBUG INICIO//
+        print('🗑️ [DEBUG] Excluindo do Supabase: remoteId="$remoteId"');
+        //FINAL DEBUG//
+
+        // Exclui os pagamentos associados
         await _supabase
             .from('pagamentos_mensais')
             .delete()
             .eq('conta_id', remoteId);
-        await _supabase.from('contas').delete().eq('id', remoteId);
+
+        // Exclui a conta
+        await _supabase
+            .from('contas')
+            .delete()
+            .eq('id', remoteId)
+            .eq('user_id', user.id);
+
+        //DEBUG INICIO//
+        print('🗑️ [DEBUG] Supabase: exclusão concluída');
+        //FINAL DEBUG//
       } catch (e) {
+        //DEBUG INICIO//
+        print('🔴 [DEBUG] Erro ao excluir do Supabase: $e');
+        //FINAL DEBUG//
         LoggerService.error('Erro ao excluir do Supabase: $e');
       }
     }
 
-    // Usando soft delete ou hard delete local dependendo da regra anterior, mantido o original
-    await db
-        .delete(tabelaPagamentos, where: 'conta_id = ?', whereArgs: [contaId]);
-    await db.delete(tabelaContas,
-        where: 'id = ? OR remote_id = ?', whereArgs: [contaId, contaId]);
+    // 🔥 3. EXCLUI DO BANCO LOCAL
+    try {
+      //DEBUG INICIO//
+      print('🗑️ [DEBUG] Excluindo do banco local');
+      //FINAL DEBUG//
 
+      // Exclui os pagamentos associados
+      await db.delete(
+        tabelaPagamentos,
+        where: 'conta_id = ?',
+        whereArgs: [contaId],
+      );
+
+      // Exclui a conta
+      await db.delete(
+        tabelaContas,
+        where: 'id = ? OR remote_id = ?',
+        whereArgs: [contaId, contaId],
+      );
+
+      //DEBUG INICIO//
+      print('🗑️ [DEBUG] Banco local: exclusão concluída');
+      //FINAL DEBUG//
+    } catch (e) {
+      //DEBUG INICIO//
+      print('🔴 [DEBUG] Erro ao excluir do banco local: $e');
+      //FINAL DEBUG//
+      LoggerService.error('Erro ao excluir do banco local: $e');
+      rethrow;
+    }
+
+    // 🔥 4. DISPARA SINCRONIZAÇÃO
     _syncService.syncNow();
+
+    //DEBUG INICIO//
+    print('🗑️ [DEBUG] deletarConta FINALIZADO');
+    //FINAL DEBUG//
   }
 
   Future<String?> _getRemoteIdFromLocalId(String localId) async {
@@ -270,25 +427,93 @@ class ContaRepository {
   }
 
   Future<void> deletarContaString(String contaId) async {
+    //DEBUG INICIO//
+    print('🗑️ [DEBUG] deletarContaString INICIADO');
+    print('🗑️ [DEBUG] contaId = "$contaId"');
+    //FINAL DEBUG//
     await deletarConta(contaId);
   }
 
-  /// 🔥 CORRIGIDO: Removemos a limpeza de cache e o sync de dentro da função
+  // ============================================================
+  // 🔥 FUNÇÃO ATUALIZAR CONTA - CORRIGIDA COM SUPABASE
+  // ============================================================
   Future<int> atualizarConta(Map<String, dynamic> conta) async {
-    final mapaParaSalvar = Map<String, dynamic>.from(conta);
-    final id = mapaParaSalvar['id'];
+    //DEBUG INICIO//
+    print('✏️ [DEBUG] atualizarConta INICIADO');
+    print('✏️ [DEBUG] conta = $conta');
+    //FINAL DEBUG//
 
-    mapaParaSalvar.remove('id');
-    mapaParaSalvar['sync_status'] = 'pending';
-    mapaParaSalvar['updated_at'] = DateTime.now().toIso8601String();
+    final user = _supabase.auth.currentUser;
+    final id = conta['id'];
+    final remoteId = conta['remote_id']?.toString();
 
-    final result = await _dbHelper.update(tabelaContas, mapaParaSalvar, id);
+    // 🔥 1. ATUALIZA NO SUPABASE
+    if (user != null && remoteId != null && remoteId.isNotEmpty) {
+      try {
+        //DEBUG INICIO//
+        print('✏️ [DEBUG] Atualizando no Supabase: remoteId="$remoteId"');
+        //FINAL DEBUG//
 
-    // 🔥 REMOVIDO: _dbHelper.limparCacheCompleto();
-    // 🔥 REMOVIDO: _dispararSyncSilencioso();
-    return result;
+        final dadosSupabase = {
+          'nome': conta['nome'],
+          'valor': conta['valor'],
+          'dia_vencimento': conta['dia_vencimento'],
+          'categoria': conta['categoria'],
+          'tipo': conta['tipo'],
+          'parcelas_total': conta['parcelas_total'],
+          'parcelas_pagas': conta['parcelas_pagas'],
+          'ativa': conta['ativa'],
+          'data_inicio': conta['data_inicio'],
+          'atualizado_em': DateTime.now().toIso8601String(),
+        };
+
+        await _supabase
+            .from('contas')
+            .update(dadosSupabase)
+            .eq('id', remoteId)
+            .eq('user_id', user.id);
+
+        //DEBUG INICIO//
+        print('✏️ [DEBUG] Supabase: atualização concluída');
+        //FINAL DEBUG//
+      } catch (e) {
+        //DEBUG INICIO//
+        print('🔴 [DEBUG] Erro ao atualizar no Supabase: $e');
+        //FINAL DEBUG//
+        LoggerService.error('Erro ao atualizar no Supabase: $e');
+      }
+    }
+
+    // 🔥 2. ATUALIZA NO BANCO LOCAL
+    try {
+      //DEBUG INICIO//
+      print('✏️ [DEBUG] Atualizando no banco local');
+      //FINAL DEBUG//
+
+      final mapaParaSalvar = Map<String, dynamic>.from(conta);
+      mapaParaSalvar.remove('id');
+      mapaParaSalvar['sync_status'] = 'pending';
+      mapaParaSalvar['updated_at'] = DateTime.now().toIso8601String();
+
+      final result = await _dbHelper.update(tabelaContas, mapaParaSalvar, id);
+
+      //DEBUG INICIO//
+      print('✏️ [DEBUG] Banco local: atualização concluída, result=$result');
+      //FINAL DEBUG//
+
+      return result;
+    } catch (e) {
+      //DEBUG INICIO//
+      print('🔴 [DEBUG] Erro ao atualizar no banco local: $e');
+      //FINAL DEBUG//
+      LoggerService.error('Erro ao atualizar no banco local: $e');
+      rethrow;
+    }
   }
 
+  // ============================================================
+  // RESULT METHODS
+  // ============================================================
   Future<Result<bool>> pagarConta(int pagamentoId) async {
     try {
       final res = await _dbHelper.pagarConta(pagamentoId);
@@ -376,7 +601,6 @@ class ContaRepository {
     }
   }
 
-  /// 🔥 CORRIGIDO: Cache limpo no fluxo de Result
   Future<Result<int>> atualizarContaResult(Map<String, dynamic> conta) async {
     try {
       final result = await atualizarConta(conta);
@@ -419,23 +643,15 @@ class ContaRepository {
 
   List<String> getCategorias() {
     return [
-      'Água',
       'Alimentação',
       'Cartão de Crédito',
-      'Cartão',
       'Cuidados Pessoais',
       'Educação',
-      'Empréstimo', // Mantido apenas a versão correta e acentuada
-      'Financiamento',
-      'Internet',
+      'Empréstimo',
       'Investimentos',
-      'IPTU',
-      'IPVA',
       'Lazer',
-      'Luz',
       'Moradia',
       'Saúde',
-      'Telefone',
       'Transporte',
       'Outros'
     ];

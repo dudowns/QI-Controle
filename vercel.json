@@ -1,6 +1,6 @@
 {
     "installCommand": "flutter pub get",
-    "buildCommand": "flutter build web --release --base-href=\"/\"",
+    "buildCommand": "flutter build web --release --web-renderer canvaskit",
     "outputDirectory": "build/web",
     "builds": [
         {
